@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Container Monkey - Secure Your Docker Environment</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐵</text></svg>">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.1.3.1">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- XTerm.js -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+</head>
+<body>
+    <div id="notification-container"></div>
+    <div class="app-layout">
+        <!-- Top Bar - Full Width -->
+        <div class="top-bar">
+            <div class="top-bar-content">
+                <h1 class="top-bar-title">
+                    <span class="emoji">🐵</span>
+                    <span class="text-gradient">Container Monkey</span>
+                </h1>
+                <div class="top-bar-right">
+                    <div class="top-bar-stats" id="top-bar-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">CPU:</span>
+                            <span class="stat-value" id="system-cpu">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">RAM:</span>
+                            <span class="stat-value" id="system-ram">--</span>
+                        </div>
+                    </div>
+                    <div class="user-menu-container" id="user-menu-container" style="display: none;">
+                        <div class="user-menu-trigger" onclick="toggleUserMenu()">
+                            <span id="user-menu-username">monkey</span>
+                            <i class="ph ph-caret-down" style="margin-left: 6px;"></i>
+                        </div>
+                        <div class="user-menu-dropdown" id="user-menu-dropdown">
+                            <a href="#" onclick="showChangePasswordModal(); return false;" class="user-menu-item">
+                                <i class="ph ph-key"></i>
+                                <span>Change Password</span>
+                            </a>
+                            <a href="#" onclick="showChangeUsernameModal(); return false;" class="user-menu-item">
+                                <i class="ph ph-user"></i>
+                                <span>Change Username</span>
+                            </a>
+                            <a href="#" onclick="logout(); return false;" class="user-menu-item">
+                                <i class="ph ph-sign-out"></i>
+                                <span>Logout</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fixed Sidebar -->
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" onclick="showSection('dashboard', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-chart-bar"></i></span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('containers', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-cube"></i></span>
+                    <span class="nav-text">Containers</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('stacks', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-stack"></i></span>
+                    <span class="nav-text">Stacks</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('images', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-list-dashes"></i></span>
+                    <span class="nav-text">Images</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('networks', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-tree-structure" style="transform: rotate(90deg); display: inline-block;"></i></span>
+                    <span class="nav-text">Networks</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('volumes', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-database"></i></span>
+                    <span class="nav-text">Volumes</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('backups', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-shield-check"></i></span>
+                    <span class="nav-text">Backup Vault</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="https://ko-fi.com/containermonkey" target="_blank" rel="noopener noreferrer" class="coffee-link">
+                    <i class="ph ph-coffee" style="font-size: 1.2em;"></i>
+                    <span>Buy me a Coffee</span>
+                </a>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.1.20</span>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="content-section active">
+                <div class="section-header">
+                    <h2><i class="ph ph-chart-bar" style="margin-right: 12px;"></i>Dashboard</h2>
+                </div>
+                <div class="panel-container">
+                    <!-- Environment Info Panel -->
+                    <div class="panel dashboard-card">
+                        <div class="card-icon">
+                            <i class="ph ph-cpu"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number" style="font-size: 1.2em;">{{ cpu_ram_info }}</div>
+                            <div class="card-label">System Info</div>
+                            <div class="card-subtext">{{ docker_sock_url }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Containers -->
+                    <div class="panel dashboard-card" style="cursor: pointer;" onclick="showSection('containers', document.querySelector('.nav-item[onclick*=\'containers\']'))">
+                        <div class="card-icon">
+                            <i class="ph ph-cube"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number">{{ containers_qty }}</div>
+                            <div class="card-label">Containers</div>
+                            <div class="card-subtext">
+                                <span class="status-dot running" title="Running"></span> {{ running_containers }}
+                                <span class="status-dot stopped" style="margin-left: 8px;" title="Stopped"></span> {{ stopped_containers }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Images -->
+                    <div class="panel dashboard-card" style="cursor: pointer;" onclick="showSection('images', document.querySelector('.nav-item[onclick*=\'images\']'))">
+                        <div class="card-icon">
+                            <i class="ph ph-list-dashes"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number">{{ images_qty }}</div>
+                            <div class="card-label">Images</div>
+                            <div class="card-subtext">
+                                <i class="ph ph-database" style="margin-right: 4px;"></i> {{ total_images_size }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Volumes -->
+                    <div class="panel dashboard-card" style="cursor: pointer;" onclick="showSection('volumes', document.querySelector('.nav-item[onclick*=\'volumes\']'))">
+                        <div class="card-icon">
+                            <i class="ph ph-database"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number">{{ volumes_qty }}</div>
+                            <div class="card-label">Volumes</div>
+                            <div class="card-subtext">
+                                <i class="ph ph-database" style="margin-right: 4px;"></i> {{ total_volumes_size or 'N/A' }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Networks -->
+                    <div class="panel dashboard-card" style="cursor: pointer;" onclick="showSection('networks', document.querySelector('.nav-item[onclick*=\'networks\']'))">
+                        <div class="card-icon">
+                            <i class="ph ph-tree-structure" style="transform: rotate(90deg);"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number">{{ networks_qty }}</div>
+                            <div class="card-label">Networks</div>
+                        </div>
+                    </div>
+
+                    <!-- Stacks -->
+                    <div class="panel dashboard-card" style="cursor: pointer;" onclick="showSection('stacks', document.querySelector('.nav-item[onclick*=\'stacks\']'))">
+                        <div class="card-icon">
+                            <i class="ph ph-stack"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number">{{ stacks_qty }}</div>
+                            <div class="card-label">Stacks</div>
+                        </div>
+                    </div>
+
+                    <!-- Backups -->
+                    <div class="panel dashboard-card" style="cursor: pointer;" onclick="showSection('backups', document.querySelector('.nav-item[onclick*=\'backups\']'))">
+                        <div class="card-icon">
+                            <i class="ph ph-shield-check"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number">{{ backups_qty }}</div>
+                            <div class="card-label">Backup Vault</div>
+                            <div class="card-subtext">
+                                <i class="ph ph-database" style="margin-right: 4px;"></i> {{ total_backups_size }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Containers Section -->
+            <section id="containers-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-cube" style="margin-right: 12px;"></i>Containers</h2>
+                    <div>
+                        <div class="btn-group">
+                            <button class="btn btn-success btn-sm bulk-btn" onclick="startSelectedContainers()" disabled><i class="ph ph-play"></i> Start</button>
+                            <button class="btn btn-secondary btn-sm bulk-btn" onclick="stopSelectedContainers()" disabled><i class="ph ph-pause"></i> Stop</button>
+                            <button class="btn btn-primary btn-sm bulk-btn" onclick="restartSelectedContainers()" disabled><i class="ph ph-arrows-clockwise"></i> Restart</button>
+                            <button class="btn btn-warning btn-sm bulk-btn" onclick="backupSelectedContainers()" disabled><i class="ph ph-floppy-disk"></i> Backup</button>
+                            <button class="btn btn-danger btn-sm bulk-btn" onclick="deleteSelectedContainers()" disabled><i class="ph ph-trash"></i> Delete</button>
+                            <button class="btn btn-success btn-sm" id="backup-all-btn" onclick="backupAllContainers()"><i class="ph ph-floppy-disk"></i> Backup All</button>
+                            <button class="btn btn-secondary btn-sm" id="clear-filter-btn" onclick="clearStackFilter()" style="display: none;"><i class="ph ph-x"></i> Clear Filter</button>
+                            <button class="btn btn-primary btn-sm" onclick="loadContainers()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="error" class="error" style="display: none;"></div>
+                <div class="table-responsive" id="containers-table-wrapper">
+                    <div id="containers-spinner" class="grid-spinner-container" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Containers...</div>
+                    </div>
+                    <table class="table" id="containers-table">
+                        <thead>
+                            <tr>
+                                <th width="40"><input type="checkbox" id="select-all-containers" onclick="toggleSelectAll(this)"></th>
+                                <th class="sortable" data-sort="name" onclick="sortContainers('name')" style="cursor: pointer; user-select: none;">
+                                    Container <span class="sort-indicator" id="sort-name"></span>
+                                </th>
+                                <th class="sortable" data-sort="status" onclick="sortContainers('status')" style="cursor: pointer; user-select: none;">
+                                    Status <span class="sort-indicator" id="sort-status"></span>
+                                </th>
+                                <th class="sortable" data-sort="stack" onclick="sortContainers('stack')" style="cursor: pointer; user-select: none;">
+                                    Stack <span class="sort-indicator" id="sort-stack"></span>
+                                </th>
+                                <th class="sortable" data-sort="image" onclick="sortContainers('image')" style="cursor: pointer; user-select: none;">
+                                    Image <span class="sort-indicator" id="sort-image"></span>
+                                </th>
+                                <th class="sortable" data-sort="created" onclick="sortContainers('created')" style="cursor: pointer; user-select: none;">
+                                    Created <span class="sort-indicator" id="sort-created"></span>
+                                </th>
+                                <th>IP / Ports</th>
+                                <th>CPU / RAM</th>
+                                <th width="120">Quick Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="containers-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Volumes Section -->
+            <section id="volumes-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-database" style="margin-right: 12px;"></i>Docker Volumes</h2>
+                    <div>
+                        <button class="btn btn-danger btn-sm" id="delete-selected-volumes-btn" onclick="deleteSelectedVolumes()" disabled><i class="ph ph-trash"></i> Delete</button>
+                        <button class="btn btn-primary btn-sm" onclick="loadVolumes()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                    </div>
+                </div>
+                
+                <div id="volumes-error" class="error" style="display: none;"></div>
+                <div class="table-responsive" id="volumes-table-wrapper">
+                    <div id="volumes-spinner" class="grid-spinner-container" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Volumes...</div>
+                    </div>
+                    <table class="table" id="volumes-table">
+                        <thead>
+                            <tr>
+                                <th width="40"><input type="checkbox" id="select-all-volumes" onclick="toggleAllVolumeSelections(this)"></th>
+                                <th>Name</th>
+                                <th>Driver</th>
+                                <th>Mountpoint</th>
+                                <th>Created</th>
+                                <th>Size</th>
+                                <th width="150">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="volumes-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Images Section -->
+            <section id="images-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-list-dashes" style="margin-right: 12px;"></i>Docker Images</h2>
+                    <div>
+                        <button class="btn btn-danger btn-sm" id="delete-selected-images-btn" onclick="deleteSelectedImages()" disabled><i class="ph ph-trash"></i> Delete Selected</button>
+                        <button class="btn btn-warning btn-sm" onclick="cleanupDanglingImages()"><i class="ph ph-broom"></i> Cleanup Dangling Images</button>
+                        <button class="btn btn-primary btn-sm" onclick="loadImages()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                    </div>
+                </div>
+                
+                <div id="images-error" class="error" style="display: none;"></div>
+                <div class="table-responsive" id="images-table-wrapper">
+                    <div id="images-spinner" class="grid-spinner-container" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Images...</div>
+                    </div>
+                    <table class="table" id="images-table">
+                        <thead>
+                            <tr>
+                                <th width="40"><input type="checkbox" id="select-all-images" onclick="toggleAllImageSelections(this)"></th>
+                                <th>Name / Tags</th>
+                                <th>ID</th>
+                                <th>Size</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody id="images-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Networks Section -->
+            <section id="networks-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-tree-structure" style="transform: rotate(90deg); margin-right: 12px;"></i>Docker Networks</h2>
+                    <div>
+                        <button class="btn btn-primary btn-sm" onclick="loadNetworks()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                    </div>
+                </div>
+                
+                <div id="networks-error" class="error" style="display: none;"></div>
+                <div class="table-responsive" id="networks-table-wrapper">
+                    <div id="networks-spinner" class="grid-spinner-container" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Networks...</div>
+                    </div>
+                    <table class="table" id="networks-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Driver</th>
+                                <th>Scope</th>
+                                <th>Subnet / Gateway</th>
+                                <th>Containers</th>
+                                <th style="white-space: nowrap;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="networks-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Stacks Section -->
+            <section id="stacks-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-stack" style="margin-right: 12px;"></i>Docker Stacks</h2>
+                    <div>
+                        <button class="btn btn-primary btn-sm" onclick="loadStacks()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                    </div>
+                </div>
+                
+                <div id="stacks-error" class="error" style="display: none;"></div>
+                <div class="table-responsive" id="stacks-table-wrapper">
+                    <div id="stacks-spinner" class="grid-spinner-container" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Stacks...</div>
+                    </div>
+                    <table class="table" id="stacks-table">
+                        <thead>
+                            <tr>
+                                <th>Stack Name</th>
+                                <th>Type</th>
+                                <th>Services</th>
+                                <th>Containers</th>
+                                <th>Networks</th>
+                                <th width="150">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stacks-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Backups Section -->
+            <section id="backups-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-shield-check" style="margin-right: 12px;"></i>Available Backups</h2>
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm" style="margin-right: 10px;" onclick="document.getElementById('backup-upload').click();">
+                            <i class="ph ph-upload-simple"></i> Upload Backup
+                        </button>
+                        <input type="file" id="backup-upload" accept=".tar.gz" style="display: none;" onchange="uploadBackup(event)" multiple>
+                        <button type="button" class="btn btn-primary btn-sm" style="margin-right: 10px;" onclick="document.getElementById('network-upload').click();">
+                            <i class="ph ph-upload-simple"></i> Upload Network Backup
+                        </button>
+                        <input type="file" id="network-upload" accept=".json" style="display: none;" onchange="uploadNetworkBackup(event)">
+                        <button class="btn btn-primary btn-sm" onclick="loadBackups()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                        <button class="btn btn-success btn-sm" style="margin-left: 10px;" onclick="downloadAllBackups()"><i class="ph ph-download-simple"></i> Download All</button>
+                        <button class="btn btn-danger btn-sm" style="margin-left: 10px;" onclick="deleteAllBackups()"><i class="ph ph-trash"></i> Delete All</button>
+                    </div>
+                </div>
+                
+                <div id="backups-error" class="error" style="display: none;"></div>
+                <div class="table-responsive" id="backups-table-wrapper">
+                    <div id="backups-spinner" class="grid-spinner-container" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Backups...</div>
+                    </div>
+                    <table class="table" id="backups-table">
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Type</th>
+                                <th>Size</th>
+                                <th>Created</th>
+                                <th style="white-space: nowrap;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="backups-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Modal for container details -->
+    <div id="details-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Container Details</h2>
+            <div id="container-details"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary btn-sm" onclick="closeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attach Console Modal -->
+    <div id="attach-console-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px; height: 80vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;">Exec Console: <span id="console-container-name"></span></h2>
+                <span class="close" onclick="closeAttachConsoleModal()">&times;</span>
+            </div>
+            <div id="terminal-container" style="flex: 1; background: #000; border-radius: 4px; overflow: hidden; padding: 5px;"></div>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="btn btn-secondary btn-sm" onclick="closeAttachConsoleModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="logs-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px; height: 80vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;">Container Logs: <span id="logs-container-name"></span></h2>
+                <span class="close" onclick="closeLogsModal()">&times;</span>
+            </div>
+            <div id="logs-container" style="flex: 1; background: #000; color: #fff; font-family: monospace; font-size: 14px; overflow: auto; padding: 10px; border-radius: 4px; white-space: pre-wrap;"></div>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="btn btn-primary btn-sm" onclick="refreshLogs()" id="refresh-logs-btn">
+                    <i class="ph ph-arrows-clockwise"></i> Refresh
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="closeLogsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup progress modal -->
+    <div id="backup-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2>Creating Backup...</h2>
+            <div id="backup-progress-container" style="margin: 20px 0;">
+                <div id="backup-status" style="margin-bottom: 15px; font-size: 1.1em; color: var(--text-primary); font-weight: 600;">Starting backup...</div>
+                <div id="backup-step" style="margin-bottom: 15px; color: var(--text-secondary); font-size: 0.95em;">Preparing...</div>
+                <div style="background: var(--bg-secondary); border-radius: 5px; padding: 15px; margin-top: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 0.9em; color: var(--text-secondary); font-weight: 500;">Progress</span>
+                        <span id="backup-percentage" style="font-size: 0.9em; color: var(--text-primary); font-weight: 600;">0%</span>
+                    </div>
+                    <div style="background: var(--bg-card); border-radius: 3px; height: 24px; overflow: hidden; border: 1px solid var(--border);">
+                        <div id="backup-progress-bar" style="background: var(--accent); height: 100%; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8em; font-weight: 600;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore backup modal -->
+    <div id="restore-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" onclick="closeRestoreModal()">&times;</span>
+            <h2>Restore Backup</h2>
+            <div id="restore-content">
+                <p>Restore container from backup: <strong id="restore-filename"></strong></p>
+                
+                <div id="restore-loading" class="backup-progress" style="display: none; text-align: center; padding: 60px 20px;">
+                    <div class="spinner" style="margin: 0 auto;"></div>
+                    <p style="margin-top: 20px;">Loading backup preview...</p>
+                </div>
+                
+                <div id="restore-options" style="display: none;">
+                    <!-- Volume Overwrite Option -->
+                    <div id="restore-volumes-section" style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border);">
+                        <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 1em; color: var(--text-primary);">Volume Options</h3>
+                        <div id="restore-volumes-list" style="margin-bottom: 10px;"></div>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="restore-overwrite-volumes" style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="color: var(--text-primary);">Overwrite existing volumes with backup data</span>
+                        </label>
+                        <p style="font-size: 0.85em; color: var(--text-light); margin-top: 8px; margin-bottom: 0;">
+                            ℹ️ If unchecked, existing volumes will be used (backup data will be skipped)
+                        </p>
+                    </div>
+                    
+                    <!-- Port Mappings -->
+                    <div id="restore-ports-section" style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border);">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1em; color: var(--text-primary);">Port Mappings</h3>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; font-weight: bold; font-size: 0.9em; color: var(--text-secondary); border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                            <div>Container Port</div>
+                            <div>Host Port</div>
+                        </div>
+                        <div id="restore-ports-list"></div>
+                        <p style="font-size: 0.85em; color: var(--text-light); margin-top: 10px; margin-bottom: 0;">
+                            ℹ️ Edit host ports to change external port mappings
+                        </p>
+                    </div>
+                </div>
+                
+                <div id="restore-modal-actions" class="modal-actions">
+                    <button class="btn btn-success btn-sm" onclick="submitRestore()">🚀 Restore Container</button>
+                    <button class="btn btn-secondary btn-sm" onclick="closeRestoreModal()">Cancel</button>
+                </div>
+            </div>
+            <div id="restore-progress" class="backup-progress" style="display: none; text-align: center; padding: 60px 20px;">
+                <div class="spinner" style="margin: 0 auto;"></div>
+                <p style="margin-top: 20px;">Restoring container...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Volume explore modal -->
+    <div id="volume-explore-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="closeVolumeExploreModal()">&times;</span>
+            <h2 id="volume-explore-title">Exploring Volume</h2>
+            <div id="volume-explore-loading" class="spinner-container" style="display: none;"><div class="spinner"></div></div>
+            <div id="volume-file-list" style="max-height: 500px; overflow-y: auto;"></div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn btn-secondary btn-sm" onclick="closeVolumeExploreModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Volume file viewer modal -->
+    <div id="volume-file-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="closeVolumeFileModal()">&times;</span>
+            <h2 id="volume-file-title">File Contents</h2>
+            <div id="volume-file-loading" class="spinner-container" style="display: none;"><div class="spinner"></div></div>
+            <div id="volume-file-content" style="max-height: 600px; overflow-y: auto;"></div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn btn-secondary btn-sm" onclick="closeVolumeFileModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete container modal -->
+    <div id="delete-container-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" onclick="closeDeleteContainerModal()">&times;</span>
+            <div id="delete-container-content"></div>
+        </div>
+    </div>
+
+    <!-- Environment Check Modal -->
+    <div id="env-check-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" onclick="closeEnvCheckModal()">&times;</span>
+            <h2>System Environment Check</h2>
+            <div id="env-check-results"></div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn btn-primary btn-sm" onclick="checkEnvironment()">🔄 Re-run Checks</button>
+                <button class="btn btn-secondary btn-sm" onclick="closeEnvCheckModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup All Modal -->
+    <div id="backup-all-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close" onclick="closeBackupAllModal()">&times;</span>
+            <h2>Backing Up</h2>
+            <div id="backup-all-progress" style="margin: 20px 0;">
+                <div id="backup-all-status" style="margin-bottom: 15px; font-size: 1.1em; color: var(--text-primary);"></div>
+                <div id="backup-all-list" style="max-height: 400px; overflow-y: auto; background: var(--bg-secondary); padding: 15px; border-radius: 5px; border: 1px solid var(--border);">
+                    <div style="text-align: center; color: var(--text-light);">Preparing...</div>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button id="backup-all-close-btn" class="btn btn-secondary btn-sm" onclick="closeBackupAllModal()" style="display: none;">Close</button>
+                <button id="backup-all-cancel-btn" class="btn btn-danger btn-sm" onclick="cancelBackupAll()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Download All Modal -->
+    <div id="download-all-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close" onclick="closeDownloadAllModal()">&times;</span>
+            <h2>Downloading All Backups</h2>
+            <div id="download-all-progress" style="margin: 20px 0;">
+                <div id="download-all-status" style="margin-bottom: 15px; font-size: 1.1em; color: var(--text-primary);"></div>
+                <div id="download-all-list" style="max-height: 400px; overflow-y: auto; background: var(--bg-secondary); padding: 15px; border-radius: 5px; border: 1px solid var(--border);">
+                    <div style="text-align: center; color: var(--text-light);">Preparing...</div>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button id="download-all-close-btn" class="btn btn-secondary btn-sm" onclick="closeDownloadAllModal()" style="display: none;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Progress Modal -->
+    <div id="upload-progress-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <h2>Uploading Backups</h2>
+            <div id="upload-progress-content" style="margin: 20px 0;">
+                <div id="upload-progress-status" style="margin-bottom: 15px; font-size: 1.1em; color: var(--text-primary);"></div>
+                <div id="upload-progress-list" style="max-height: 400px; overflow-y: auto; background: var(--bg-secondary); padding: 15px; border-radius: 5px; border: 1px solid var(--border);">
+                    <!-- Progress for each file will be injected here -->
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button id="upload-progress-close-btn" class="btn btn-secondary btn-sm" onclick="closeUploadProgressModal()" style="display: none;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2 id="confirmation-title">Confirmation</h2>
+            <p id="confirmation-message" style="margin: 20px 0; color: var(--text-secondary);"></p>
+            <div class="modal-actions">
+                <button id="confirmation-cancel-btn" class="btn btn-secondary btn-sm">Cancel</button>
+                <button id="confirmation-confirm-btn" class="btn btn-danger btn-sm">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="modal" style="display: block;">
+        <div class="modal-content" style="max-width: 450px;">
+            <h2 style="margin-top: 0;">Login</h2>
+            <div id="login-error" class="error" style="display: none; margin-bottom: 20px;"></div>
+            <form id="login-form" onsubmit="handleLogin(event); return false;">
+                <div style="margin-bottom: 20px;">
+                    <label for="login-username" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Username</label>
+                    <input type="text" id="login-username" required autofocus
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="Enter username">
+                </div>
+                <div style="margin-bottom: 24px;">
+                    <label for="login-password" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Password</label>
+                    <input type="password" id="login-password" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="Enter password">
+                </div>
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary btn-sm btn-full">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="change-password-modal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <span class="close" onclick="closeChangePasswordModal()">&times;</span>
+            <h2 style="margin-top: 0;">Change Password</h2>
+            <div id="change-password-error" class="error" style="display: none; margin-bottom: 20px;"></div>
+            <div id="change-password-success" class="success-message" style="display: none; margin-bottom: 20px;">
+                <h3>Success!</h3>
+                <p id="change-password-success-message">Password changed successfully.</p>
+            </div>
+            <form id="change-password-form" onsubmit="handleChangePassword(event); return false;">
+                <div style="margin-bottom: 20px;">
+                    <label for="current-password" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Current Password <span style="color: var(--danger);">*</span></label>
+                    <input type="password" id="current-password" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="Enter current password">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="new-password" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">New Password <span style="color: var(--danger);">*</span></label>
+                    <input type="password" id="new-password" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="Enter new password">
+                </div>
+                <div style="margin-bottom: 24px;">
+                    <label for="confirm-password" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Confirm New Password <span style="color: var(--danger);">*</span></label>
+                    <input type="password" id="confirm-password" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="Confirm new password">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeChangePasswordModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Change Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Username Modal -->
+    <div id="change-username-modal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <span class="close" onclick="closeChangeUsernameModal()">&times;</span>
+            <h2 style="margin-top: 0;">Change Username</h2>
+            <div id="change-username-error" class="error" style="display: none; margin-bottom: 20px;"></div>
+            <div id="change-username-success" class="success-message" style="display: none; margin-bottom: 20px;">
+                <h3>Success!</h3>
+                <p id="change-username-success-message">Username changed successfully.</p>
+            </div>
+            <form id="change-username-form" onsubmit="handleChangeUsername(event); return false;">
+                <div style="margin-bottom: 20px;">
+                    <label for="current-password-username" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Current Password <span style="color: var(--danger);">*</span></label>
+                    <input type="password" id="current-password-username" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="Enter current password">
+                </div>
+                <div style="margin-bottom: 24px;">
+                    <label for="new-username" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">New Username <span style="color: var(--danger);">*</span></label>
+                    <input type="text" id="new-username" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="Enter new username">
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeChangeUsernameModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Change Username</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
