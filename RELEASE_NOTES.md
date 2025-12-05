@@ -1,5 +1,26 @@
 # Release Notes
 
+## Version 0.2.3
+
+### Bug Fixes
+- **Fixed container stats polling issues**: Resolved multiple issues with CPU/RAM stats display for containers
+  - Fixed stats not updating after logout/login - stats now properly restart after authentication
+  - Fixed stats stopping when navigating between sections - container stats only poll when containers section is visible
+  - Fixed stats showing "--" with many containers - increased polling interval from 5 seconds to 1 minute to allow time for all containers to update
+  - Separated system stats (top bar) and container stats polling intervals for better performance
+  - System stats continue updating every 5 seconds (top bar)
+  - Container stats update every 1 minute, only when containers section is visible
+
+### Performance Improvements
+- Optimized container stats polling to prevent overlapping requests
+- Container stats polling now checks section visibility before updating
+- Reduced unnecessary API calls when containers section is not active
+
+### Version Update
+- Updated version number to 0.2.3 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.2
 
 ### Bug Fixes

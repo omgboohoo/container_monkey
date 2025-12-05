@@ -72,9 +72,19 @@ async function handleLogin(event) {
             document.getElementById('login-form').reset();
             
             // Reload page data
+            // Stats polling will be started automatically by loadContainers() if containers section is active
+            // For other sections, start stats polling immediately
             if (document.querySelector('.content-section.active')) {
                 const activeSection = document.querySelector('.content-section.active').id.replace('-section', '');
                 showSection(activeSection);
+                
+                // Start stats polling for non-containers sections (containers section will start it after loading)
+                if (activeSection !== 'containers') {
+                    startStatsPolling();
+                }
+            } else {
+                // No active section, start stats polling
+                startStatsPolling();
             }
         } else {
             errorDiv.textContent = data.error || 'Login failed';
@@ -320,6 +330,7 @@ function showSection(sectionName, navElement) {
         loadDashboardStats();
     } else if (sectionName === 'containers') {
         loadContainers();
+        // Container stats polling will be started by loadContainers() after containers load
     } else if (sectionName === 'volumes') {
         loadVolumes();
     } else if (sectionName === 'images') {
@@ -462,6 +473,9 @@ async function loadContainers() {
         // Update button states after loading containers
         resetSelection();
         updateButtonStates();
+        
+        // Restart stats polling after containers are loaded (ensures stats cells exist)
+        startStatsPolling();
         
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
@@ -3468,11 +3482,26 @@ function closeEnvCheckModal() {
 
 // --- Container Stats Polling ---
 let statsPollInterval = null;
+let systemStatsInterval = null; // Separate interval for system stats (top bar)
 
 async function updateContainerStats(containerId) {
     try {
         const response = await fetch(`/api/container/${containerId}/stats`);
         const data = await response.json();
+        
+        // If we get a 401, stop polling (session expired)
+        if (response.status === 401) {
+            console.warn('Authentication expired, stopping stats polling');
+            if (statsPollInterval) {
+                clearInterval(statsPollInterval);
+                statsPollInterval = null;
+            }
+            if (systemStatsInterval) {
+                clearInterval(systemStatsInterval);
+                systemStatsInterval = null;
+            }
+            return;
+        }
         
         if (!response.ok || data.error) {
             return;
@@ -3503,6 +3532,12 @@ async function updateContainerStats(containerId) {
 }
 
 function updateAllContainerStats() {
+    // Only update container stats if containers section is visible
+    const containersSection = document.getElementById('containers-section');
+    if (!containersSection || containersSection.style.display === 'none') {
+        return;
+    }
+    
     // Get all container stats elements (table cells)
     const statsElements = document.querySelectorAll('.stats-cell[data-container-id]');
     
@@ -3852,26 +3887,57 @@ async function deleteSelectedStacks() {
 }
 
 function startStatsPolling() {
-    // Clear any existing interval
+    // Clear any existing intervals
     if (statsPollInterval) {
         clearInterval(statsPollInterval);
+        statsPollInterval = null;
+    }
+    if (systemStatsInterval) {
+        clearInterval(systemStatsInterval);
+        systemStatsInterval = null;
     }
     
-    // Update immediately
-    updateAllContainerStats();
+    // Update system stats immediately (always needed for top bar)
     updateSystemStats();
     
-    // Then update every 5 seconds
-    statsPollInterval = setInterval(() => {
+    // Update container stats immediately if containers section is visible
+    const containersSection = document.getElementById('containers-section');
+    if (containersSection && containersSection.style.display !== 'none') {
         updateAllContainerStats();
+    }
+    
+    // System stats (top bar) - update every 5 seconds
+    systemStatsInterval = setInterval(() => {
         updateSystemStats();
     }, 5000);
+    
+    // Container stats - update every 1 minute, only if containers section is visible
+    statsPollInterval = setInterval(() => {
+        const containersSection = document.getElementById('containers-section');
+        if (containersSection && containersSection.style.display !== 'none') {
+            updateAllContainerStats();
+        }
+    }, 60000); // 1 minute for container stats
 }
 
 async function updateSystemStats() {
     try {
         const response = await fetch('/api/system-stats');
         const data = await response.json();
+        
+        // If we get a 401, stop polling (session expired)
+        if (response.status === 401) {
+            console.warn('Authentication expired, stopping stats polling');
+            if (statsPollInterval) {
+                clearInterval(statsPollInterval);
+                statsPollInterval = null;
+            }
+            if (systemStatsInterval) {
+                clearInterval(systemStatsInterval);
+                systemStatsInterval = null;
+            }
+            return;
+        }
         
         if (!response.ok || data.error) {
             console.error('System stats API error:', response.status, data.error || response.statusText);
