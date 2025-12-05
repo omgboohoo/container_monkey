@@ -29,7 +29,7 @@ from backup_manager import BackupManager
 from backup_file_manager import BackupFileManager
 from restore_manager import RestoreManager
 from system_manager import (
-    get_dashboard_stats, get_system_stats, check_environment as check_environment_helper,
+    get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
 )
 
@@ -165,10 +165,25 @@ def dashboard_stats():
     return jsonify(stats)
 
 @app.route('/api/system-stats')
+@limiter.exempt  # Exempt from rate limiting to ensure stats always work
 def system_stats():
-    result = get_system_stats()
+    try:
+        result = get_system_stats()
+        if 'error' in result:
+            return jsonify(result), 500
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/statistics')
+@login_required
+def statistics():
+    result = get_statistics()
     if 'error' in result:
-        return jsonify(result), 500
+        status_code = 500 if result['error'] != 'Docker client not available' else 503
+        return jsonify(result), status_code
     return jsonify(result)
 
 @app.route('/api/check-environment', methods=['GET'])

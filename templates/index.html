@@ -89,13 +89,17 @@
                     <span class="nav-icon"><i class="ph ph-shield-check"></i></span>
                     <span class="nav-text">Backup Vault</span>
                 </a>
+                <a href="#" class="nav-item" onclick="showSection('statistics', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-chart-line"></i></span>
+                    <span class="nav-text">Statistics</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <a href="https://ko-fi.com/containermonkey" target="_blank" rel="noopener noreferrer" class="coffee-link">
                     <i class="ph ph-coffee" style="font-size: 1.2em;"></i>
                     <span>Buy me a Coffee</span>
                 </a>
-                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.3</span>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.4</span>
             </div>
         </aside>
 
@@ -245,7 +249,6 @@
                                     Created <span class="sort-indicator" id="sort-created"></span>
                                 </th>
                                 <th>IP / Ports</th>
-                                <th>CPU / RAM</th>
                                 <th width="120">Quick Actions</th>
                             </tr>
                         </thead>
@@ -427,6 +430,40 @@
                             </tr>
                         </thead>
                         <tbody id="backups-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="statistics-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-chart-line" style="margin-right: 12px;"></i>Statistics</h2>
+                    <div>
+                        <button class="btn btn-primary btn-sm" onclick="loadStatistics()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                    </div>
+                </div>
+                
+                <div id="statistics-error" class="error" style="display: none;"></div>
+                
+                <div class="table-responsive" id="statistics-table-wrapper">
+                    <div id="statistics-spinner" class="grid-spinner-container" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Statistics...</div>
+                    </div>
+                    <table class="table" id="statistics-table">
+                        <thead>
+                            <tr>
+                                <th>Container</th>
+                                <th>Image</th>
+                                <th>Status</th>
+                                <th>CPU %</th>
+                                <th>RAM</th>
+                                <th>Network I/O</th>
+                                <th>Block I/O</th>
+                            </tr>
+                        </thead>
+                        <tbody id="statistics-list">
                             <!-- Rows will be injected here -->
                         </tbody>
                     </table>

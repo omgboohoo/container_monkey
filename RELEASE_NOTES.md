@@ -1,5 +1,37 @@
 # Release Notes
 
+## Version 0.2.4
+
+### New Features
+- **Statistics Page**: Added comprehensive statistics page accessible from the sidebar
+  - Displays all containers in a grid format with detailed metrics
+  - Shows CPU %, RAM usage, Network I/O, and Block I/O for each container
+  - Status badges match the container viewer styling
+  - Auto-refreshes when visiting the page
+  - Manual refresh button for on-demand updates
+  - Network I/O shows bytes received/sent (e.g., `73.8kB / 285kB`)
+  - Block I/O shows bytes read/written (e.g., `0B / 438kB`)
+
+### UI Improvements
+- **Removed CPU/RAM stats from container grid**: Simplified container viewer by removing per-container CPU/RAM displays
+- **System stats remain**: Top bar continues to show system-wide CPU and RAM utilization
+- **Improved focus**: Container grid now focuses on container management without stats clutter
+
+### Backend Changes
+- Added `/api/statistics` endpoint for comprehensive container statistics
+- Enhanced `get_statistics()` function in `system_manager.py` to collect Network I/O and Block I/O data
+- Statistics endpoint uses `docker stats` command to gather real-time metrics
+
+### Documentation
+- Updated README.md and PRD.md to reflect Statistics page addition
+- Removed references to per-container stats in container viewer
+- Added Statistics page documentation to both files
+
+### Version Update
+- Updated version number to 0.2.4 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.3
 
 ### Bug Fixes

@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.2.3**
+**Version 0.2.4**
 
 ## Overview
 
@@ -45,7 +45,6 @@ Container Monkey is a web-based Docker management platform providing container l
 ### Container Management
 - List, start, stop, restart, delete containers
 - Bulk operations on multiple containers
-- Real-time container stats (CPU, memory)
 - Container logs streaming
 - Interactive exec console
 - Container details inspection
@@ -78,9 +77,14 @@ Container Monkey is a web-based Docker management platform providing container l
 
 ### System Monitoring
 - Dashboard with resource overview
-- Real-time system CPU/RAM stats
-- Per-container resource utilization
-- Stats polling (5-second intervals)
+- Real-time system CPU/RAM stats in top bar
+- **Statistics Page**: Comprehensive container statistics view
+  - All containers displayed in a grid format
+  - Shows CPU %, RAM usage, Network I/O, and Block I/O for each container
+  - Status badges (running/stopped) matching container viewer styling
+  - Auto-refreshes when visiting the page
+  - Manual refresh button for on-demand updates
+  - Stats polling for running containers (5-second intervals)
 
 ## API Endpoints
 
@@ -148,6 +152,7 @@ POST   /api/upload-network-backup               # Upload network backup
 ```
 GET    /api/dashboard-stats                     # Get dashboard statistics
 GET    /api/system-stats                        # Get system CPU/RAM stats
+GET    /api/statistics                          # Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
 GET    /api/check-environment                   # Check Docker environment
 POST   /api/cleanup/temp-containers             # Cleanup temporary containers
 ```

@@ -1,6 +1,6 @@
 # Container Monkey 🐵
 
-**Version 0.2.3**
+**Version 0.2.4**
 
 The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
@@ -15,7 +15,8 @@ The ultimate backup and recovery solution for Docker. Protect your containers, v
   - Sequential backup queue system for bulk operations
   - Real-time backup progress tracking
   - Backup completion verification (ensures tar.gz files are fully written)
-- **Real-time Stats**: CPU and RAM utilization monitoring for containers and system
+- **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
+- **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
 - **Web Console**: Interactive terminal access to containers
 - **Logs Viewer**: Real-time container logs viewing
 - **Bulk Operations**: Select multiple containers/volumes/images for batch operations
@@ -141,7 +142,10 @@ docker run -d \
 
 - **Dashboard**: Overview of containers, images, volumes, networks
 - **System Stats**: Real-time CPU and RAM utilization in top bar
-- **Container Stats**: Per-container CPU and memory usage
+- **Statistics Page**: View all containers with detailed stats including CPU %, RAM, Network I/O, and Block I/O
+  - Refreshes automatically when visiting the page
+  - Manual refresh button available
+  - Shows running/stopped status for each container
 
 ## API Endpoints
 
@@ -159,7 +163,7 @@ The application provides a RESTful API. Key endpoints include:
 - `GET /api/networks` - List networks
 - `GET /api/backups` - List backups
 - `GET /api/system-stats` - System CPU/RAM stats
-- `GET /api/container/<id>/stats` - Container stats
+- `GET /api/statistics` - Comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
 - `POST /api/change-password` - Change username/password
 
 See PRD.md for complete API documentation.

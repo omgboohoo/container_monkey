@@ -341,6 +341,8 @@ function showSection(sectionName, navElement) {
         loadStacks();
     } else if (sectionName === 'backups') {
         loadBackups();
+    } else if (sectionName === 'statistics') {
+        loadStatistics();
     }
 }
 
@@ -474,7 +476,7 @@ async function loadContainers() {
         resetSelection();
         updateButtonStates();
         
-        // Restart stats polling after containers are loaded (ensures stats cells exist)
+        // Restart stats polling after containers are loaded
         startStatsPolling();
         
     } catch (error) {
@@ -498,6 +500,9 @@ function createContainerCard(container) {
     if (!container.is_self) {
         tr.style.cursor = 'pointer';
         tr.onclick = (event) => toggleContainerSelection(event, tr);
+    } else {
+        // For self container, ensure buttons are still clickable
+        tr.style.pointerEvents = 'auto';
     }
     
     // Normalize status for display
@@ -561,21 +566,15 @@ function createContainerCard(container) {
                 <div style="margin-top: 2px;">${portsDisplay}</div>
             </div>
         </td>
-        <td class="stats-cell" data-container-id="${container.id}" style="font-family: monospace; font-size: 0.9em;">
-            ${isRunning ? `
-                <div class="cpu-stat" style="color: var(--secondary);">CPU: <span class="cpu-val">--</span></div>
-                <div class="mem-stat" style="color: var(--accent);">MEM: <span class="mem-val">--</span></div>
-            ` : '<span style="color: var(--text-light);">-</span>'}
-        </td>
         <td style="white-space: nowrap;">
-            <div class="btn-group" style="display: flex; gap: 2px;">
-                <button class="btn-icon" onclick="event.stopPropagation(); showContainerDetails('${container.id}')" title="Container Details">
+            <div class="btn-group" style="display: flex; gap: 2px; pointer-events: auto;">
+                <button class="btn-icon" onclick="event.stopPropagation(); event.preventDefault(); showContainerDetails('${container.id}'); return false;" title="Container Details" style="pointer-events: auto;">
                     <i class="ph ph-info"></i>
                 </button>
-                <button class="btn-icon" onclick="event.stopPropagation(); showLogs('${container.id}', '${escapeHtml(container.name)}')" title="Container Logs">
+                <button class="btn-icon" onclick="event.stopPropagation(); event.preventDefault(); showLogs('${container.id}', '${escapeHtml(container.name)}'); return false;" title="Container Logs" style="pointer-events: auto;">
                     <i class="ph ph-terminal-window"></i>
                 </button>
-                <button class="btn-icon" onclick="event.stopPropagation(); openAttachConsole('${container.id}', '${escapeHtml(container.name)}')" title="Exec Console">
+                <button class="btn-icon" onclick="event.stopPropagation(); event.preventDefault(); openAttachConsole('${container.id}', '${escapeHtml(container.name)}'); return false;" title="Exec Console" style="pointer-events: auto;">
                     <i class="ph ph-terminal"></i>
                 </button>
             </div>
@@ -602,10 +601,6 @@ function renderContainers(containers) {
         containersList.appendChild(card);
     });
     
-    // Update stats after rendering
-    setTimeout(() => {
-        updateAllContainerStats();
-    }, 100);
 }
 
 // Sort containers
@@ -1272,6 +1267,118 @@ async function loadBackups() {
         if (backupsSpinner) backupsSpinner.style.display = 'none';
         if (backupsWrapper) backupsWrapper.style.overflow = '';
     }
+}
+
+// Load statistics
+async function loadStatistics() {
+    const errorEl = document.getElementById('statistics-error');
+    const statisticsList = document.getElementById('statistics-list');
+    const statisticsSpinner = document.getElementById('statistics-spinner');
+    const statisticsWrapper = document.getElementById('statistics-table-wrapper');
+    
+    errorEl.style.display = 'none';
+    statisticsList.innerHTML = '';
+    
+    // Show spinner and prevent scrollbars
+    if (statisticsSpinner) statisticsSpinner.style.display = 'flex';
+    if (statisticsWrapper) statisticsWrapper.style.overflow = 'hidden';
+    
+    try {
+        const response = await fetch('/api/statistics');
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load statistics');
+        }
+        
+        if (!data.containers || data.containers.length === 0) {
+            statisticsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No containers found</td></tr>';
+        } else {
+            data.containers.forEach(container => {
+                const row = createStatisticsRow(container);
+                statisticsList.appendChild(row);
+            });
+        }
+        
+    } catch (error) {
+        errorEl.textContent = `Error: ${error.message}`;
+        errorEl.style.display = 'block';
+    } finally {
+        // Hide spinner and restore overflow
+        if (statisticsSpinner) statisticsSpinner.style.display = 'none';
+        if (statisticsWrapper) statisticsWrapper.style.overflow = '';
+    }
+}
+
+// Create statistics row
+function createStatisticsRow(container) {
+    const tr = document.createElement('tr');
+    tr.className = 'statistics-row';
+    
+    const statusClass = container.status === 'running' ? 'status-running' : 'status-stopped';
+    const statusText = container.status === 'running' ? 'Running' : 'Stopped';
+    
+    // Format RAM display
+    let ramDisplay = '-';
+    if (container.status === 'running' && container.memory_used_mb > 0) {
+        const usedMB = container.memory_used_mb.toFixed(1);
+        const totalMB = container.memory_total_mb > 0 ? container.memory_total_mb.toFixed(1) : '';
+        const percent = container.memory_percent > 0 ? container.memory_percent.toFixed(1) : '';
+        if (totalMB) {
+            ramDisplay = `${usedMB} MB / ${totalMB} MB`;
+            if (percent) {
+                ramDisplay += ` (${percent}%)`;
+            }
+        } else {
+            ramDisplay = `${usedMB} MB`;
+        }
+    }
+    
+    // Format CPU display
+    let cpuDisplay = '-';
+    if (container.status === 'running' && container.cpu_percent > 0) {
+        cpuDisplay = `${container.cpu_percent.toFixed(2)}%`;
+    }
+    
+    // Format Network I/O display
+    const networkIO = container.network_io && container.network_io !== '-' ? escapeHtml(container.network_io) : '-';
+    
+    // Format Block I/O display
+    const blockIO = container.block_io && container.block_io !== '-' ? escapeHtml(container.block_io) : '-';
+    
+    tr.innerHTML = `
+        <td>
+            <div style="font-weight: 500;">${escapeHtml(container.name)}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary);">${container.id}</div>
+        </td>
+        <td>${escapeHtml(container.image)}</td>
+        <td>
+            <div class="container-status ${statusClass}">${statusText}</div>
+        </td>
+        <td>${cpuDisplay}</td>
+        <td>${ramDisplay}</td>
+        <td>${networkIO}</td>
+        <td>${blockIO}</td>
+    `;
+    
+    return tr;
+}
+
+// Create total summary row
+function createTotalRow(label, value) {
+    const tr = document.createElement('tr');
+    tr.className = 'statistics-total-row';
+    tr.style.backgroundColor = 'var(--card-bg)';
+    tr.style.fontWeight = 'bold';
+    
+    tr.innerHTML = `
+        <td colspan="2" style="font-weight: 600; color: var(--text-primary);">${escapeHtml(label)}</td>
+        <td>-</td>
+        <td>-</td>
+        <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(value)}</td>
+    `;
+    
+    return tr;
 }
 
 // Create backup row
@@ -3480,75 +3587,10 @@ function closeEnvCheckModal() {
 }
 
 
-// --- Container Stats Polling ---
-let statsPollInterval = null;
-let systemStatsInterval = null; // Separate interval for system stats (top bar)
-
-async function updateContainerStats(containerId) {
-    try {
-        const response = await fetch(`/api/container/${containerId}/stats`);
-        const data = await response.json();
-        
-        // If we get a 401, stop polling (session expired)
-        if (response.status === 401) {
-            console.warn('Authentication expired, stopping stats polling');
-            if (statsPollInterval) {
-                clearInterval(statsPollInterval);
-                statsPollInterval = null;
-            }
-            if (systemStatsInterval) {
-                clearInterval(systemStatsInterval);
-                systemStatsInterval = null;
-            }
-            return;
-        }
-        
-        if (!response.ok || data.error) {
-            return;
-        }
-        
-        // Find the stats element for this container (table cell)
-        const statsCell = document.querySelector(`.stats-cell[data-container-id="${containerId}"]`);
-        if (!statsCell) return;
-        
-        const cpuPercent = data.cpu_percent || 0;
-        const memoryUsedMb = data.memory_used_mb || 0;
-        const memoryTotalMb = data.memory_total_mb || 0;
-        
-        const cpuEl = statsCell.querySelector('.cpu-val');
-        const memEl = statsCell.querySelector('.mem-val');
-        
-        if (cpuEl) {
-            cpuEl.textContent = `${cpuPercent}%`;
-        }
-        
-        if (memEl) {
-            memEl.textContent = `${memoryUsedMb.toFixed(0)} MB / ${memoryTotalMb.toFixed(0)} MB`;
-        }
-        
-    } catch (error) {
-        console.error(`Failed to update stats for container ${containerId}:`, error);
-    }
-}
-
-function updateAllContainerStats() {
-    // Only update container stats if containers section is visible
-    const containersSection = document.getElementById('containers-section');
-    if (!containersSection || containersSection.style.display === 'none') {
-        return;
-    }
-    
-    // Get all container stats elements (table cells)
-    const statsElements = document.querySelectorAll('.stats-cell[data-container-id]');
-    
-    // Update stats for each container in parallel
-    statsElements.forEach(statsEl => {
-        const containerId = statsEl.getAttribute('data-container-id');
-        if (containerId) {
-            updateContainerStats(containerId);
-        }
-    });
-}
+// --- System Stats Polling (Top Bar) ---
+let systemStatsInterval = null; // Interval for system stats (top bar)
+let systemStatsCache = null; // Cache for system stats
+let consecutiveSystemStatsErrors = 0;
 
 // ===== STACKS MANAGEMENT =====
 
@@ -3887,11 +3929,7 @@ async function deleteSelectedStacks() {
 }
 
 function startStatsPolling() {
-    // Clear any existing intervals
-    if (statsPollInterval) {
-        clearInterval(statsPollInterval);
-        statsPollInterval = null;
-    }
+    // Clear any existing interval
     if (systemStatsInterval) {
         clearInterval(systemStatsInterval);
         systemStatsInterval = null;
@@ -3900,38 +3938,33 @@ function startStatsPolling() {
     // Update system stats immediately (always needed for top bar)
     updateSystemStats();
     
-    // Update container stats immediately if containers section is visible
-    const containersSection = document.getElementById('containers-section');
-    if (containersSection && containersSection.style.display !== 'none') {
-        updateAllContainerStats();
+    // System stats (top bar) - update every 5 seconds
+    // Apply cached stats immediately if available
+    if (systemStatsCache) {
+        applyCachedSystemStats();
     }
     
-    // System stats (top bar) - update every 5 seconds
     systemStatsInterval = setInterval(() => {
         updateSystemStats();
     }, 5000);
-    
-    // Container stats - update every 1 minute, only if containers section is visible
-    statsPollInterval = setInterval(() => {
-        const containersSection = document.getElementById('containers-section');
-        if (containersSection && containersSection.style.display !== 'none') {
-            updateAllContainerStats();
-        }
-    }, 60000); // 1 minute for container stats
 }
 
 async function updateSystemStats() {
     try {
-        const response = await fetch('/api/system-stats');
+        // Add timeout to fetch request (10 seconds)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch('/api/system-stats', {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
         const data = await response.json();
         
         // If we get a 401, stop polling (session expired)
         if (response.status === 401) {
             console.warn('Authentication expired, stopping stats polling');
-            if (statsPollInterval) {
-                clearInterval(statsPollInterval);
-                statsPollInterval = null;
-            }
             if (systemStatsInterval) {
                 clearInterval(systemStatsInterval);
                 systemStatsInterval = null;
@@ -3940,9 +3973,40 @@ async function updateSystemStats() {
         }
         
         if (!response.ok || data.error) {
+            consecutiveSystemStatsErrors++;
             console.error('System stats API error:', response.status, data.error || response.statusText);
+            
+            // If we have cached stats, use them
+            if (systemStatsCache && consecutiveSystemStatsErrors < 5) {
+                applyCachedSystemStats();
+            }
+            
+            // If too many consecutive errors, restart polling after a delay
+            if (consecutiveSystemStatsErrors >= 10) {
+                console.warn('Too many system stats errors, restarting polling...');
+                consecutiveSystemStatsErrors = 0;
+                if (systemStatsInterval) {
+                    clearInterval(systemStatsInterval);
+                    systemStatsInterval = null;
+                }
+                setTimeout(() => {
+                    startStatsPolling();
+                }, 5000);
+            }
             return;
         }
+        
+        // Reset error counter on success
+        consecutiveSystemStatsErrors = 0;
+        
+        // Update cache
+        systemStatsCache = {
+            cpu_percent: data.cpu_percent || 0,
+            memory_used_mb: data.memory_used_mb || 0,
+            memory_total_mb: data.memory_total_mb || 0,
+            memory_percent: data.memory_percent || 0,
+            timestamp: Date.now()
+        };
         
         const cpuEl = document.getElementById('system-cpu');
         const ramEl = document.getElementById('system-ram');
@@ -3959,7 +4023,47 @@ async function updateSystemStats() {
         }
         
     } catch (error) {
+        consecutiveSystemStatsErrors++;
         console.error('Failed to update system stats:', error);
+        
+        // If fetch was aborted (timeout), use cached stats
+        if (error.name === 'AbortError') {
+            console.warn('System stats request timed out, using cached values');
+            if (systemStatsCache) {
+                applyCachedSystemStats();
+            }
+        }
+        
+        // If too many consecutive errors, restart polling
+        if (consecutiveSystemStatsErrors >= 10) {
+            console.warn('Too many system stats errors, restarting polling...');
+            consecutiveSystemStatsErrors = 0;
+            if (systemStatsInterval) {
+                clearInterval(systemStatsInterval);
+                systemStatsInterval = null;
+            }
+            setTimeout(() => {
+                startStatsPolling();
+            }, 5000);
+        }
+    }
+}
+
+function applyCachedSystemStats() {
+    if (!systemStatsCache) return;
+    
+    const cpuEl = document.getElementById('system-cpu');
+    const ramEl = document.getElementById('system-ram');
+    
+    if (cpuEl) {
+        cpuEl.textContent = `${systemStatsCache.cpu_percent}%`;
+    }
+    
+    if (ramEl) {
+        const memUsed = systemStatsCache.memory_used_mb || 0;
+        const memTotal = systemStatsCache.memory_total_mb || 0;
+        const memPercent = systemStatsCache.memory_percent || 0;
+        ramEl.textContent = `${Math.round(memUsed)} MB / ${Math.round(memTotal)} MB (${memPercent.toFixed(1)}%)`;
     }
 }
 

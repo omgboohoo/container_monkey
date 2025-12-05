@@ -547,17 +547,29 @@ class ContainerManager:
                 ['docker', 'stats', '--no-stream', '--format', '{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}', container_id],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=10  # Increased timeout to 10 seconds
             )
             
             if result.returncode != 0:
+                # Check if container doesn't exist or is stopped
+                if 'No such container' in result.stderr or 'is not running' in result.stderr:
+                    return {
+                        'cpu_percent': 0,
+                        'memory_percent': 0,
+                        'memory_usage': '0B / 0B',
+                        'memory_used_mb': 0,
+                        'memory_total_mb': 0,
+                        'status': 'stopped',
+                        'error': 'Container not found or not running'
+                    }
                 return {
                     'cpu_percent': 0,
                     'memory_percent': 0,
                     'memory_usage': '0B / 0B',
                     'memory_used_mb': 0,
                     'memory_total_mb': 0,
-                    'status': 'stopped'
+                    'status': 'stopped',
+                    'error': result.stderr[:100] if result.stderr else 'Unknown error'
                 }
             
             parts = result.stdout.strip().split('\t')
@@ -634,6 +646,18 @@ class ContainerManager:
                 'status': 'running'
             }
             
+        except subprocess.TimeoutExpired:
+            # Docker stats command timed out
+            print(f"Warning: Docker stats timeout for container {container_id}")
+            return {
+                'cpu_percent': 0,
+                'memory_percent': 0,
+                'memory_usage': '0B / 0B',
+                'memory_used_mb': 0,
+                'memory_total_mb': 0,
+                'status': 'timeout',
+                'error': 'Stats request timed out'
+            }
         except Exception as e:
             return {
                 'cpu_percent': 0,

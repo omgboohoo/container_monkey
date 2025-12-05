@@ -283,22 +283,260 @@ def get_dashboard_stats(backup_dir: str) -> Dict[str, Any]:
 def get_system_stats() -> Dict[str, Any]:
     """Get system-wide CPU and RAM usage"""
     try:
-        # Get system CPU usage (percentage)
-        cpu_percent = psutil.cpu_percent(interval=0.1)
+        # Get system CPU usage (percentage) with error handling
+        try:
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            # If CPU percent is None (first call), try again with a short interval
+            if cpu_percent is None:
+                cpu_percent = psutil.cpu_percent(interval=0.1)
+        except Exception as cpu_error:
+            print(f"Warning: Failed to get CPU stats: {cpu_error}")
+            cpu_percent = 0
         
-        # Get system memory info
-        memory = psutil.virtual_memory()
-        memory_used_mb = memory.used / 1024 / 1024
-        memory_total_mb = memory.total / 1024 / 1024
-        memory_percent = memory.percent
+        # Get system memory info with error handling
+        try:
+            memory = psutil.virtual_memory()
+            memory_used_mb = memory.used / 1024 / 1024
+            memory_total_mb = memory.total / 1024 / 1024
+            memory_percent = memory.percent
+        except Exception as mem_error:
+            print(f"Warning: Failed to get memory stats: {mem_error}")
+            memory_used_mb = 0
+            memory_total_mb = 0
+            memory_percent = 0
         
         return {
-            'cpu_percent': cpu_percent,
+            'cpu_percent': cpu_percent if cpu_percent is not None else 0,
             'memory_used_mb': memory_used_mb,
             'memory_total_mb': memory_total_mb,
             'memory_percent': memory_percent
         }
     except Exception as e:
+        print(f"Error in get_system_stats: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'error': str(e)}
+
+
+def get_statistics() -> Dict[str, Any]:
+    """
+    Get comprehensive statistics for all containers including CPU, RAM, and disk usage
+    
+    Returns:
+        Dict with container statistics and totals
+    """
+    docker_api_client = docker_utils.docker_api_client
+    if not docker_api_client:
+        return {'error': 'Docker client not available'}
+    
+    try:
+        # Get all containers
+        containers = docker_api_client.list_containers(all=True)
+        container_stats_list = []
+        
+        # Get container sizes from docker system df
+        container_sizes = {}
+        try:
+            df_result = subprocess.run(
+                ['docker', 'system', 'df', '-v'],
+                capture_output=True, text=True, timeout=15
+            )
+            if df_result.returncode == 0:
+                output_lines = df_result.stdout.split('\n')
+                in_containers_section = False
+                
+                for line in output_lines:
+                    line = line.strip()
+                    if 'CONTAINER ID' in line.upper() or 'CONTAINERS' in line.upper():
+                        in_containers_section = True
+                        continue
+                    if in_containers_section:
+                        if ('IMAGE' in line.upper() and 'REPOSITORY' in line.upper()) or \
+                           ('LOCAL VOLUMES' in line.upper()) or \
+                           (':' in line and 'USAGE' in line.upper()):
+                            break
+                        if not line or line.startswith('-') or 'CONTAINER ID' in line.upper():
+                            continue
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            container_id = parts[0]
+                            size_str = parts[2]
+                            if any(unit in size_str.upper() for unit in ['B', 'K', 'M', 'G', 'T']):
+                                container_sizes[container_id] = size_str
+        except Exception as e:
+            print(f"Warning: Could not get container sizes from df: {e}")
+        
+        # Get total volumes and images sizes
+        total_volumes_size_bytes = 0
+        total_images_size_bytes = 0
+        
+        try:
+            df_result = subprocess.run(
+                ['docker', 'system', 'df'],
+                capture_output=True, text=True, timeout=10
+            )
+            if df_result.returncode == 0:
+                output_lines = df_result.stdout.split('\n')
+                for line in output_lines:
+                    line = line.strip()
+                    if 'LOCAL VOLUMES' in line.upper():
+                        parts = line.split()
+                        for i, part in enumerate(parts):
+                            if any(unit in part.upper() for unit in ['B', 'K', 'M', 'G', 'T']) and i > 0:
+                                total_volumes_size_bytes = parse_size_string(part)
+                                break
+                    elif 'IMAGES' in line.upper():
+                        parts = line.split()
+                        for i, part in enumerate(parts):
+                            if any(unit in part.upper() for unit in ['B', 'K', 'M', 'G', 'T']) and i > 0:
+                                total_images_size_bytes = parse_size_string(part)
+                                break
+        except Exception as e:
+            print(f"Warning: Could not get totals from df: {e}")
+        
+        # Fallback: calculate images size from API
+        if total_images_size_bytes == 0:
+            try:
+                all_images = docker_api_client.list_images()
+                total_images_size_bytes = sum(img.get('Size', 0) for img in all_images)
+            except:
+                pass
+        
+        # Process each container
+        for container in containers:
+            names = container.get('Names', [])
+            if names is None:
+                names = ['']
+            
+            container_name = names[0].lstrip('/') if names else ''
+            if container_name.startswith('backup-temp-') or container_name.startswith('restore-temp-'):
+                continue
+            
+            container_id = container.get('Id', '')
+            container_id_short = container_id[:12] if container_id else ''
+            
+            # Get container size
+            container_size_str = '0B'
+            container_size_bytes = 0
+            if container_id_short in container_sizes:
+                container_size_str = container_sizes[container_id_short]
+                container_size_bytes = parse_size_string(container_size_str)
+            elif container_id in container_sizes:
+                container_size_str = container_sizes[container_id]
+                container_size_bytes = parse_size_string(container_size_str)
+            
+            # Get CPU and RAM stats
+            cpu_percent = 0
+            memory_percent = 0
+            memory_used_mb = 0
+            memory_total_mb = 0
+            network_io = '-'
+            block_io = '-'
+            status_text = container.get('Status', 'unknown')
+            is_running = status_text.lower().startswith('up') or 'running' in status_text.lower()
+            
+            if is_running:
+                try:
+                    result = subprocess.run(
+                        ['docker', 'stats', '--no-stream', '--format', '{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}\t{{.BlockIO}}', container_id_short],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    
+                    if result.returncode == 0:
+                        parts = result.stdout.strip().split('\t')
+                        
+                        if len(parts) >= 1:
+                            cpu_str = parts[0].replace('%', '').strip()
+                            try:
+                                cpu_percent = float(cpu_str)
+                            except:
+                                cpu_percent = 0
+                        
+                        if len(parts) >= 2:
+                            memory_usage = parts[1].strip()
+                            if '/' in memory_usage:
+                                try:
+                                    used_str, total_str = memory_usage.split('/')
+                                    used_str = used_str.strip().upper()
+                                    total_str = total_str.strip().upper()
+                                    
+                                    def to_mb(value_str):
+                                        if 'GIB' in value_str:
+                                            num = float(value_str.replace('GIB', '').strip())
+                                            return num * 1024
+                                        elif 'MIB' in value_str:
+                                            num = float(value_str.replace('MIB', '').strip())
+                                            return num
+                                        elif 'KIB' in value_str:
+                                            num = float(value_str.replace('KIB', '').strip())
+                                            return num / 1024
+                                        elif 'GB' in value_str:
+                                            num = float(value_str.replace('GB', '').strip())
+                                            return num * 1000
+                                        elif 'MB' in value_str:
+                                            num = float(value_str.replace('MB', '').strip())
+                                            return num
+                                        elif 'KB' in value_str:
+                                            num = float(value_str.replace('KB', '').strip())
+                                            return num / 1000
+                                        else:
+                                            return 0
+                                    
+                                    memory_used_mb = to_mb(used_str)
+                                    memory_total_mb = to_mb(total_str)
+                                except:
+                                    pass
+                        
+                        if len(parts) >= 3:
+                            mem_perc_str = parts[2].replace('%', '').strip()
+                            try:
+                                memory_percent = float(mem_perc_str)
+                            except:
+                                memory_percent = 0
+                        
+                        if len(parts) >= 4:
+                            network_io = parts[3].strip()
+                        
+                        if len(parts) >= 5:
+                            block_io = parts[4].strip()
+                except:
+                    pass
+            
+            container_stats_list.append({
+                'id': container_id_short,
+                'name': container_name,
+                'image': container.get('Image', 'unknown'),
+                'status': 'running' if is_running else 'stopped',
+                'cpu_percent': round(cpu_percent, 2),
+                'memory_percent': round(memory_percent, 2),
+                'memory_used_mb': round(memory_used_mb, 2),
+                'memory_total_mb': round(memory_total_mb, 2),
+                'network_io': network_io,
+                'block_io': block_io,
+                'disk_size': container_size_str,
+                'disk_size_bytes': container_size_bytes,
+            })
+        
+        # Calculate total container disk size
+        total_containers_size_bytes = sum(c['disk_size_bytes'] for c in container_stats_list)
+        
+        return {
+            'containers': container_stats_list,
+            'totals': {
+                'containers_disk': format_size(total_containers_size_bytes),
+                'containers_disk_bytes': total_containers_size_bytes,
+                'volumes_disk': format_size(total_volumes_size_bytes),
+                'volumes_disk_bytes': total_volumes_size_bytes,
+                'images_disk': format_size(total_images_size_bytes),
+                'images_disk_bytes': total_images_size_bytes,
+            }
+        }
+    except Exception as e:
+        print(f"Error in get_statistics: {e}")
+        import traceback
+        traceback.print_exc()
         return {'error': str(e)}
 
 
