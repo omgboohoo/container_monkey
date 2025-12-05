@@ -206,37 +206,86 @@ class SchedulerManager:
         """Run backups for all selected containers"""
         print(f"🚀 Starting scheduled backups for {len(self.selected_containers)} containers")
         
+        # Track progress IDs for this scheduled backup run
+        scheduled_progress_ids = []
+        
         for container_id in self.selected_containers:
             try:
                 print(f"📦 Queuing scheduled backup for container {container_id[:12]}...")
                 # Use queue_if_busy=True to queue if manual backup is running
-                self.backup_manager.start_backup(container_id, queue_if_busy=True, is_scheduled=True)
+                result = self.backup_manager.start_backup(container_id, queue_if_busy=True, is_scheduled=True)
+                progress_id = result.get('progress_id')
+                if progress_id:
+                    scheduled_progress_ids.append(progress_id)
+                    print(f"   Progress ID: {progress_id[:8]}...")
             except Exception as e:
                 print(f"❌ Error queuing scheduled backup for {container_id[:12]}: {e}")
         
-        # After backups complete, cleanup old scheduled backups
-        # Note: This runs immediately, but cleanup will happen after backups finish
-        # For now, we'll run cleanup in a separate thread after a delay
-        threading.Thread(
-            target=self._delayed_cleanup,
-            daemon=True
-        ).start()
+        # Monitor backups and cleanup when all complete
+        if scheduled_progress_ids:
+            threading.Thread(
+                target=self._monitor_and_cleanup,
+                args=(scheduled_progress_ids,),
+                daemon=True
+            ).start()
+        else:
+            print("⚠️  No scheduled backups were queued, skipping cleanup")
     
-    def _delayed_cleanup(self):
-        """Wait for backups to complete, then cleanup old scheduled backups"""
-        # Wait 5 minutes for backups to complete
-        time.sleep(300)
-        self.cleanup_old_backups()
+    def _monitor_and_cleanup(self, progress_ids):
+        """Monitor scheduled backups and cleanup when all complete"""
+        print(f"👀 Monitoring {len(progress_ids)} scheduled backups for completion...")
+        
+        max_wait_time = 3600  # Maximum 1 hour wait time
+        check_interval = 5  # Check every 5 seconds
+        start_time = time.time()
+        
+        # Check every 5 seconds until all backups complete
+        while True:
+            # Check for timeout
+            if time.time() - start_time > max_wait_time:
+                print(f"⏰ Timeout waiting for scheduled backups to complete (waited {max_wait_time}s)")
+                print("🧹 Running lifecycle cleanup anyway...")
+                self.cleanup_old_backups()
+                break
+            
+            completed_count = 0
+            error_count = 0
+            
+            for progress_id in progress_ids:
+                try:
+                    progress = self.backup_manager.get_progress(progress_id)
+                    if not progress:
+                        # Progress not found, assume completed/cleaned up
+                        completed_count += 1
+                        continue
+                    
+                    status = progress.get('status', '')
+                    if status == 'complete':
+                        completed_count += 1
+                    elif status == 'error':
+                        error_count += 1
+                        completed_count += 1  # Count errors as "done" for cleanup purposes
+                except Exception as e:
+                    print(f"⚠️  Error checking progress for {progress_id[:8]}...: {e}")
+                    # If we can't check progress, assume it's done to avoid infinite loop
+                    completed_count += 1
+            
+            # If all backups are done (complete or error), run cleanup
+            if completed_count >= len(progress_ids):
+                print(f"✅ All scheduled backups completed ({completed_count - error_count} successful, {error_count} errors)")
+                print("🧹 Running lifecycle cleanup...")
+                self.cleanup_old_backups()
+                break
+            
+            # Wait before checking again
+            time.sleep(check_interval)
     
     def cleanup_old_backups(self):
         """Cleanup old scheduled backups based on lifecycle"""
         try:
-            import glob
-            import tarfile
-            import json
-            
             # List all scheduled backup files
             if not os.path.exists(self.backup_dir):
+                print("ℹ️  Backup directory does not exist, skipping cleanup")
                 return
             
             scheduled_backups = []
@@ -250,11 +299,6 @@ class SchedulerManager:
                             'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
                             'file_path': file_path
                         })
-            backups = backup_file_manager.list_backups()
-            
-            if 'error' in backups:
-                print(f"⚠️  Error listing backups for cleanup: {backups['error']}")
-                return
             
             # Group scheduled backups by container
             container_backups = {}

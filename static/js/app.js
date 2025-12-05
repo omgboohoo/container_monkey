@@ -2,6 +2,21 @@
 let isAuthenticated = false;
 let currentUsername = '';
 
+// Global error handler to ensure modals don't get stuck
+window.addEventListener('error', function(event) {
+    console.error('Global error:', event.error);
+    // Don't close modals on every error, but log it
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    // Close modals if they might be stuck
+    const visibleModals = document.querySelectorAll('.modal[style*="block"]');
+    if (visibleModals.length > 0) {
+        console.warn('Unhandled rejection detected with visible modals, checking for stuck modals...');
+    }
+});
+
 // Check authentication status on page load
 async function checkAuthStatus() {
     try {
@@ -1255,6 +1270,32 @@ function closeModal() {
     currentContainerId = null;
 }
 
+// Close all modals (safety function to prevent stuck modals)
+function closeAllModals() {
+    const modals = [
+        'details-modal',
+        'backup-modal',
+        'restore-modal',
+        'env-check-modal',
+        'backup-all-modal',
+        'attach-console-modal',
+        'logs-modal',
+        'download-all-modal',
+        'upload-progress-modal',
+        'confirmation-modal',
+        'change-password-modal',
+        'change-username-modal',
+        'delete-container-modal'
+    ];
+    
+    modals.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    });
+}
+
 // Load backups
 async function loadBackups() {
     const errorEl = document.getElementById('backups-error');
@@ -1871,6 +1912,63 @@ window.onclick = function(event) {
         closeConfirmationModal();
     }
 }
+
+// Close modals on ESC key press
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeAllModals();
+    }
+});
+
+// Safety check: Detect if modals are blocking clicks
+// This helps identify when modals get stuck open
+let clickBlockedCount = 0;
+document.addEventListener('click', function(event) {
+    // Check if click is on a button or interactive element
+    const target = event.target;
+    const isInteractive = target.tagName === 'BUTTON' || 
+                         target.tagName === 'A' || 
+                         target.closest('button') || 
+                         target.closest('a') ||
+                         target.closest('.nav-item');
+    
+    if (isInteractive) {
+        // Check if any modal is visible (excluding login modal)
+        const modals = document.querySelectorAll('.modal');
+        const visibleModals = Array.from(modals).filter(modal => {
+            const display = window.getComputedStyle(modal).display;
+            return display === 'block' && modal.id !== 'login-modal';
+        });
+        
+        // If there are visible modals but we're clicking outside them, 
+        // the modal backdrop might be blocking - this is normal
+        // But if clicking on a button that should work, check if modal is stuck
+        if (visibleModals.length > 0) {
+            const clickedInModal = visibleModals.some(modal => modal.contains(target));
+            if (!clickedInModal) {
+                // Clicking outside modal - this should close it via window.onclick handler
+                // If it doesn't, the modal might be stuck
+                clickBlockedCount++;
+                if (clickBlockedCount > 3) {
+                    console.warn('Multiple clicks detected with visible modals, checking for stuck modals...');
+                    // Check if modals are actually blocking (have backdrop but no content)
+                    visibleModals.forEach(modal => {
+                        const content = modal.querySelector('.modal-content');
+                        if (!content || content.offsetHeight === 0) {
+                            console.warn('Detected stuck modal (no content), closing:', modal.id);
+                            modal.style.display = 'none';
+                        }
+                    });
+                    clickBlockedCount = 0;
+                }
+            } else {
+                clickBlockedCount = 0; // Reset if clicking inside modal
+            }
+        } else {
+            clickBlockedCount = 0; // Reset if no modals visible
+        }
+    }
+}, true);
 
 // Container management functions
 async function startContainer(containerId) {
@@ -4708,9 +4806,10 @@ async function loadSchedulerConfig() {
 async function loadSchedulerContainers() {
     const spinner = document.getElementById('scheduler-containers-spinner');
     const list = document.getElementById('scheduler-containers-list');
+    const wrapper = document.getElementById('scheduler-containers-table-wrapper');
     
     spinner.style.display = 'flex';
-    list.style.display = 'none';
+    list.innerHTML = '';
     
     try {
         const response = await fetch('/api/containers');
@@ -4726,10 +4825,17 @@ async function loadSchedulerContainers() {
         const containers = data.containers || [];
         const selectedIds = schedulerConfig ? (schedulerConfig.selected_containers || []) : [];
         
-        list.innerHTML = '';
+        // Update select all checkbox
+        const selectAllCheckbox = document.getElementById('scheduler-select-all');
+        if (selectAllCheckbox) {
+            const visibleContainers = containers.filter(c => !c.is_self);
+            const allSelected = visibleContainers.length > 0 && visibleContainers.every(c => selectedIds.includes(c.id));
+            selectAllCheckbox.checked = allSelected;
+            selectAllCheckbox.indeterminate = !allSelected && visibleContainers.some(c => selectedIds.includes(c.id));
+        }
         
         if (containers.length === 0) {
-            list.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No containers found</div>';
+            list.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-secondary);">No containers found</td></tr>';
         } else {
             containers.forEach(container => {
                 // Skip self container
@@ -4738,39 +4844,80 @@ async function loadSchedulerContainers() {
                 }
                 
                 const isSelected = selectedIds.includes(container.id);
-                const checkbox = document.createElement('div');
-                checkbox.style.cssText = 'display: flex; align-items: center; padding: 12px; background: var(--bg-secondary); border-radius: 8px; cursor: pointer;';
-                checkbox.onclick = () => {
-                    const input = checkbox.querySelector('input[type="checkbox"]');
-                    input.checked = !input.checked;
+                const tr = document.createElement('tr');
+                tr.className = 'scheduler-container-row';
+                tr.style.cursor = 'pointer';
+                tr.onclick = (event) => {
+                    if (event.target.type !== 'checkbox') {
+                        const checkbox = tr.querySelector('input[type="checkbox"]');
+                        checkbox.checked = !checkbox.checked;
+                        updateSelectAllCheckbox();
+                    }
                 };
                 
-                checkbox.innerHTML = `
-                    <input type="checkbox" 
-                           data-container-id="${container.id}" 
-                           ${isSelected ? 'checked' : ''} 
-                           onclick="event.stopPropagation();"
-                           style="margin-right: 12px; width: 18px; height: 18px; cursor: pointer;">
-                    <div style="flex: 1;">
-                        <div style="font-weight: 500; color: var(--text-primary);">${escapeHtml(container.name)}</div>
-                        <div style="font-size: 0.85em; color: var(--text-secondary); font-family: monospace;">${container.id.substring(0, 12)}</div>
-                    </div>
-                    <div class="container-status ${container.status === 'running' ? 'status-running' : 'status-stopped'}" style="margin-left: 12px;">
-                        ${container.status.toUpperCase()}
-                    </div>
+                const statusLower = container.status.toLowerCase();
+                const statusClass = statusLower === 'running' ? 'status-running' : 'status-stopped';
+                const statusDisplay = container.status_text || container.status.toUpperCase();
+                
+                const imageInfo = container.image_info || {};
+                const imageName = imageInfo.name || container.image || 'unknown';
+                
+                tr.innerHTML = `
+                    <td class="checkbox-cell" onclick="event.stopPropagation();">
+                        <input type="checkbox" 
+                               class="container-checkbox scheduler-container-checkbox"
+                               data-container-id="${container.id}" 
+                               ${isSelected ? 'checked' : ''} 
+                               onclick="event.stopPropagation(); updateSelectAllCheckbox();">
+                    </td>
+                    <td>
+                        <div class="container-name" style="font-weight: 600; color: var(--text-primary);">${escapeHtml(container.name)}</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); font-family: monospace;">${container.id.substring(0, 12)}</div>
+                    </td>
+                    <td>
+                        <div class="container-status ${statusClass}">${statusDisplay}</div>
+                    </td>
+                    <td>
+                        <div style="color: var(--secondary); font-size: 0.9em;">${escapeHtml(imageName)}</div>
+                    </td>
                 `;
                 
-                list.appendChild(checkbox);
+                list.appendChild(tr);
             });
         }
         
         spinner.style.display = 'none';
-        list.style.display = 'grid';
+        if (wrapper) wrapper.style.overflow = '';
     } catch (error) {
         console.error('Error loading containers:', error);
         spinner.style.display = 'none';
-        list.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--error);">Error loading containers: ${error.message}</div>`;
+        list.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--danger);">Error loading containers: ${error.message}</td></tr>`;
     }
+}
+
+function toggleSelectAllSchedulerContainers() {
+    const selectAllCheckbox = document.getElementById('scheduler-select-all');
+    const checkboxes = document.querySelectorAll('.scheduler-container-checkbox');
+    const isChecked = selectAllCheckbox.checked;
+    
+    checkboxes.forEach(checkbox => {
+        checkbox.checked = isChecked;
+    });
+}
+
+function updateSelectAllCheckbox() {
+    const selectAllCheckbox = document.getElementById('scheduler-select-all');
+    const checkboxes = document.querySelectorAll('.scheduler-container-checkbox');
+    
+    if (checkboxes.length === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+        return;
+    }
+    
+    const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+    selectAllCheckbox.checked = checkedCount === checkboxes.length;
+    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
 }
 
 function updateScheduleUI() {
@@ -4828,7 +4975,7 @@ async function saveSchedulerConfig() {
         const lifecycle = parseInt(document.getElementById('schedule-lifecycle').value);
         
         // Get selected container IDs
-        const checkboxes = document.querySelectorAll('#scheduler-containers-list input[type="checkbox"]');
+        const checkboxes = document.querySelectorAll('.scheduler-container-checkbox');
         const selectedContainers = Array.from(checkboxes)
             .filter(cb => cb.checked)
             .map(cb => cb.getAttribute('data-container-id'));

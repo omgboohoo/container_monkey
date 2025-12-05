@@ -529,13 +529,27 @@
                     <div class="card-header">
                         <h3 style="margin: 0; font-size: 1.1em;">Select Containers to Backup</h3>
                     </div>
-                    <div class="card-body">
-                        <div id="scheduler-containers-spinner" class="grid-spinner-container" style="display: none;">
-                            <div class="spinner"></div>
-                            <div class="grid-spinner-text">Loading Containers...</div>
-                        </div>
-                        <div id="scheduler-containers-list" style="display: grid; gap: 12px;">
-                            <!-- Container checkboxes will be injected here -->
+                    <div class="card-body" style="padding: 0;">
+                        <div class="table-responsive" id="scheduler-containers-table-wrapper">
+                            <div id="scheduler-containers-spinner" class="grid-spinner-container" style="display: none;">
+                                <div class="spinner"></div>
+                                <div class="grid-spinner-text">Loading Containers...</div>
+                            </div>
+                            <table class="table" id="scheduler-containers-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">
+                                            <input type="checkbox" id="scheduler-select-all" onclick="toggleSelectAllSchedulerContainers()" style="width: 18px; height: 18px; cursor: pointer;">
+                                        </th>
+                                        <th>Container</th>
+                                        <th>Status</th>
+                                        <th>Image</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scheduler-containers-list">
+                                    <!-- Container rows will be injected here -->
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
