@@ -872,7 +872,14 @@ async function backupContainer() {
                         return;
                     }
                     
-                    const progress = await progressResponse.json();
+                    let progress;
+                    try {
+                        progress = await progressResponse.json();
+                    } catch (jsonError) {
+                        console.error('Failed to parse progress JSON:', jsonError);
+                        clearInterval(progressInterval);
+                        return;
+                    }
                     
                     // Update UI
                     statusEl.innerHTML = progress.step || 'Processing...';
@@ -1051,7 +1058,14 @@ async function backupContainerDirect(containerId, containerName) {
                         return;
                     }
                     
-                    const progress = await progressResponse.json();
+                    let progress;
+                    try {
+                        progress = await progressResponse.json();
+                    } catch (jsonError) {
+                        console.error('Failed to parse progress JSON:', jsonError);
+                        clearInterval(progressInterval);
+                        return;
+                    }
                     
                     // Update UI
                     statusEl.innerHTML = progress.step || 'Processing...';
@@ -2338,7 +2352,14 @@ async function downloadAllBackups() {
                     return;
                 }
 
-                const progress = await progressResponse.json();
+                let progress;
+                try {
+                    progress = await progressResponse.json();
+                } catch (jsonError) {
+                    console.error('Failed to parse progress JSON:', jsonError);
+                    clearInterval(progressInterval);
+                    return;
+                }
 
                 // Update status
                 if (progress.status === 'archiving') {
@@ -4109,7 +4130,13 @@ async function backupSelectedContainers() {
                                     return;
                                 }
                                 
-                                const progress = await progressResponse.json();
+                                let progress;
+                                try {
+                                    progress = await progressResponse.json();
+                                } catch (jsonError) {
+                                    console.error('Failed to parse progress JSON:', jsonError);
+                                    return; // Continue polling
+                                }
                                 
                                 // Only mark as completed if status is actually 'complete' or 'error'
                                 if (progress.status !== 'complete' && progress.status !== 'error') {
@@ -4219,7 +4246,15 @@ async function backupSelectedContainers() {
                                 return;
                             }
                             
-                            const progress = await progressResponse.json();
+                            let progress;
+                            try {
+                                progress = await progressResponse.json();
+                            } catch (jsonError) {
+                                console.error('Failed to parse progress JSON:', jsonError);
+                                clearInterval(progressInterval);
+                                backupCompleted = true;
+                                return;
+                            }
                             
                             // Update UI immediately
                             stepEl.textContent = progress.step || 'Processing...';

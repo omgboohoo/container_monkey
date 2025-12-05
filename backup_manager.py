@@ -611,4 +611,3 @@ class BackupManager:
             # Only clear current_backup_info if we're releasing the lock
             if release_lock:
                 self.current_backup_info.clear()
-

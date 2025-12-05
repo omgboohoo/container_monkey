@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.1.20**
+**Version 0.2.0**
 
 ## Overview
 
@@ -10,9 +10,19 @@ Container Monkey is a web-based Docker management platform providing container l
 
 ### Backend
 - **Framework**: Flask 3.0.0 (Python 3.11)
-- **Authentication**: Session-based authentication with SQLite user database
+- **Architecture**: Modular design with separate manager modules for maintainability
+- **Authentication**: Session-based authentication with SQLite user database (`auth_manager.py`)
 - **Docker Integration**: Direct Docker socket API (`docker_api.py`) with fallback to docker-py library
-- **Backup System**: Modular `backup_manager.py` with queue support for sequential backup processing
+- **Modular Managers**:
+  - `container_manager.py` - Container lifecycle operations
+  - `backup_manager.py` - Backup operations with queue support for sequential processing
+  - `backup_file_manager.py` - Backup file management and operations
+  - `restore_manager.py` - Restore operations and conflict handling
+  - `volume_manager.py` - Volume exploration and management
+  - `image_manager.py` - Image management and cleanup
+  - `network_manager.py` - Network backup and restore
+  - `stack_manager.py` - Docker stack management
+  - `system_manager.py` - System monitoring and statistics
 - **Storage**: Docker volumes for backup persistence
 - **Database**: SQLite database for user management (stored in backup volume)
 - **Rate Limiting**: Flask-Limiter 3.5.0 for API protection (progress endpoint exempt)
@@ -180,16 +190,17 @@ GET    /console/<container_id>                  # Container console page
 
 ## Key Technical Decisions
 
-1. **Direct Docker Socket API**: Uses direct HTTP requests to Docker socket (`docker_api.py`) for better reliability than docker-py library
-2. **Modular Backup System**: Backup functionality separated into `backup_manager.py` module for maintainability
-3. **Sequential Backup Queue**: Queue processor ensures backups complete fully (including tar.gz writing) before starting next
-4. **Session-based Authentication**: SQLite database stores user credentials with password hashing for security
-5. **Volume-based Storage**: Backups stored in Docker volume for persistence across container restarts
-6. **Client-side Polling**: Stats updated via 5-second polling intervals for real-time updates
-7. **Rate Limiting**: Flask-Limiter protects API endpoints (progress endpoint exempt for frequent polling)
-8. **Progressive Enhancement**: Works without JavaScript for basic functionality, enhanced with JS
-9. **Self-filtering**: Application filters itself from container/image/volume listings to avoid recursion
-10. **Backup Completion Verification**: Ensures tar.gz files are fully written before marking backup complete
+1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`) for better maintainability and separation of concerns
+2. **Direct Docker Socket API**: Uses direct HTTP requests to Docker socket (`docker_api.py`) for better reliability than docker-py library
+3. **Modular Backup System**: Backup functionality separated into `backup_manager.py` and `backup_file_manager.py` modules for maintainability
+4. **Sequential Backup Queue**: Queue processor ensures backups complete fully (including tar.gz writing) before starting next
+5. **Session-based Authentication**: SQLite database stores user credentials with password hashing for security (`auth_manager.py`)
+6. **Volume-based Storage**: Backups stored in Docker volume for persistence across container restarts
+7. **Client-side Polling**: Stats updated via 5-second polling intervals for real-time updates
+8. **Rate Limiting**: Flask-Limiter protects API endpoints (progress endpoint exempt for frequent polling)
+9. **Progressive Enhancement**: Works without JavaScript for basic functionality, enhanced with JS
+10. **Self-filtering**: Application filters itself from container/image/volume listings to avoid recursion
+11. **Backup Completion Verification**: Ensures tar.gz files are fully written before marking backup complete
 
 ## Performance Considerations
 
@@ -204,8 +215,8 @@ GET    /console/<container_id>                  # Container console page
 ## Security Considerations
 
 - Requires Docker socket access (run with appropriate permissions)
-- **Built-in authentication**: Session-based login system with SQLite user database
-- Default credentials: username `monkey`, password `monkey` (should be changed in production)
+- **Built-in authentication**: Session-based login system with SQLite user database (`auth_manager.py`)
+- Default credentials: username `monkeysee`, password `monkeydo` (should be changed in production)
 - All API endpoints require authentication (except `/api/login`, `/api/logout`, `/api/auth-status`)
 - File uploads validated and sanitized
 - Container commands executed with user permissions

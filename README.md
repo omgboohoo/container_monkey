@@ -1,6 +1,6 @@
 # Container Monkey 🐵
 
-**Version 0.1.20**
+**Version 0.2.0**
 
 The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
@@ -36,8 +36,8 @@ chmod +x build_deploy_local_docker.sh
 Access the web UI at: http://localhost:666
 
 **Default login credentials:**
-- Username: `monkey`
-- Password: `monkey`
+- Username: `monkeysee`
+- Password: `monkeydo`
 
 ### Cloud Deployment (build_image.sh)
 
@@ -73,8 +73,8 @@ sudo docker run -d \
 Access the web UI at: http://your-server:666
 
 **Default login credentials:**
-- Username: `monkey`
-- Password: `monkey`
+- Username: `monkeysee`
+- Password: `monkeydo`
 
 ### Manual Build
 
@@ -166,10 +166,22 @@ See PRD.md for complete API documentation.
 
 ## Architecture
 
+The application has been refactored into a modular architecture with separate manager modules for better maintainability:
+
 - **Backend**: Flask 3.0.0 (Python 3.11)
 - **Frontend**: Vanilla JavaScript (ES6+) with modern CSS
 - **Docker API**: Direct Docker socket communication (`docker_api.py`) with fallback to docker-py
-- **Backup System**: Modular `backup_manager.py` with queue support for sequential processing
+- **Modular Managers**: 
+  - `auth_manager.py` - Authentication and user management
+  - `container_manager.py` - Container operations
+  - `backup_manager.py` - Backup operations with queue support
+  - `backup_file_manager.py` - Backup file management
+  - `restore_manager.py` - Restore operations
+  - `volume_manager.py` - Volume management
+  - `image_manager.py` - Image management
+  - `network_manager.py` - Network management
+  - `stack_manager.py` - Docker stack management
+  - `system_manager.py` - System monitoring and stats
 - **Storage**: Docker volumes for backup persistence
 - **Database**: SQLite for user management
 - **Rate Limiting**: Flask-Limiter for API protection
@@ -178,7 +190,7 @@ See PRD.md for complete API documentation.
 ## Security Notes
 
 - Runs with Docker socket access (requires appropriate permissions)
-- Built-in authentication with default credentials (username: `monkey`, password: `monkey`) - change in production
+- Built-in authentication with default credentials (username: `monkeysee`, password: `monkeydo`) - change in production
 - Use nginx reverse proxy with TLS termination and IP-based access control
 - Backups stored in Docker volume for persistence
 
