@@ -93,8 +93,14 @@ class BackupManager:
             try:
                 # Get next item from queue (blocking with timeout)
                 try:
-                    container_id, progress_id = self.backup_queue.get(timeout=1)
-                    print(f"📦 Got queued backup from queue: {container_id[:12]}... (progress_id: {progress_id[:8]})")
+                    queue_item = self.backup_queue.get(timeout=1)
+                    # Handle both old format (container_id, progress_id) and new format (container_id, progress_id, is_scheduled)
+                    if len(queue_item) == 2:
+                        container_id, progress_id = queue_item
+                        is_scheduled = False
+                    else:
+                        container_id, progress_id, is_scheduled = queue_item
+                    print(f"📦 Got queued backup from queue: {container_id[:12]}... (progress_id: {progress_id[:8]}, scheduled: {is_scheduled})")
                 except Empty:
                     # Timeout - queue is empty, continue loop
                     continue
@@ -132,9 +138,12 @@ class BackupManager:
                         'start_time': datetime.now().isoformat()
                     })
                     
+                    # Get is_scheduled from progress tracking
+                    is_scheduled = self.backup_progress.get(progress_id, {}).get('is_scheduled', False)
+                    
                     # Process the backup (don't release lock - we'll do it here)
-                    print(f"🚀 Starting backup for {container_name}")
-                    self._backup_container_background(progress_id, container_id, release_lock=False)
+                    print(f"🚀 Starting backup for {container_name} (scheduled: {is_scheduled})")
+                    self._backup_container_background(progress_id, container_id, release_lock=False, is_scheduled=is_scheduled)
                     print(f"✅ Backup completed for {container_name}")
                 finally:
                     # Release lock and clear info - this allows next backup in queue to proceed
@@ -163,12 +172,13 @@ class BackupManager:
                 except:
                     pass
     
-    def queue_backup(self, container_id: str) -> str:
+    def queue_backup(self, container_id: str, is_scheduled: bool = False) -> str:
         """
         Queue a backup operation
         
         Args:
             container_id: Container ID to backup
+            is_scheduled: Whether this is a scheduled backup
             
         Returns:
             progress_id: Progress tracking ID
@@ -183,12 +193,13 @@ class BackupManager:
             'total_steps': 6,
             'current_step': 0,
             'container_id': container_id,
-            'error': None
+            'error': None,
+            'is_scheduled': is_scheduled
         }
         
-        # Add to queue
-        print(f"📥 Adding backup to queue: {container_id[:12]}... (progress_id: {progress_id[:8]})")
-        self.backup_queue.put((container_id, progress_id))
+        # Add to queue (include is_scheduled)
+        print(f"📥 Adding backup to queue: {container_id[:12]}... (progress_id: {progress_id[:8]}, scheduled: {is_scheduled})")
+        self.backup_queue.put((container_id, progress_id, is_scheduled))
         queue_size = self.backup_queue.qsize()
         print(f"📊 Queue size after adding: {queue_size}")
         
@@ -203,13 +214,14 @@ class BackupManager:
         
         return progress_id
     
-    def start_backup(self, container_id: str, queue_if_busy: bool = False) -> Dict:
+    def start_backup(self, container_id: str, queue_if_busy: bool = False, is_scheduled: bool = False) -> Dict:
         """
         Start a backup operation (immediate or optionally queued)
         
         Args:
             container_id: Container ID to backup
             queue_if_busy: If True, queue the backup when lock is held. If False, raise exception.
+            is_scheduled: If True, tag this backup as scheduled (for lifecycle management)
             
         Returns:
             Dict with success status and progress_id
@@ -225,7 +237,7 @@ class BackupManager:
             # If lock is held
             if queue_if_busy:
                 # Queue the backup
-                progress_id = self.queue_backup(container_id)
+                progress_id = self.queue_backup(container_id, is_scheduled=is_scheduled)
                 status = self.get_status()
                 return {
                     'success': True,
@@ -257,7 +269,8 @@ class BackupManager:
                 'total_steps': 6,
                 'current_step': 0,
                 'container_id': container_id,
-                'error': None
+                'error': None,
+                'is_scheduled': is_scheduled
             }
             
             self.current_backup_info.update({
@@ -270,7 +283,7 @@ class BackupManager:
             # Start backup in background thread
             thread = threading.Thread(
                 target=self._backup_container_background,
-                args=(progress_id, container_id)
+                args=(progress_id, container_id, True, is_scheduled)
             )
             thread.daemon = True
             thread.start()
@@ -320,7 +333,7 @@ class BackupManager:
             'queue_size': self.backup_queue.qsize()
         }
     
-    def _backup_container_background(self, progress_id: str, container_id: str, release_lock: bool = True):
+    def _backup_container_background(self, progress_id: str, container_id: str, release_lock: bool = True, is_scheduled: bool = False):
         """
         Background thread function to create backup with progress updates
         Only marks complete once tar.gz streaming is fully finished
@@ -329,6 +342,7 @@ class BackupManager:
             progress_id: Progress tracking ID
             container_id: Container ID to backup
             release_lock: Whether to release the lock when done (False when called from queue processor)
+            is_scheduled: Whether this is a scheduled backup (affects filename prefix and metadata)
         """
         try:
             self.backup_progress[progress_id]['status'] = 'running'
@@ -348,7 +362,9 @@ class BackupManager:
                 return
             
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_filename = f"{container_name}_{timestamp}.tar.gz"
+            # Prefix scheduled backups with "scheduled_" to distinguish from manual backups
+            prefix = "scheduled_" if is_scheduled else ""
+            backup_filename = f"{prefix}{container_name}_{timestamp}.tar.gz"
             backup_path = os.path.join(self.backup_dir, backup_filename)
             self.backup_progress[progress_id]['backup_filename'] = backup_filename
             
@@ -533,6 +549,7 @@ class BackupManager:
                     'container_id': inspect_data.get('Id', container_id),
                     'container_name': inspect_data.get('Name', '').lstrip('/'),
                     'backup_date': datetime.now().isoformat(),
+                    'backup_type': 'scheduled' if is_scheduled else 'manual',
                     'image': image_name,
                     'image_backed_up': os.path.exists(image_file) and os.path.getsize(image_file) > 100,
                     'status': 'running' if inspect_data.get('State', {}).get('Running') else 'stopped',

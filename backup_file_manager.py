@@ -44,18 +44,36 @@ class BackupFileManager:
                 stat = os.stat(file_path)
                 
                 if filename.endswith(('.zip', '.tar.gz')):
+                    # Determine backup type: scheduled backups have "scheduled_" prefix
+                    backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
+                    
+                    # Try to read backup_type from metadata if available (more reliable)
+                    try:
+                        with tarfile.open(file_path, 'r:gz') as tar:
+                            try:
+                                metadata_file = tar.extractfile('backup_metadata.json')
+                                if metadata_file:
+                                    metadata = json.loads(metadata_file.read().decode('utf-8'))
+                                    backup_type = metadata.get('backup_type', backup_type)
+                            except (KeyError, json.JSONDecodeError):
+                                pass  # Use filename-based detection if metadata not available
+                    except Exception:
+                        pass  # Use filename-based detection if tar read fails
+                    
                     backups.append({
                         'filename': filename,
                         'size': stat.st_size,
                         'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        'type': 'container'
+                        'type': 'container',
+                        'backup_type': backup_type
                     })
                 elif filename.startswith('network_') and filename.endswith('.json'):
                     backups.append({
                         'filename': filename,
                         'size': stat.st_size,
                         'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        'type': 'network'
+                        'type': 'network',
+                        'backup_type': 'manual'  # Network backups are always manual
                     })
             
             backups.sort(key=lambda x: x['created'], reverse=True)

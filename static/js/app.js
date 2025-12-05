@@ -325,6 +325,11 @@ function showSection(sectionName, navElement) {
         });
     }
     
+    // Stop time display if leaving scheduler section
+    if (sectionName !== 'backup-scheduler') {
+        stopTimeDisplay();
+    }
+    
     // Load data for the section
     if (sectionName === 'dashboard') {
         loadDashboardStats();
@@ -342,6 +347,11 @@ function showSection(sectionName, navElement) {
     } else if (sectionName === 'backups') {
         loadBackups();
     } else if (sectionName === 'statistics') {
+        loadStatistics();
+    } else if (sectionName === 'backup-scheduler') {
+        loadSchedulerConfig();
+        loadSchedulerContainers();
+        startTimeDisplay();
         loadStatistics();
     }
 }
@@ -533,7 +543,24 @@ function createContainerCard(container) {
     // Format image info
     const imageInfo = container.image_info || {};
     const imageName = imageInfo.name || container.image || 'unknown';
-    const createdDate = container.created ? new Date(container.created).toLocaleString() : 'Unknown';
+    // Handle created timestamp - can be milliseconds (number) or ISO string
+    let createdDate = 'Unknown';
+    if (container.created) {
+        if (typeof container.created === 'number') {
+            // If it's a number, it should be milliseconds timestamp
+            // If it's less than a reasonable date (e.g., before 2000), it might be seconds - convert it
+            if (container.created > 0 && container.created < 946684800000) { // Jan 1, 2000 in milliseconds
+                // Likely seconds, convert to milliseconds
+                createdDate = new Date(container.created * 1000).toLocaleString();
+            } else if (container.created > 0) {
+                // Already milliseconds
+                createdDate = new Date(container.created).toLocaleString();
+            }
+        } else if (typeof container.created === 'string') {
+            // ISO 8601 string format
+            createdDate = new Date(container.created).toLocaleString();
+        }
+    }
     
     // Format stack info
     const stackInfo = container.stack_info || null;
@@ -1397,6 +1424,12 @@ function createBackupRow(backup) {
         ? '<span style="color: #667eea;">🌐 Network</span>' 
         : '<span style="color: #10b981;">📦 Container</span>';
     
+    // Build backup type display (manual/scheduled)
+    const backupTypeValue = backup.backup_type || 'manual';
+    const backupTypeDisplay = backupTypeValue === 'scheduled'
+        ? '<span style="color: #f59e0b; font-weight: 500;"><i class="ph ph-clock-clockwise" style="margin-right: 4px;"></i>Scheduled</span>'
+        : '<span style="color: var(--text-secondary);"><i class="ph ph-hand" style="margin-right: 4px;"></i>Manual</span>';
+    
     // Build actions column
     const actionsHtml = `
         <div class="btn-group" style="display: flex; gap: 4px; flex-wrap: nowrap;">
@@ -1415,6 +1448,9 @@ function createBackupRow(backup) {
         </td>
         <td>
             ${typeDisplay}
+        </td>
+        <td>
+            ${backupTypeDisplay}
         </td>
         <td>
             <div style="color: var(--text-secondary);">${sizeDisplay}</div>
@@ -4642,4 +4678,273 @@ function showNotification(message, type = 'info') {
             container.removeChild(notification);
         }, 500);
     }, 5000);
+}
+
+// --- Backup Scheduler ---
+let schedulerConfig = null;
+
+async function loadSchedulerConfig() {
+    try {
+        const response = await fetch('/api/scheduler/config');
+        if (!response.ok) {
+            throw new Error('Failed to load scheduler config');
+        }
+        schedulerConfig = await response.json();
+        
+        // Update UI with config
+        document.getElementById('schedule-type').value = schedulerConfig.schedule_type || 'daily';
+        document.getElementById('schedule-hour').value = schedulerConfig.hour || 2;
+        document.getElementById('day-of-week').value = schedulerConfig.day_of_week || 0;
+        document.getElementById('schedule-lifecycle').value = schedulerConfig.lifecycle || 7;
+        
+        updateScheduleUI();
+        updateSchedulerStatus();
+    } catch (error) {
+        console.error('Error loading scheduler config:', error);
+        showError('scheduler-error', `Error loading scheduler config: ${error.message}`);
+    }
+}
+
+async function loadSchedulerContainers() {
+    const spinner = document.getElementById('scheduler-containers-spinner');
+    const list = document.getElementById('scheduler-containers-list');
+    
+    spinner.style.display = 'flex';
+    list.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/containers');
+        if (!response.ok) {
+            throw new Error('Failed to load containers');
+        }
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        const containers = data.containers || [];
+        const selectedIds = schedulerConfig ? (schedulerConfig.selected_containers || []) : [];
+        
+        list.innerHTML = '';
+        
+        if (containers.length === 0) {
+            list.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">No containers found</div>';
+        } else {
+            containers.forEach(container => {
+                // Skip self container
+                if (container.is_self) {
+                    return;
+                }
+                
+                const isSelected = selectedIds.includes(container.id);
+                const checkbox = document.createElement('div');
+                checkbox.style.cssText = 'display: flex; align-items: center; padding: 12px; background: var(--bg-secondary); border-radius: 8px; cursor: pointer;';
+                checkbox.onclick = () => {
+                    const input = checkbox.querySelector('input[type="checkbox"]');
+                    input.checked = !input.checked;
+                };
+                
+                checkbox.innerHTML = `
+                    <input type="checkbox" 
+                           data-container-id="${container.id}" 
+                           ${isSelected ? 'checked' : ''} 
+                           onclick="event.stopPropagation();"
+                           style="margin-right: 12px; width: 18px; height: 18px; cursor: pointer;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 500; color: var(--text-primary);">${escapeHtml(container.name)}</div>
+                        <div style="font-size: 0.85em; color: var(--text-secondary); font-family: monospace;">${container.id.substring(0, 12)}</div>
+                    </div>
+                    <div class="container-status ${container.status === 'running' ? 'status-running' : 'status-stopped'}" style="margin-left: 12px;">
+                        ${container.status.toUpperCase()}
+                    </div>
+                `;
+                
+                list.appendChild(checkbox);
+            });
+        }
+        
+        spinner.style.display = 'none';
+        list.style.display = 'grid';
+    } catch (error) {
+        console.error('Error loading containers:', error);
+        spinner.style.display = 'none';
+        list.innerHTML = `<div style="text-align: center; padding: 20px; color: var(--error);">Error loading containers: ${error.message}</div>`;
+    }
+}
+
+function updateScheduleUI() {
+    const scheduleType = document.getElementById('schedule-type').value;
+    const dayOfWeekContainer = document.getElementById('day-of-week-container');
+    
+    if (scheduleType === 'weekly') {
+        dayOfWeekContainer.style.display = 'block';
+    } else {
+        dayOfWeekContainer.style.display = 'none';
+    }
+}
+
+function updateSchedulerStatus() {
+    const statusIcon = document.getElementById('scheduler-status-icon');
+    const statusText = document.getElementById('scheduler-status-text');
+    const nextRun = document.getElementById('scheduler-next-run');
+    
+    if (!schedulerConfig) {
+        statusIcon.textContent = '⏸️';
+        statusText.textContent = 'Scheduler disabled (no containers selected)';
+        nextRun.style.display = 'none';
+        return;
+    }
+    
+    const enabled = schedulerConfig.enabled;
+    const selectedCount = schedulerConfig.selected_containers ? schedulerConfig.selected_containers.length : 0;
+    
+    if (enabled && selectedCount > 0) {
+        statusIcon.textContent = '✅';
+        statusText.textContent = `Scheduler enabled: ${selectedCount} container(s) selected`;
+        
+        if (schedulerConfig.next_run) {
+            const nextRunDate = new Date(schedulerConfig.next_run);
+            nextRun.textContent = `Next backup: ${nextRunDate.toLocaleString()}`;
+            nextRun.style.display = 'block';
+        } else {
+            nextRun.style.display = 'none';
+        }
+    } else {
+        statusIcon.textContent = '⏸️';
+        statusText.textContent = 'Scheduler disabled (no containers selected)';
+        nextRun.style.display = 'none';
+    }
+}
+
+async function saveSchedulerConfig() {
+    const errorEl = document.getElementById('scheduler-error');
+    errorEl.style.display = 'none';
+    
+    try {
+        const scheduleType = document.getElementById('schedule-type').value;
+        const hour = parseInt(document.getElementById('schedule-hour').value);
+        const dayOfWeek = scheduleType === 'weekly' ? parseInt(document.getElementById('day-of-week').value) : null;
+        const lifecycle = parseInt(document.getElementById('schedule-lifecycle').value);
+        
+        // Get selected container IDs
+        const checkboxes = document.querySelectorAll('#scheduler-containers-list input[type="checkbox"]');
+        const selectedContainers = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.getAttribute('data-container-id'));
+        
+        const config = {
+            schedule_type: scheduleType,
+            hour: hour,
+            day_of_week: dayOfWeek,
+            lifecycle: lifecycle,
+            selected_containers: selectedContainers
+        };
+        
+        const response = await fetch('/api/scheduler/config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(config)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to save scheduler config');
+        }
+        
+        const result = await response.json();
+        schedulerConfig = result.config;
+        
+        updateSchedulerStatus();
+        showNotification('Scheduler configuration saved successfully!', 'success');
+    } catch (error) {
+        console.error('Error saving scheduler config:', error);
+        showError('scheduler-error', `Error saving scheduler config: ${error.message}`);
+    }
+}
+
+function showError(elementId, message) {
+    const errorEl = document.getElementById(elementId);
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+    }
+}
+
+let timeDisplayInterval = null;
+
+function startTimeDisplay() {
+    // Clear any existing interval
+    if (timeDisplayInterval) {
+        clearInterval(timeDisplayInterval);
+    }
+    
+    // Update time immediately
+    updateTimeDisplay();
+    
+    // Update every second
+    timeDisplayInterval = setInterval(updateTimeDisplay, 1000);
+}
+
+function stopTimeDisplay() {
+    if (timeDisplayInterval) {
+        clearInterval(timeDisplayInterval);
+        timeDisplayInterval = null;
+    }
+}
+
+function updateTimeDisplay() {
+    const timeEl = document.getElementById('current-time');
+    if (timeEl) {
+        const now = new Date();
+        const formatted = now.toLocaleString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        });
+        timeEl.textContent = `🕐 ${formatted}`;
+    }
+}
+
+async function testScheduler() {
+    const errorEl = document.getElementById('scheduler-error');
+    errorEl.style.display = 'none';
+    
+    if (!schedulerConfig || !schedulerConfig.enabled) {
+        showError('scheduler-error', 'Scheduler is disabled. Please select at least one container and save the configuration.');
+        return;
+    }
+    
+    const selectedCount = schedulerConfig.selected_containers ? schedulerConfig.selected_containers.length : 0;
+    if (selectedCount === 0) {
+        showError('scheduler-error', 'No containers selected. Please select at least one container and save the configuration.');
+        return;
+    }
+    
+    if (!confirm(`Trigger scheduled backups for ${selectedCount} container(s) now?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/scheduler/test', {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to trigger scheduled backups');
+        }
+        
+        const result = await response.json();
+        showNotification(result.message || 'Scheduled backups triggered successfully!', 'success');
+    } catch (error) {
+        console.error('Error testing scheduler:', error);
+        showError('scheduler-error', `Error triggering scheduled backups: ${error.message}`);
+    }
 }

@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.2.4**
+**Version 0.2.5**
 
 ## Overview
 
@@ -23,6 +23,7 @@ Container Monkey is a web-based Docker management platform providing container l
   - `network_manager.py` - Network backup and restore
   - `stack_manager.py` - Docker stack management
   - `system_manager.py` - System monitoring and statistics
+  - `scheduler_manager.py` - Scheduled backup management and lifecycle cleanup
 - **Storage**: Docker volumes for backup persistence
 - **Database**: SQLite database for user management (stored in backup volume)
 - **Rate Limiting**: Flask-Limiter 3.5.0 for API protection (progress endpoint exempt)
@@ -58,6 +59,18 @@ Container Monkey is a web-based Docker management platform providing container l
 - Restore with port override and volume overwrite options
 - Backup download/upload (single and bulk)
 - Bulk backup operations with queue management
+- **Backup Type Tracking**: Backups tagged as Manual or Scheduled in backup vault
+- **Backup Scheduler**: Automated scheduled backups
+  - Single schedule configuration (daily or weekly)
+  - Select containers to include in scheduled backups
+  - Daily schedule: backup at specific hour (0-23)
+  - Weekly schedule: backup on specific day of week and hour
+  - Lifecycle management: specify number of scheduled backups to keep
+  - Manual backups never auto-deleted
+  - Scheduled backups automatically cleaned up based on lifecycle
+  - Test scheduler button for immediate testing
+  - Real-time system clock display on scheduler page
+  - Scheduler enabled when one or more containers are selected
 
 ### Volume Management
 - Volume listing and exploration
@@ -119,6 +132,14 @@ GET    /api/backups/download-all/<id>           # Download bulk archive
 DELETE /api/backups/delete-all                  # Delete all backups
 GET    /api/backup-progress/<progress_id>       # Get backup progress (exempt from rate limiting)
 GET    /api/backup/status                       # Get backup status (includes queue size)
+```
+
+### Scheduler Endpoints
+```
+GET    /api/scheduler/config                    # Get scheduler configuration
+POST   /api/scheduler/config                    # Update scheduler configuration
+POST   /api/scheduler/test                      # Trigger scheduled backups immediately (for testing)
+POST   /api/scheduler/cleanup                   # Manually trigger cleanup of old scheduled backups
 ```
 
 ### Volume Endpoints

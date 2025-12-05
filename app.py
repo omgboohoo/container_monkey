@@ -28,6 +28,7 @@ from stack_manager import StackManager
 from backup_manager import BackupManager
 from backup_file_manager import BackupFileManager
 from restore_manager import RestoreManager
+from scheduler_manager import SchedulerManager
 from system_manager import (
     get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
@@ -88,6 +89,18 @@ if docker_api_client:
         generate_docker_compose_fn=docker_utils.generate_docker_compose
     )
     print("✅ Restore manager initialized")
+
+# Initialize scheduler manager
+scheduler_manager = None
+if backup_manager:
+    scheduler_manager = SchedulerManager(
+        backup_manager=backup_manager,
+        backup_dir=app.config['BACKUP_DIR']
+    )
+    # Start scheduler if enabled
+    if scheduler_manager.is_enabled():
+        scheduler_manager.start_scheduler()
+    print("✅ Scheduler manager initialized")
 
 # Login required decorator
 def login_required(f):
@@ -606,6 +619,112 @@ def create_download_all_archive(session_id):
 
 @app.route('/api/backups/download-all/<session_id>')
 def download_all_backups(session_id):
+    archive_path = backup_file_manager.get_download_all_file(session_id)
+    if not archive_path:
+        return jsonify({'error': 'Archive file not ready'}), 400
+    
+    progress = backup_file_manager.download_all_progress.get(session_id, {})
+    archive_filename = progress.get('archive_filename', 'all_backups.tar.gz')
+    
+    @after_this_request
+    def cleanup(response):
+        backup_file_manager.cleanup_download_session(session_id)
+        return response
+    
+    return send_file(archive_path, as_attachment=True, download_name=archive_filename)
+
+# Scheduler API endpoints
+@app.route('/api/scheduler/config', methods=['GET'])
+@login_required
+def get_scheduler_config():
+    """Get scheduler configuration"""
+    if not scheduler_manager:
+        return jsonify({'error': 'Scheduler manager not available'}), 500
+    return jsonify(scheduler_manager.get_config())
+
+@app.route('/api/scheduler/config', methods=['POST'])
+@login_required
+def update_scheduler_config():
+    """Update scheduler configuration"""
+    if not scheduler_manager:
+        return jsonify({'error': 'Scheduler manager not available'}), 500
+    
+    try:
+        data = request.get_json()
+        schedule_type = data.get('schedule_type', 'daily')
+        hour = int(data.get('hour', 2))
+        day_of_week = data.get('day_of_week')  # Can be None for daily
+        lifecycle = int(data.get('lifecycle', 7))
+        selected_containers = data.get('selected_containers', [])
+        
+        # Validate inputs
+        if schedule_type not in ['daily', 'weekly']:
+            return jsonify({'error': 'Invalid schedule_type'}), 400
+        if hour < 0 or hour > 23:
+            return jsonify({'error': 'Hour must be 0-23'}), 400
+        if schedule_type == 'weekly' and (day_of_week is None or day_of_week < 0 or day_of_week > 6):
+            return jsonify({'error': 'day_of_week must be 0-6 for weekly schedule'}), 400
+        if lifecycle < 1:
+            return jsonify({'error': 'Lifecycle must be at least 1'}), 400
+        
+        # Update configuration
+        scheduler_manager.update_config(
+            schedule_type=schedule_type,
+            hour=hour,
+            day_of_week=day_of_week,
+            lifecycle=lifecycle,
+            selected_containers=selected_containers
+        )
+        
+        return jsonify({
+            'success': True,
+            'config': scheduler_manager.get_config()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scheduler/cleanup', methods=['POST'])
+@login_required
+def run_scheduler_cleanup():
+    """Manually trigger cleanup of old scheduled backups"""
+    if not scheduler_manager:
+        return jsonify({'error': 'Scheduler manager not available'}), 500
+    
+    try:
+        scheduler_manager.cleanup_old_backups()
+        return jsonify({'success': True, 'message': 'Cleanup completed'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/scheduler/test', methods=['POST'])
+@login_required
+def test_scheduler():
+    """Trigger scheduled backups immediately (for testing)"""
+    if not scheduler_manager:
+        return jsonify({'error': 'Scheduler manager not available'}), 500
+    
+    try:
+        if not scheduler_manager.is_enabled():
+            return jsonify({'error': 'Scheduler is disabled (no containers selected)'}), 400
+        
+        # Trigger scheduled backups
+        scheduler_manager._run_scheduled_backups()
+        return jsonify({
+            'success': True,
+            'message': f'Scheduled backups triggered for {len(scheduler_manager.selected_containers)} container(s)'
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/system-time', methods=['GET'])
+@login_required
+def get_system_time():
+    """Get current system time"""
+    from datetime import datetime
+    return jsonify({
+        'time': datetime.now().isoformat(),
+        'formatted': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    })
     archive_path = backup_file_manager.get_download_all_file(session_id)
     if not archive_path:
         return jsonify({'error': 'Archive file not ready'}), 400

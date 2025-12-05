@@ -1,6 +1,6 @@
 # Container Monkey 🐵
 
-**Version 0.2.4**
+**Version 0.2.5**
 
 The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
@@ -15,8 +15,16 @@ The ultimate backup and recovery solution for Docker. Protect your containers, v
   - Sequential backup queue system for bulk operations
   - Real-time backup progress tracking
   - Backup completion verification (ensures tar.gz files are fully written)
+- **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules
+  - Select containers to include in scheduled backups
+  - Configure schedule (daily at specific hour, or weekly on specific day/hour)
+  - Set lifecycle (number of scheduled backups to keep)
+  - Manual backups never auto-deleted, scheduled backups cleaned up based on lifecycle
+  - Test scheduler button for immediate testing
+  - Real-time system clock display on scheduler page
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
 - **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
+- **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled
 - **Web Console**: Interactive terminal access to containers
 - **Logs Viewer**: Real-time container logs viewing
 - **Bulk Operations**: Select multiple containers/volumes/images for batch operations
@@ -164,6 +172,10 @@ The application provides a RESTful API. Key endpoints include:
 - `GET /api/backups` - List backups
 - `GET /api/system-stats` - System CPU/RAM stats
 - `GET /api/statistics` - Comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
+- `GET /api/scheduler/config` - Get scheduler configuration
+- `POST /api/scheduler/config` - Update scheduler configuration
+- `POST /api/scheduler/test` - Trigger scheduled backups immediately (for testing)
+- `POST /api/scheduler/cleanup` - Manually trigger cleanup of old scheduled backups
 - `POST /api/change-password` - Change username/password
 
 See PRD.md for complete API documentation.

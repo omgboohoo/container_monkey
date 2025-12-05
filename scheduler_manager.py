@@ -1,0 +1,304 @@
+"""
+Scheduler Manager Module
+Handles scheduled backup operations with simple single-schedule approach
+"""
+import json
+import os
+import threading
+import time
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Any
+
+
+class SchedulerManager:
+    """Manages scheduled backups with a single schedule configuration"""
+    
+    def __init__(self, backup_manager, backup_dir: str):
+        """
+        Initialize SchedulerManager
+        
+        Args:
+            backup_manager: BackupManager instance
+            backup_dir: Directory where backups are stored
+        """
+        self.backup_manager = backup_manager
+        self.backup_dir = backup_dir
+        self.config_file = os.path.join(backup_dir, 'scheduler_config.json')
+        
+        # Schedule configuration
+        self.schedule_type = 'daily'  # 'daily' or 'weekly'
+        self.hour = 2  # 0-23
+        self.day_of_week = 0  # 0-6 (Sunday=0), only used for weekly
+        self.lifecycle = 7  # Number of scheduled backups to keep
+        self.selected_containers = []  # List of container IDs
+        
+        # Scheduler state
+        self.scheduler_thread: Optional[threading.Thread] = None
+        self.scheduler_running = False
+        self.last_run: Optional[datetime] = None
+        self.next_run: Optional[datetime] = None
+        
+        # Load configuration
+        self.load_config()
+    
+    def load_config(self):
+        """Load scheduler configuration from file"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r') as f:
+                    config = json.load(f)
+                    self.schedule_type = config.get('schedule_type', 'daily')
+                    self.hour = config.get('hour', 2)
+                    self.day_of_week = config.get('day_of_week', 0)
+                    self.lifecycle = config.get('lifecycle', 7)
+                    self.selected_containers = config.get('selected_containers', [])
+                    last_run_str = config.get('last_run')
+                    if last_run_str:
+                        self.last_run = datetime.fromisoformat(last_run_str)
+                    next_run_str = config.get('next_run')
+                    if next_run_str:
+                        self.next_run = datetime.fromisoformat(next_run_str)
+                print(f"✅ Loaded scheduler config: {self.schedule_type} at {self.hour:02d}:00, {len(self.selected_containers)} containers")
+            else:
+                print("ℹ️  No scheduler config found, using defaults")
+        except Exception as e:
+            print(f"⚠️  Error loading scheduler config: {e}")
+    
+    def save_config(self):
+        """Save scheduler configuration to file"""
+        try:
+            config = {
+                'schedule_type': self.schedule_type,
+                'hour': self.hour,
+                'day_of_week': self.day_of_week,
+                'lifecycle': self.lifecycle,
+                'selected_containers': self.selected_containers,
+                'last_run': self.last_run.isoformat() if self.last_run else None,
+                'next_run': self.next_run.isoformat() if self.next_run else None
+            }
+            with open(self.config_file, 'w') as f:
+                json.dump(config, f, indent=2)
+        except Exception as e:
+            print(f"⚠️  Error saving scheduler config: {e}")
+    
+    def update_config(self, schedule_type: str, hour: int, day_of_week: Optional[int], lifecycle: int, selected_containers: List[str]):
+        """
+        Update scheduler configuration
+        
+        Args:
+            schedule_type: 'daily' or 'weekly'
+            hour: Hour of day (0-23)
+            day_of_week: Day of week (0-6, Sunday=0), None for daily
+            lifecycle: Number of scheduled backups to keep
+            selected_containers: List of container IDs to backup
+        """
+        self.schedule_type = schedule_type
+        self.hour = hour
+        self.day_of_week = day_of_week if schedule_type == 'weekly' else None
+        self.lifecycle = lifecycle
+        self.selected_containers = selected_containers
+        self.calculate_next_run()
+        self.save_config()
+        
+        # Restart scheduler if running
+        if self.scheduler_running:
+            self.stop_scheduler()
+            self.start_scheduler()
+    
+    def calculate_next_run(self):
+        """Calculate next scheduled run time"""
+        now = datetime.now()
+        
+        if self.schedule_type == 'daily':
+            # Next run is today at specified hour, or tomorrow if hour has passed
+            next_run = now.replace(hour=self.hour, minute=0, second=0, microsecond=0)
+            if next_run <= now:
+                next_run += timedelta(days=1)
+        else:  # weekly
+            # Find next occurrence of specified day and hour
+            days_ahead = (self.day_of_week - now.weekday()) % 7
+            if days_ahead == 0:
+                # Today is the scheduled day, check if hour has passed
+                next_run = now.replace(hour=self.hour, minute=0, second=0, microsecond=0)
+                if next_run <= now:
+                    days_ahead = 7
+            if days_ahead > 0:
+                next_run = now + timedelta(days=days_ahead)
+                next_run = next_run.replace(hour=self.hour, minute=0, second=0, microsecond=0)
+            else:
+                next_run = now.replace(hour=self.hour, minute=0, second=0, microsecond=0)
+        
+        self.next_run = next_run
+        self.save_config()
+        return next_run
+    
+    def is_enabled(self) -> bool:
+        """Check if scheduler is enabled (has selected containers)"""
+        return len(self.selected_containers) > 0
+    
+    def get_config(self) -> Dict[str, Any]:
+        """Get current scheduler configuration"""
+        return {
+            'schedule_type': self.schedule_type,
+            'hour': self.hour,
+            'day_of_week': self.day_of_week,
+            'lifecycle': self.lifecycle,
+            'selected_containers': self.selected_containers,
+            'enabled': self.is_enabled(),
+            'last_run': self.last_run.isoformat() if self.last_run else None,
+            'next_run': self.next_run.isoformat() if self.next_run else None
+        }
+    
+    def start_scheduler(self):
+        """Start the scheduler thread"""
+        if not self.is_enabled():
+            print("ℹ️  Scheduler disabled (no containers selected)")
+            return
+        
+        if self.scheduler_running:
+            print("ℹ️  Scheduler already running")
+            return
+        
+        self.scheduler_running = True
+        self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
+        self.scheduler_thread.start()
+        print(f"✅ Scheduler started: {self.schedule_type} at {self.hour:02d}:00, {len(self.selected_containers)} containers")
+    
+    def stop_scheduler(self):
+        """Stop the scheduler thread"""
+        if not self.scheduler_running:
+            return
+        
+        self.scheduler_running = False
+        if self.scheduler_thread:
+            self.scheduler_thread.join(timeout=2)
+        print("🛑 Scheduler stopped")
+    
+    def _scheduler_loop(self):
+        """Main scheduler loop - checks every minute if backup is due"""
+        print("🔄 Scheduler loop started")
+        
+        while self.scheduler_running:
+            try:
+                if not self.is_enabled():
+                    time.sleep(60)
+                    continue
+                
+                now = datetime.now()
+                
+                # Check if it's time to run backups
+                if self.next_run and now >= self.next_run:
+                    print(f"⏰ Scheduled backup time reached: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+                    self._run_scheduled_backups()
+                    self.last_run = now
+                    self.calculate_next_run()
+                    print(f"📅 Next scheduled backup: {self.next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # Sleep for 1 minute
+                time.sleep(60)
+            except Exception as e:
+                print(f"❌ Error in scheduler loop: {e}")
+                import traceback
+                traceback.print_exc()
+                time.sleep(60)
+    
+    def _run_scheduled_backups(self):
+        """Run backups for all selected containers"""
+        print(f"🚀 Starting scheduled backups for {len(self.selected_containers)} containers")
+        
+        for container_id in self.selected_containers:
+            try:
+                print(f"📦 Queuing scheduled backup for container {container_id[:12]}...")
+                # Use queue_if_busy=True to queue if manual backup is running
+                self.backup_manager.start_backup(container_id, queue_if_busy=True, is_scheduled=True)
+            except Exception as e:
+                print(f"❌ Error queuing scheduled backup for {container_id[:12]}: {e}")
+        
+        # After backups complete, cleanup old scheduled backups
+        # Note: This runs immediately, but cleanup will happen after backups finish
+        # For now, we'll run cleanup in a separate thread after a delay
+        threading.Thread(
+            target=self._delayed_cleanup,
+            daemon=True
+        ).start()
+    
+    def _delayed_cleanup(self):
+        """Wait for backups to complete, then cleanup old scheduled backups"""
+        # Wait 5 minutes for backups to complete
+        time.sleep(300)
+        self.cleanup_old_backups()
+    
+    def cleanup_old_backups(self):
+        """Cleanup old scheduled backups based on lifecycle"""
+        try:
+            import glob
+            import tarfile
+            import json
+            
+            # List all scheduled backup files
+            if not os.path.exists(self.backup_dir):
+                return
+            
+            scheduled_backups = []
+            for filename in os.listdir(self.backup_dir):
+                if filename.startswith('scheduled_') and filename.endswith('.tar.gz'):
+                    file_path = os.path.join(self.backup_dir, filename)
+                    if os.path.isfile(file_path):
+                        stat = os.stat(file_path)
+                        scheduled_backups.append({
+                            'filename': filename,
+                            'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                            'file_path': file_path
+                        })
+            backups = backup_file_manager.list_backups()
+            
+            if 'error' in backups:
+                print(f"⚠️  Error listing backups for cleanup: {backups['error']}")
+                return
+            
+            # Group scheduled backups by container
+            container_backups = {}
+            for backup in scheduled_backups:
+                filename = backup['filename']
+                # Extract container name from filename (remove scheduled_ prefix and timestamp)
+                # Format: scheduled_container-name_YYYYMMDD_HHMMSS.tar.gz
+                if filename.startswith('scheduled_'):
+                    parts = filename.replace('scheduled_', '').replace('.tar.gz', '').rsplit('_', 2)
+                    if len(parts) >= 2:
+                        container_name = '_'.join(parts[:-2])  # Everything except last 2 parts (timestamp)
+                        if container_name not in container_backups:
+                            container_backups[container_name] = []
+                        container_backups[container_name].append({
+                            'filename': filename,
+                            'created': backup['created'],
+                            'file_path': backup['file_path']
+                        })
+            
+            # Cleanup backups for each container
+            deleted_count = 0
+            for container_name, container_backup_list in container_backups.items():
+                # Sort by created date (newest first)
+                container_backup_list.sort(key=lambda x: x['created'], reverse=True)
+                
+                # Keep only lifecycle number of backups
+                if len(container_backup_list) > self.lifecycle:
+                    backups_to_delete = container_backup_list[self.lifecycle:]
+                    for backup_to_delete in backups_to_delete:
+                        try:
+                            file_path = backup_to_delete['file_path']
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+                                deleted_count += 1
+                                print(f"🗑️  Deleted old scheduled backup: {backup_to_delete['filename']}")
+                        except Exception as e:
+                            print(f"⚠️  Error deleting backup {backup_to_delete['filename']}: {e}")
+            
+            if deleted_count > 0:
+                print(f"✅ Cleanup complete: Deleted {deleted_count} old scheduled backups")
+            else:
+                print(f"ℹ️  No old scheduled backups to cleanup")
+        except Exception as e:
+            print(f"❌ Error during cleanup: {e}")
+            import traceback
+            traceback.print_exc()
+

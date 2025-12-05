@@ -1,5 +1,60 @@
 # Release Notes
 
+## Version 0.2.5
+
+### New Features
+- **Backup Scheduler**: Added comprehensive backup scheduling system
+  - Single schedule configuration (not per-container)
+  - Daily schedule: backup at specific hour (0-23)
+  - Weekly schedule: backup on specific day of week and hour
+  - Select containers to include in scheduled backups via checkbox interface
+  - Lifecycle management: specify number of scheduled backups to keep (default: 7)
+  - Scheduler automatically enabled when one or more containers are selected
+  - Test Scheduler button for immediate testing without waiting for scheduled time
+  - Real-time system clock display on scheduler page
+  - Next backup time display in scheduler status
+
+### Backup Management Improvements
+- **Backup Type Tracking**: Backup vault now shows whether backups are Manual or Scheduled
+  - Manual backups: Never auto-deleted, preserved indefinitely
+  - Scheduled backups: Automatically cleaned up based on lifecycle setting
+  - Backup type displayed in vault grid with visual indicators
+  - Scheduled backups prefixed with `scheduled_` in filename
+  - Backup metadata includes `backup_type` field
+
+### Bug Fixes
+- **Fixed container creation date display**: Resolved issue where all containers showed creation date as "21/01/1970"
+  - Fixed Unix timestamp conversion (seconds to milliseconds) in Docker API responses
+  - Fixed CLI fallback timestamp parsing for Docker `CreatedAt` format
+  - Added proper handling for ISO 8601 timestamps with nanosecond precision
+  - Frontend now correctly handles both timestamp formats (seconds and milliseconds)
+
+### UI Improvements
+- **Fixed backup vault grid layout**: Adjusted column widths to prevent action buttons from being squashed
+  - Size column reduced from 24% to 10%
+  - Created column reduced from 28% to 15%
+  - Actions column now properly sized at 30% with minimum width
+  - All columns now have appropriate min-width constraints
+  - Backup Type column added with proper sizing
+
+### Backend Changes
+- Added `scheduler_manager.py` module for scheduled backup management
+- Enhanced `backup_manager.py` to support `is_scheduled` parameter
+- Updated `backup_file_manager.py` to detect and display backup type
+- Added scheduler API endpoints: `/api/scheduler/config`, `/api/scheduler/test`, `/api/scheduler/cleanup`
+- Scheduler runs in background thread, checking every minute for due backups
+- Automatic cleanup of old scheduled backups after each scheduled backup run
+
+### Documentation
+- Updated README.md and PRD.md with Backup Scheduler feature documentation
+- Added scheduler API endpoints to API documentation
+- Updated version number to 0.2.5 across all files
+
+### Version Update
+- Updated version number to 0.2.5 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.4
 
 ### New Features

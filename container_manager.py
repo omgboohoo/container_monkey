@@ -6,6 +6,7 @@ import json
 import subprocess
 import shlex
 from typing import Dict, List, Optional, Any
+from datetime import datetime
 import docker_utils
 from docker_utils import APP_CONTAINER_NAME, reconstruct_docker_run_command
 
@@ -129,13 +130,19 @@ class ContainerManager:
                     if 'network_names' not in locals():
                         network_names = []
                     
+                    # Handle Created timestamp - Docker API returns Unix timestamp in seconds
+                    created_timestamp = container.get('Created', 0)
+                    if created_timestamp and isinstance(created_timestamp, (int, float)) and created_timestamp > 0:
+                        # Convert seconds to milliseconds for JavaScript Date constructor
+                        created_timestamp = int(created_timestamp * 1000)
+                    
                     container_info = {
                         'id': container_id[:12] if container_id else '',
                         'name': names[0].lstrip('/') if names else '',
                         'image': container.get('Image', 'unknown'),
                         'status': status_display,
                         'status_text': status_text,
-                        'created': container.get('Created', 0),
+                        'created': created_timestamp,
                         'ports': ports,
                         'ip_address': ip_address,
                         'port_mappings': port_mappings,
@@ -283,13 +290,56 @@ class ContainerManager:
                     except:
                         pass
                     
+                    # Parse CreatedAt timestamp from CLI format (e.g., "2024-01-15 10:30:45 +0000 UTC")
+                    created_timestamp = 0
+                    if len(parts) > 4 and parts[4]:
+                        created_str = parts[4]
+                        try:
+                            # Try parsing Docker CLI format: "2024-01-15 10:30:45 +0000 UTC"
+                            # Remove "UTC" if present and parse
+                            created_str_clean = created_str.replace(' UTC', '').strip()
+                            # Try multiple formats
+                            for fmt in ['%Y-%m-%d %H:%M:%S %z', '%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S.%fZ', '%Y-%m-%dT%H:%M:%SZ']:
+                                try:
+                                    dt = datetime.strptime(created_str_clean, fmt)
+                                    # Convert to milliseconds timestamp
+                                    created_timestamp = int(dt.timestamp() * 1000)
+                                    break
+                                except ValueError:
+                                    continue
+                        except Exception:
+                            # If parsing fails, try to get timestamp from inspect
+                            try:
+                                inspect_result = subprocess.run(
+                                    ['docker', 'inspect', container_id, '--format', '{{.Created}}'],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=5
+                                )
+                                if inspect_result.returncode == 0:
+                                    created_str = inspect_result.stdout.strip()
+                                    # Handle ISO format with nanoseconds (Docker returns 9 digits)
+                                    # fromisoformat only handles up to 6 digits (microseconds)
+                                    if '.' in created_str and created_str.endswith('Z'):
+                                        # Replace nanoseconds with microseconds
+                                        parts = created_str.split('.')
+                                        if len(parts) == 2:
+                                            decimal_part = parts[1].rstrip('Z')
+                                            if len(decimal_part) > 6:
+                                                decimal_part = decimal_part[:6]
+                                            created_str = f"{parts[0]}.{decimal_part}Z"
+                                    dt = datetime.fromisoformat(created_str.replace('Z', '+00:00'))
+                                    created_timestamp = int(dt.timestamp() * 1000)
+                            except Exception:
+                                pass
+                    
                     containers.append({
                         'id': container_id[:12],
                         'name': parts[1],
                         'image': parts[2],
                         'status': status_display,
                         'status_text': status_text,
-                        'created': parts[4],
+                        'created': created_timestamp,
                         'ports': {},
                         'ip_address': ip_address,
                         'port_mappings': port_mappings,

@@ -89,6 +89,10 @@
                     <span class="nav-icon"><i class="ph ph-shield-check"></i></span>
                     <span class="nav-text">Backup Vault</span>
                 </a>
+                <a href="#" class="nav-item" onclick="showSection('backup-scheduler', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-clock-clockwise"></i></span>
+                    <span class="nav-text">Backup Scheduler</span>
+                </a>
                 <a href="#" class="nav-item" onclick="showSection('statistics', this); return false;">
                     <span class="nav-icon"><i class="ph ph-chart-line"></i></span>
                     <span class="nav-text">Statistics</span>
@@ -99,7 +103,7 @@
                     <i class="ph ph-coffee" style="font-size: 1.2em;"></i>
                     <span>Buy me a Coffee</span>
                 </a>
-                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.4</span>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.5</span>
             </div>
         </aside>
 
@@ -424,6 +428,7 @@
                             <tr>
                                 <th>Filename</th>
                                 <th>Type</th>
+                                <th>Backup Type</th>
                                 <th>Size</th>
                                 <th>Created</th>
                                 <th style="white-space: nowrap;">Actions</th>
@@ -433,6 +438,106 @@
                             <!-- Rows will be injected here -->
                         </tbody>
                     </table>
+                </div>
+            </section>
+
+            <!-- Backup Scheduler Section -->
+            <section id="backup-scheduler-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-clock-clockwise" style="margin-right: 12px;"></i>Backup Scheduler</h2>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div id="current-time" style="font-size: 0.9em; color: var(--text-secondary); font-family: monospace; margin-right: 10px;"></div>
+                        <button class="btn btn-success btn-sm" onclick="testScheduler()"><i class="ph ph-play"></i> Test Scheduler</button>
+                        <button class="btn btn-primary btn-sm" onclick="saveSchedulerConfig()"><i class="ph ph-floppy-disk"></i> Save Schedule</button>
+                    </div>
+                </div>
+                
+                <div id="scheduler-error" class="error" style="display: none;"></div>
+                
+                <!-- Schedule Configuration -->
+                <div class="card" style="margin-bottom: 24px;">
+                    <div class="card-header">
+                        <h3 style="margin: 0; font-size: 1.1em;">Schedule Configuration</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Schedule Type</label>
+                                <select id="schedule-type" class="form-control" onchange="updateScheduleUI()">
+                                    <option value="daily">Daily</option>
+                                    <option value="weekly">Weekly</option>
+                                </select>
+                            </div>
+                            <div id="day-of-week-container" style="display: none;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Day of Week</label>
+                                <select id="day-of-week" class="form-control">
+                                    <option value="0">Sunday</option>
+                                    <option value="1">Monday</option>
+                                    <option value="2">Tuesday</option>
+                                    <option value="3">Wednesday</option>
+                                    <option value="4">Thursday</option>
+                                    <option value="5">Friday</option>
+                                    <option value="6">Saturday</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Hour (24-hour format)</label>
+                                <select id="schedule-hour" class="form-control">
+                                    <option value="0">00:00</option>
+                                    <option value="1">01:00</option>
+                                    <option value="2">02:00</option>
+                                    <option value="3">03:00</option>
+                                    <option value="4">04:00</option>
+                                    <option value="5">05:00</option>
+                                    <option value="6">06:00</option>
+                                    <option value="7">07:00</option>
+                                    <option value="8">08:00</option>
+                                    <option value="9">09:00</option>
+                                    <option value="10">10:00</option>
+                                    <option value="11">11:00</option>
+                                    <option value="12">12:00</option>
+                                    <option value="13">13:00</option>
+                                    <option value="14">14:00</option>
+                                    <option value="15">15:00</option>
+                                    <option value="16">16:00</option>
+                                    <option value="17">17:00</option>
+                                    <option value="18">18:00</option>
+                                    <option value="19">19:00</option>
+                                    <option value="20">20:00</option>
+                                    <option value="21">21:00</option>
+                                    <option value="22">22:00</option>
+                                    <option value="23">23:00</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Lifecycle (backups to keep)</label>
+                                <input type="number" id="schedule-lifecycle" class="form-control" min="1" value="7" style="width: 100%;">
+                            </div>
+                        </div>
+                        <div id="scheduler-status" style="padding: 12px; background: var(--bg-secondary); border-radius: 8px; margin-top: 12px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="scheduler-status-icon" style="font-size: 1.2em;">⏸️</span>
+                                <span id="scheduler-status-text" style="color: var(--text-secondary);">Scheduler disabled (no containers selected)</span>
+                            </div>
+                            <div id="scheduler-next-run" style="margin-top: 8px; font-size: 0.9em; color: var(--text-secondary); display: none;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Container Selection -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 style="margin: 0; font-size: 1.1em;">Select Containers to Backup</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="scheduler-containers-spinner" class="grid-spinner-container" style="display: none;">
+                            <div class="spinner"></div>
+                            <div class="grid-spinner-text">Loading Containers...</div>
+                        </div>
+                        <div id="scheduler-containers-list" style="display: grid; gap: 12px;">
+                            <!-- Container checkboxes will be injected here -->
+                        </div>
+                    </div>
                 </div>
             </section>
 
