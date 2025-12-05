@@ -1,6 +1,6 @@
 # Container Monkey 🐵
 
-**Version 0.2.0**
+**Version 0.2.1**
 
 The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
@@ -209,9 +209,11 @@ docker build -t container-monkey .
 
 ## License
 
-Copyright (c) 2025 Dan Bailey
+Copyright (C) 2025 Dan Bailey
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [LICENSE](LICENSE) file for details.
 
 ## Support
 
