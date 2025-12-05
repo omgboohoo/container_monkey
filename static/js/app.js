@@ -3474,7 +3474,7 @@ async function updateContainerStats(containerId) {
         const response = await fetch(`/api/container/${containerId}/stats`);
         const data = await response.json();
         
-        if (!response.ok) {
+        if (!response.ok || data.error) {
             return;
         }
         
@@ -3873,7 +3873,8 @@ async function updateSystemStats() {
         const response = await fetch('/api/system-stats');
         const data = await response.json();
         
-        if (!response.ok) {
+        if (!response.ok || data.error) {
+            console.error('System stats API error:', response.status, data.error || response.statusText);
             return;
         }
         
@@ -3898,14 +3899,14 @@ async function updateSystemStats() {
 
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Check authentication status first
-    checkAuthStatus();
+document.addEventListener('DOMContentLoaded', async function() {
+    // Check authentication status first and wait for it to complete
+    await checkAuthStatus();
     
     // Show dashboard section by default
     showSection('dashboard', document.querySelector('.nav-item'));
     
-    // Start stats polling
+    // Start stats polling only after auth check is complete
     startStatsPolling();
 });
 

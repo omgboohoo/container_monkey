@@ -29,7 +29,7 @@ from backup_manager import BackupManager
 from backup_file_manager import BackupFileManager
 from restore_manager import RestoreManager
 from system_manager import (
-    get_dashboard_stats, get_system_stats, check_environment,
+    get_dashboard_stats, get_system_stats, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
 )
 
@@ -173,7 +173,7 @@ def system_stats():
 
 @app.route('/api/check-environment', methods=['GET'])
 def check_environment():
-    result = check_environment()
+    result = check_environment_helper()
     return jsonify(result)
 
 @app.route('/api/cleanup/temp-containers', methods=['POST'])
