@@ -68,7 +68,8 @@ Container Monkey is a web-based Docker management platform providing container l
   - Lifecycle management: specify number of scheduled backups to keep
   - Manual backups never auto-deleted
   - Scheduled backups automatically cleaned up based on lifecycle
-  - Test scheduler button for immediate testing
+  - Cleanup runs after all backups complete (monitored, not fixed delay)
+  - Test scheduler button with progress modal for immediate testing
   - Real-time system clock display on scheduler page
   - Scheduler enabled when one or more containers are selected
 

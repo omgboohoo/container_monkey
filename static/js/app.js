@@ -364,6 +364,8 @@ function showSection(sectionName, navElement) {
     } else if (sectionName === 'statistics') {
         loadStatistics();
     } else if (sectionName === 'backup-scheduler') {
+        // Safety check: ensure no spinners are blocking
+        hideAllSpinners();
         loadSchedulerConfig();
         loadSchedulerContainers();
         startTimeDisplay();
@@ -440,7 +442,10 @@ async function loadContainers() {
     containersList.innerHTML = ''; // Clear immediately
     
     // Show spinner and prevent scrollbars
-    if (containersSpinner) containersSpinner.style.display = 'flex';
+    if (containersSpinner) {
+        containersSpinner.style.display = 'flex';
+        containersSpinner.dataset.shownAt = Date.now(); // Track when shown
+    }
     if (containersWrapper) containersWrapper.style.overflow = 'hidden';
     
     try {
@@ -1296,6 +1301,106 @@ function closeAllModals() {
     });
 }
 
+// Hide all loading spinners (safety function to prevent stuck spinners blocking clicks)
+function hideAllSpinners() {
+    const spinnerIds = [
+        'containers-spinner',
+        'backups-spinner',
+        'statistics-spinner',
+        'volumes-spinner',
+        'images-spinner',
+        'networks-spinner',
+        'stacks-spinner',
+        'scheduler-containers-spinner'
+    ];
+    
+    spinnerIds.forEach(spinnerId => {
+        const spinner = document.getElementById(spinnerId);
+        if (spinner) {
+            spinner.style.display = 'none';
+            delete spinner.dataset.shownAt; // Clear timestamp
+        }
+    });
+    
+    // Also hide any spinners found by class
+    const allSpinners = document.querySelectorAll('.grid-spinner-container');
+    allSpinners.forEach(spinner => {
+        spinner.style.display = 'none';
+        delete spinner.dataset.shownAt;
+    });
+}
+
+// Debug function to check for blocking elements (can be called from console)
+window.debugBlockingElements = function() {
+    console.log('=== Checking for blocking elements ===');
+    
+    // Check spinners
+    const spinners = document.querySelectorAll('.grid-spinner-container');
+    const visibleSpinners = [];
+    spinners.forEach(spinner => {
+        const display = window.getComputedStyle(spinner).display;
+        if (display === 'flex' || display === 'block') {
+            visibleSpinners.push({
+                id: spinner.id || 'no-id',
+                display: display,
+                zIndex: window.getComputedStyle(spinner).zIndex,
+                rect: spinner.getBoundingClientRect()
+            });
+        }
+    });
+    console.log('Visible spinners:', visibleSpinners);
+    
+    // Check modals
+    const modals = document.querySelectorAll('.modal');
+    const visibleModals = [];
+    modals.forEach(modal => {
+        const display = window.getComputedStyle(modal).display;
+        if (display === 'block') {
+            visibleModals.push({
+                id: modal.id || 'no-id',
+                display: display,
+                zIndex: window.getComputedStyle(modal).zIndex,
+                rect: modal.getBoundingClientRect(),
+                hasContent: !!modal.querySelector('.modal-content')
+            });
+        }
+    });
+    console.log('Visible modals:', visibleModals);
+    
+    // Check for high z-index elements
+    const allElements = document.querySelectorAll('*');
+    const highZIndex = [];
+    allElements.forEach(el => {
+        const zIndex = parseInt(window.getComputedStyle(el).zIndex);
+        if (zIndex > 100 && window.getComputedStyle(el).display !== 'none') {
+            const rect = el.getBoundingClientRect();
+            if (rect.width > 100 && rect.height > 100) { // Only large elements
+                highZIndex.push({
+                    tag: el.tagName,
+                    id: el.id || 'no-id',
+                    class: el.className || 'no-class',
+                    zIndex: zIndex,
+                    pointerEvents: window.getComputedStyle(el).pointerEvents,
+                    rect: rect
+                });
+            }
+        }
+    });
+    console.log('High z-index elements:', highZIndex);
+    
+    // Fix any stuck elements
+    if (visibleSpinners.length > 0 || (visibleModals.length > 0 && visibleModals.some(m => !m.hasContent))) {
+        console.log('Found blocking elements, fixing...');
+        hideAllSpinners();
+        closeAllModals();
+        console.log('Fixed! Try clicking buttons now.');
+    } else {
+        console.log('No obvious blocking elements found.');
+    }
+    
+    return {spinners: visibleSpinners, modals: visibleModals, highZIndex: highZIndex};
+};
+
 // Load backups
 async function loadBackups() {
     const errorEl = document.getElementById('backups-error');
@@ -1917,14 +2022,22 @@ window.onclick = function(event) {
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
         closeAllModals();
+        hideAllSpinners(); // Also hide spinners that might be blocking
+    }
+    // Ctrl+Shift+D to debug blocking elements
+    if (event.key === 'D' && event.ctrlKey && event.shiftKey) {
+        event.preventDefault();
+        window.debugBlockingElements();
     }
 });
 
-// Safety check: Detect if modals are blocking clicks
-// This helps identify when modals get stuck open
+// Safety check: Detect if modals or spinners are blocking clicks
+// This helps identify when elements get stuck and block button clicks
 let clickBlockedCount = 0;
+let lastClickTime = 0;
+
 document.addEventListener('click', function(event) {
-    // Check if click is on a button or interactive element
+    const now = Date.now();
     const target = event.target;
     const isInteractive = target.tagName === 'BUTTON' || 
                          target.tagName === 'A' || 
@@ -1933,42 +2046,138 @@ document.addEventListener('click', function(event) {
                          target.closest('.nav-item');
     
     if (isInteractive) {
-        // Check if any modal is visible (excluding login modal)
-        const modals = document.querySelectorAll('.modal');
-        const visibleModals = Array.from(modals).filter(modal => {
-            const display = window.getComputedStyle(modal).display;
-            return display === 'block' && modal.id !== 'login-modal';
+        // Check for any blocking elements
+        const blockingElements = [];
+        
+        // Check for visible spinners
+        const visibleSpinners = document.querySelectorAll('.grid-spinner-container');
+        visibleSpinners.forEach(spinner => {
+            const display = window.getComputedStyle(spinner).display;
+            if (display === 'flex' || display === 'block') {
+                const spinnerRect = spinner.getBoundingClientRect();
+                const targetRect = target.getBoundingClientRect();
+                
+                // Check if spinner overlaps with click target
+                if (!(targetRect.right < spinnerRect.left || 
+                      targetRect.left > spinnerRect.right ||
+                      targetRect.bottom < spinnerRect.top || 
+                      targetRect.top > spinnerRect.bottom)) {
+                    blockingElements.push({type: 'spinner', element: spinner, id: spinner.id || 'unknown'});
+                }
+            }
         });
         
-        // If there are visible modals but we're clicking outside them, 
-        // the modal backdrop might be blocking - this is normal
-        // But if clicking on a button that should work, check if modal is stuck
-        if (visibleModals.length > 0) {
-            const clickedInModal = visibleModals.some(modal => modal.contains(target));
-            if (!clickedInModal) {
-                // Clicking outside modal - this should close it via window.onclick handler
-                // If it doesn't, the modal might be stuck
-                clickBlockedCount++;
-                if (clickBlockedCount > 3) {
-                    console.warn('Multiple clicks detected with visible modals, checking for stuck modals...');
-                    // Check if modals are actually blocking (have backdrop but no content)
-                    visibleModals.forEach(modal => {
-                        const content = modal.querySelector('.modal-content');
-                        if (!content || content.offsetHeight === 0) {
-                            console.warn('Detected stuck modal (no content), closing:', modal.id);
-                            modal.style.display = 'none';
-                        }
-                    });
-                    clickBlockedCount = 0;
+        // Check for visible modals (excluding login)
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach(modal => {
+            const display = window.getComputedStyle(modal).display;
+            if (display === 'block' && modal.id !== 'login-modal') {
+                const modalRect = modal.getBoundingClientRect();
+                const targetRect = target.getBoundingClientRect();
+                
+                // Check if modal overlaps with click target but target is not inside modal content
+                const modalContent = modal.querySelector('.modal-content');
+                const isInsideContent = modalContent && modalContent.contains(target);
+                
+                if (!isInsideContent && 
+                    !(targetRect.right < modalRect.left || 
+                      targetRect.left > modalRect.right ||
+                      targetRect.bottom < modalRect.top || 
+                      targetRect.top > modalRect.bottom)) {
+                    blockingElements.push({type: 'modal', element: modal, id: modal.id || 'unknown'});
                 }
-            } else {
-                clickBlockedCount = 0; // Reset if clicking inside modal
+            }
+        });
+        
+        // Check for elements with pointer-events: none that might be blocking
+        let checkElement = target;
+        while (checkElement && checkElement !== document.body) {
+            const computedStyle = window.getComputedStyle(checkElement);
+            if (computedStyle.pointerEvents === 'none') {
+                // Check if parent has higher z-index blocking
+                const parent = checkElement.parentElement;
+                if (parent) {
+                    const parentZIndex = parseInt(window.getComputedStyle(parent).zIndex) || 0;
+                    if (parentZIndex > 100) {
+                        blockingElements.push({type: 'pointer-events', element: checkElement, id: checkElement.id || checkElement.className || 'unknown'});
+                    }
+                }
+            }
+            checkElement = checkElement.parentElement;
+        }
+        
+        // If blocking elements found, log and fix
+        if (blockingElements.length > 0) {
+            console.warn('Click blocked by:', blockingElements.map(b => `${b.type}:${b.id}`).join(', '));
+            console.warn('Target:', target.tagName, target.className, target.id);
+            console.warn('Target rect:', target.getBoundingClientRect());
+            
+            clickBlockedCount++;
+            
+            // Auto-fix after 2 blocked clicks
+            if (clickBlockedCount > 2) {
+                console.warn('Auto-fixing blocking elements...');
+                
+                blockingElements.forEach(blocker => {
+                    if (blocker.type === 'spinner') {
+                        console.warn('Hiding spinner:', blocker.id);
+                        blocker.element.style.display = 'none';
+                    } else if (blocker.type === 'modal') {
+                        const content = blocker.element.querySelector('.modal-content');
+                        if (!content || content.offsetHeight === 0) {
+                            console.warn('Closing stuck modal:', blocker.id);
+                            blocker.element.style.display = 'none';
+                        }
+                    }
+                });
+                
+                // Also hide all spinners as safety measure
+                hideAllSpinners();
+                clickBlockedCount = 0;
             }
         } else {
-            clickBlockedCount = 0; // Reset if no modals visible
+            // Reset counter if click went through
+            if (now - lastClickTime > 1000) {
+                clickBlockedCount = 0;
+            }
         }
+        
+        lastClickTime = now;
     }
 }, true);
+
+// Additional safety: Check for stuck elements on page load and periodically
+function checkForStuckElements() {
+    // Check for visible spinners that shouldn't be visible
+    const spinners = document.querySelectorAll('.grid-spinner-container');
+    spinners.forEach(spinner => {
+        const display = window.getComputedStyle(spinner).display;
+        if (display === 'flex' || display === 'block') {
+            // Check if spinner has been visible for more than 30 seconds
+            const spinnerData = spinner.dataset;
+            if (!spinnerData.shownAt) {
+                spinnerData.shownAt = Date.now();
+            } else if (Date.now() - parseInt(spinnerData.shownAt) > 30000) {
+                console.warn('Spinner has been visible for >30s, hiding:', spinner.id || 'unknown');
+                spinner.style.display = 'none';
+                delete spinnerData.shownAt;
+            }
+        } else {
+            delete spinnerData.shownAt;
+        }
+    });
+}
+
+// Run check every 10 seconds
+setInterval(checkForStuckElements, 10000);
+
+// Also check on page visibility change
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        // Page became visible, check for stuck elements
+        setTimeout(checkForStuckElements, 1000);
+    }
+});
 
 // Container management functions
 async function startContainer(containerId) {
@@ -4808,8 +5017,11 @@ async function loadSchedulerContainers() {
     const list = document.getElementById('scheduler-containers-list');
     const wrapper = document.getElementById('scheduler-containers-table-wrapper');
     
-    spinner.style.display = 'flex';
-    list.innerHTML = '';
+    if (spinner) {
+        spinner.style.display = 'flex';
+        spinner.dataset.shownAt = Date.now(); // Track when shown
+    }
+    if (list) list.innerHTML = '';
     
     try {
         const response = await fetch('/api/containers');
@@ -4886,12 +5098,18 @@ async function loadSchedulerContainers() {
             });
         }
         
-        spinner.style.display = 'none';
+        if (spinner) {
+            spinner.style.display = 'none';
+            delete spinner.dataset.shownAt;
+        }
         if (wrapper) wrapper.style.overflow = '';
     } catch (error) {
         console.error('Error loading containers:', error);
-        spinner.style.display = 'none';
-        list.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--danger);">Error loading containers: ${error.message}</td></tr>`;
+        if (spinner) {
+            spinner.style.display = 'none';
+            delete spinner.dataset.shownAt;
+        }
+        if (list) list.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--danger);">Error loading containers: ${error.message}</td></tr>`;
     }
 }
 
@@ -5063,8 +5281,8 @@ async function testScheduler() {
     const errorEl = document.getElementById('scheduler-error');
     errorEl.style.display = 'none';
     
-    if (!schedulerConfig || !schedulerConfig.enabled) {
-        showError('scheduler-error', 'Scheduler is disabled. Please select at least one container and save the configuration.');
+    if (!schedulerConfig) {
+        showError('scheduler-error', 'Scheduler configuration not loaded. Please refresh the page.');
         return;
     }
     
@@ -5074,9 +5292,34 @@ async function testScheduler() {
         return;
     }
     
-    if (!confirm(`Trigger scheduled backups for ${selectedCount} container(s) now?`)) {
-        return;
-    }
+    // Show progress modal
+    const modal = document.getElementById('scheduler-test-modal');
+    const statusEl = document.getElementById('scheduler-test-status');
+    const stepEl = document.getElementById('scheduler-test-step');
+    const countEl = document.getElementById('scheduler-test-count');
+    const progressBar = document.getElementById('scheduler-test-progress-bar');
+    const containersEl = document.getElementById('scheduler-test-containers');
+    
+    modal.style.display = 'block';
+    statusEl.textContent = 'Triggering scheduled backups...';
+    stepEl.textContent = `Queuing backups for ${selectedCount} container(s)...`;
+    countEl.textContent = `0 / ${selectedCount}`;
+    progressBar.style.width = '0%';
+    containersEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px;">Loading...</div>';
+    
+    // Track container progress
+    const containerStatuses = {};
+    const selectedContainers = schedulerConfig.selected_containers || [];
+    
+    // Initialize container statuses
+    selectedContainers.forEach(containerId => {
+        containerStatuses[containerId] = {
+            status: 'queued',
+            progress: null
+        };
+    });
+    
+    updateSchedulerTestProgress(containerStatuses, selectedContainers.length);
     
     try {
         const response = await fetch('/api/scheduler/test', {
@@ -5089,9 +5332,95 @@ async function testScheduler() {
         }
         
         const result = await response.json();
-        showNotification(result.message || 'Scheduled backups triggered successfully!', 'success');
+        statusEl.textContent = 'Backups triggered successfully!';
+        stepEl.textContent = 'Monitoring backup progress...';
+        
+        // Poll backup status to track progress
+        let completedCount = 0;
+        const maxWaitTime = 600000; // 10 minutes max
+        const startTime = Date.now();
+        const checkInterval = setInterval(async () => {
+            try {
+                // Check backup status
+                const statusResponse = await fetch('/api/backup/status');
+                const statusData = await statusResponse.json();
+                
+                // Update container statuses based on backup progress
+                // Note: We can't directly track which backup belongs to which container
+                // So we'll show overall progress
+                
+                if (statusData.status === 'idle' && completedCount === 0) {
+                    // All backups queued, now waiting for completion
+                    statusEl.textContent = 'All backups queued';
+                    stepEl.textContent = 'Waiting for backups to complete...';
+                }
+                
+                // Check if we've exceeded max wait time
+                if (Date.now() - startTime > maxWaitTime) {
+                    clearInterval(checkInterval);
+                    statusEl.textContent = 'Monitoring timeout';
+                    stepEl.textContent = 'Some backups may still be in progress. Check the Backup Vault for status.';
+                    progressBar.style.width = '100%';
+                    countEl.textContent = `${selectedContainers.length} / ${selectedContainers.length}`;
+                    return;
+                }
+                
+                // If idle and we've been waiting, assume done
+                if (statusData.status === 'idle' && Date.now() - startTime > 5000) {
+                    completedCount = selectedContainers.length;
+                    clearInterval(checkInterval);
+                    statusEl.textContent = 'All backups completed!';
+                    stepEl.textContent = 'Scheduled backups have been queued and processed.';
+                    progressBar.style.width = '100%';
+                    countEl.textContent = `${selectedContainers.length} / ${selectedContainers.length}`;
+                    
+                    // Refresh backup list
+                    setTimeout(() => {
+                        loadBackups();
+                        loadSchedulerConfig(); // Refresh scheduler config to update next_run
+                    }, 1000);
+                }
+            } catch (error) {
+                console.error('Error checking backup status:', error);
+            }
+        }, 2000); // Check every 2 seconds
+        
+        // Auto-close after reasonable time or when done
+        setTimeout(() => {
+            clearInterval(checkInterval);
+            if (modal.style.display === 'block') {
+                // Don't auto-close, let user close manually
+            }
+        }, maxWaitTime);
+        
     } catch (error) {
         console.error('Error testing scheduler:', error);
+        modal.style.display = 'none';
         showError('scheduler-error', `Error triggering scheduled backups: ${error.message}`);
     }
+}
+
+function updateSchedulerTestProgress(containerStatuses, totalCount) {
+    const countEl = document.getElementById('scheduler-test-count');
+    const progressBar = document.getElementById('scheduler-test-progress-bar');
+    const containersEl = document.getElementById('scheduler-test-containers');
+    
+    const completed = Object.values(containerStatuses).filter(s => s.status === 'complete').length;
+    const percentage = totalCount > 0 ? Math.round((completed / totalCount) * 100) : 0;
+    
+    countEl.textContent = `${completed} / ${totalCount}`;
+    progressBar.style.width = `${percentage}%`;
+    
+    // Update container list (simplified - we don't have container names here)
+    containersEl.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 10px;">
+        ${completed} of ${totalCount} backups completed
+    </div>`;
+}
+
+function closeSchedulerTestModal() {
+    const modal = document.getElementById('scheduler-test-modal');
+    modal.style.display = 'none';
+    // Refresh backup list when closing
+    loadBackups();
+    loadSchedulerConfig();
 }

@@ -45,20 +45,12 @@ class BackupFileManager:
                 
                 if filename.endswith(('.zip', '.tar.gz')):
                     # Determine backup type: scheduled backups have "scheduled_" prefix
+                    # This is reliable since we set the prefix when creating backups
                     backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
                     
-                    # Try to read backup_type from metadata if available (more reliable)
-                    try:
-                        with tarfile.open(file_path, 'r:gz') as tar:
-                            try:
-                                metadata_file = tar.extractfile('backup_metadata.json')
-                                if metadata_file:
-                                    metadata = json.loads(metadata_file.read().decode('utf-8'))
-                                    backup_type = metadata.get('backup_type', backup_type)
-                            except (KeyError, json.JSONDecodeError):
-                                pass  # Use filename-based detection if metadata not available
-                    except Exception:
-                        pass  # Use filename-based detection if tar read fails
+                    # Note: We used to read metadata from inside tar.gz files, but that's slow
+                    # The filename prefix is reliable and much faster, so we use that instead
+                    # If we need metadata in the future, we can read it lazily on-demand
                     
                     backups.append({
                         'filename': filename,

@@ -10,9 +10,10 @@
   - Select containers to include in scheduled backups via checkbox interface
   - Lifecycle management: specify number of scheduled backups to keep (default: 7)
   - Scheduler automatically enabled when one or more containers are selected
-  - Test Scheduler button for immediate testing without waiting for scheduled time
+  - Test Scheduler button with progress modal for immediate testing
   - Real-time system clock display on scheduler page
   - Next backup time display in scheduler status
+  - Cleanup runs automatically after scheduled backups complete (monitored, not fixed delay)
 
 ### Backup Management Improvements
 - **Backup Type Tracking**: Backup vault now shows whether backups are Manual or Scheduled
@@ -29,6 +30,19 @@
   - Added proper handling for ISO 8601 timestamps with nanosecond precision
   - Frontend now correctly handles both timestamp formats (seconds and milliseconds)
 
+- **Fixed backup vault slow loading**: Significantly improved backup vault load time
+  - Removed slow tar file reading for backup type detection
+  - Now uses fast filename-based detection (`scheduled_` prefix)
+  - Backup vault loads instantly even with many backups
+
+- **Fixed UI button blocking issues**: Comprehensive fixes for buttons becoming unclickable
+  - Added automatic detection and fixing of stuck spinners and modals
+  - Added ESC key handler to close all modals and hide spinners
+  - Added debug function (`debugBlockingElements()`) accessible via Ctrl+Shift+D
+  - Automatic detection of spinners visible >30 seconds
+  - Improved click blocking detection with detailed logging
+  - Safety checks when loading scheduler page to prevent stuck spinners
+
 ### UI Improvements
 - **Fixed backup vault grid layout**: Adjusted column widths to prevent action buttons from being squashed
   - Size column reduced from 24% to 10%
@@ -37,13 +51,26 @@
   - All columns now have appropriate min-width constraints
   - Backup Type column added with proper sizing
 
+- **Test Scheduler Progress Modal**: Added progress tracking for test scheduler
+  - Shows spinner and progress bar when testing scheduler
+  - Displays backup completion status
+  - Monitors backup queue to track progress
+  - Auto-refreshes backup vault when complete
+
+- **Confirmation Modal Improvements**: Fixed modal width for long backup names
+  - Increased max-width from 500px to 600px
+  - Added word wrapping for long filenames
+  - Prevents scrollbars on confirmation dialogs
+
 ### Backend Changes
 - Added `scheduler_manager.py` module for scheduled backup management
 - Enhanced `backup_manager.py` to support `is_scheduled` parameter
-- Updated `backup_file_manager.py` to detect and display backup type
+- Updated `backup_file_manager.py` to detect and display backup type (using fast filename-based detection)
 - Added scheduler API endpoints: `/api/scheduler/config`, `/api/scheduler/test`, `/api/scheduler/cleanup`
 - Scheduler runs in background thread, checking every minute for due backups
-- Automatic cleanup of old scheduled backups after each scheduled backup run
+- Scheduler cleanup monitors backup completion and runs automatically after all backups finish
+- Removed unnecessary tar file reading in `backup_file_manager.py` for better performance
+- Enhanced error handling in scheduler cleanup process
 
 ### Documentation
 - Updated README.md and PRD.md with Backup Scheduler feature documentation
@@ -181,4 +208,3 @@
 - Better code organization and separation of concerns
 - Improved maintainability with modular design
 - Enhanced error handling in backup operations
-

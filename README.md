@@ -2,7 +2,7 @@
 
 **Version 0.2.5**
 
-The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups. Restore instantly when disaster strikes. Move containers between servers effortlessly.
+The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups or automated scheduling. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
 ## Features
 
@@ -20,11 +20,16 @@ The ultimate backup and recovery solution for Docker. Protect your containers, v
   - Configure schedule (daily at specific hour, or weekly on specific day/hour)
   - Set lifecycle (number of scheduled backups to keep)
   - Manual backups never auto-deleted, scheduled backups cleaned up based on lifecycle
-  - Test scheduler button for immediate testing
+  - Test scheduler button with progress tracking for immediate testing
   - Real-time system clock display on scheduler page
+  - Cleanup runs automatically after backups complete (not fixed delay)
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
 - **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
 - **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled
+- **UI Reliability**: Automatic detection and fixing of stuck UI elements
+  - ESC key closes all modals and hides spinners
+  - Debug mode (Ctrl+Shift+D) to identify blocking elements
+  - Automatic cleanup of stuck spinners and modals
 - **Web Console**: Interactive terminal access to containers
 - **Logs Viewer**: Real-time container logs viewing
 - **Bulk Operations**: Select multiple containers/volumes/images for batch operations
