@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.2.6**
+**Version 0.2.7**
 
 ## Overview
 
@@ -46,7 +46,7 @@ Container Monkey is a web-based Docker management platform providing container l
 ## Key Functionality
 
 ### Container Management
-- List, start, stop, restart, delete containers
+- List, start, stop (graceful), kill (immediate), restart, delete containers
 - Bulk operations on multiple containers
 - Container logs streaming
 - Interactive exec console
@@ -112,7 +112,8 @@ Container Monkey is a web-based Docker management platform providing container l
 ```
 GET    /api/containers                          # List all containers
 POST   /api/container/<id>/start                # Start container
-POST   /api/container/<id>/stop                 # Stop container
+POST   /api/container/<id>/stop                 # Stop container gracefully (SIGTERM)
+POST   /api/container/<id>/kill                 # Kill container immediately (SIGKILL)
 POST   /api/container/<id>/restart              # Restart container
 DELETE /api/container/<id>/delete               # Delete container
 GET    /api/container/<id>/details              # Get container details

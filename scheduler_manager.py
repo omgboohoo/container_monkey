@@ -140,14 +140,38 @@ class SchedulerManager:
         """Check if scheduler is enabled (has selected containers)"""
         return len(self.selected_containers) > 0
     
-    def get_config(self) -> Dict[str, Any]:
-        """Get current scheduler configuration"""
+    def get_config(self, validate_containers: bool = False, existing_container_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        """
+        Get current scheduler configuration
+        
+        Args:
+            validate_containers: If True, filter out non-existent containers
+            existing_container_ids: List of existing container IDs for validation
+        """
+        selected_containers = self.selected_containers
+        
+        # Validate and filter out non-existent containers if requested
+        if validate_containers and existing_container_ids is not None:
+            original_count = len(selected_containers)
+            selected_containers = [cid for cid in selected_containers if cid in existing_container_ids]
+            if len(selected_containers) < original_count:
+                removed_count = original_count - len(selected_containers)
+                print(f"🧹 Removed {removed_count} non-existent container(s) from scheduler config")
+                self.selected_containers = selected_containers
+                self.save_config()
+                # Recalculate next run if scheduler is still enabled
+                if self.is_enabled():
+                    self.calculate_next_run()
+                # Stop scheduler if no containers left
+                elif self.scheduler_running:
+                    self.stop_scheduler()
+        
         return {
             'schedule_type': self.schedule_type,
             'hour': self.hour,
             'day_of_week': self.day_of_week,
             'lifecycle': self.lifecycle,
-            'selected_containers': self.selected_containers,
+            'selected_containers': selected_containers,
             'enabled': self.is_enabled(),
             'last_run': self.last_run.isoformat() if self.last_run else None,
             'next_run': self.next_run.isoformat() if self.next_run else None
@@ -303,6 +327,22 @@ class SchedulerManager:
             
             # Wait before checking again
             time.sleep(check_interval)
+    
+    def remove_container(self, container_id: str):
+        """Remove a container from selected containers list"""
+        if container_id in self.selected_containers:
+            self.selected_containers.remove(container_id)
+            self.save_config()
+            print(f"🗑️  Removed container {container_id[:12]} from scheduler")
+            
+            # If no containers left, stop scheduler
+            if not self.is_enabled() and self.scheduler_running:
+                self.stop_scheduler()
+                print("🛑 Scheduler stopped (no containers selected)")
+            
+            # Recalculate next run if scheduler is still enabled
+            if self.is_enabled():
+                self.calculate_next_run()
     
     def cleanup_old_backups(self):
         """Cleanup old scheduled backups based on lifecycle"""

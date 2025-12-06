@@ -242,6 +242,13 @@ def stop_container(container_id):
         return jsonify(result), 500
     return jsonify(result)
 
+@app.route('/api/container/<container_id>/kill', methods=['POST'])
+def kill_container(container_id):
+    result = container_manager.kill_container(container_id)
+    if 'error' in result:
+        return jsonify(result), 500
+    return jsonify(result)
+
 @app.route('/api/container/<container_id>/restart', methods=['POST'])
 def restart_container(container_id):
     result = container_manager.restart_container(container_id)
@@ -255,6 +262,11 @@ def delete_container(container_id):
     result = container_manager.delete_container(container_id, delete_volumes)
     if 'error' in result:
         return jsonify(result), 500
+    
+    # Remove container from scheduler if it's in the selected containers list
+    if scheduler_manager:
+        scheduler_manager.remove_container(container_id)
+    
     return jsonify(result)
 
 @app.route('/api/container/<container_id>/logs')
@@ -641,7 +653,16 @@ def get_scheduler_config():
     """Get scheduler configuration"""
     if not scheduler_manager:
         return jsonify({'error': 'Scheduler manager not available'}), 500
-    return jsonify(scheduler_manager.get_config())
+    
+    # Validate containers by checking against existing containers
+    containers_result = container_manager.list_containers()
+    existing_container_ids = []
+    if 'containers' in containers_result:
+        existing_container_ids = [c['id'] for c in containers_result['containers']]
+    
+    # Get config with validation to remove non-existent containers
+    config = scheduler_manager.get_config(validate_containers=True, existing_container_ids=existing_container_ids)
+    return jsonify(config)
 
 @app.route('/api/scheduler/config', methods=['POST'])
 @login_required

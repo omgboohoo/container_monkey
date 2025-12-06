@@ -103,7 +103,7 @@
                     <i class="ph ph-coffee" style="font-size: 1.2em;"></i>
                     <span>Buy me a Coffee</span>
                 </a>
-                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.6</span>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.7</span>
             </div>
         </aside>
 
@@ -217,6 +217,7 @@
                         <div class="btn-group">
                             <button class="btn btn-success btn-sm bulk-btn" onclick="startSelectedContainers()" disabled><i class="ph ph-play"></i> Start</button>
                             <button class="btn btn-secondary btn-sm bulk-btn" onclick="stopSelectedContainers()" disabled><i class="ph ph-pause"></i> Stop</button>
+                            <button class="btn btn-danger btn-sm bulk-btn" onclick="killSelectedContainers()" disabled><i class="ph ph-x-circle"></i> Kill</button>
                             <button class="btn btn-primary btn-sm bulk-btn" onclick="restartSelectedContainers()" disabled><i class="ph ph-arrows-clockwise"></i> Restart</button>
                             <button class="btn btn-warning btn-sm bulk-btn" onclick="backupSelectedContainers()" disabled><i class="ph ph-floppy-disk"></i> Backup</button>
                             <button class="btn btn-danger btn-sm bulk-btn" onclick="deleteSelectedContainers()" disabled><i class="ph ph-trash"></i> Delete</button>

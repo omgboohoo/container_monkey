@@ -1,5 +1,48 @@
 # Release Notes
 
+## Version 0.2.7
+
+### New Features
+- **Separated Stop and Kill Operations**: Enhanced container control with distinct graceful stop and immediate kill actions
+  - **Stop Button**: Now performs graceful shutdown (SIGTERM with default timeout)
+  - **Kill Button**: New button for immediate container termination (SIGKILL)
+  - Both operations available in bulk actions for multiple containers
+  - Improved user control over container lifecycle management
+
+### Container Management Improvements
+- **Graceful Stop Implementation**: Stop operation now uses `docker stop` without timeout flag, allowing containers to shut down gracefully
+- **Kill Operation**: New `kill_container()` method provides immediate termination when needed
+- **Backend API**: Added `/api/container/<container_id>/kill` endpoint for kill operations
+- **Frontend Updates**: Added Kill button between Stop and Restart buttons in container management interface
+
+### Bug Fixes
+- **Fixed scheduler error when deleting scheduled containers**: Resolved issue where deleting a container that was part of scheduled tasks caused "Error loading containers" on scheduler page
+  - Added automatic removal of deleted containers from scheduler's selected containers list
+  - Added validation when loading scheduler config to filter out non-existent containers
+  - Scheduler automatically stops if no containers remain after cleanup
+  - Prevents errors when viewing scheduler page after container deletion
+  - Improved scheduler reliability and error handling
+
+### Technical Changes
+- Updated `container_manager.py`:
+  - Modified `stop_container()` to perform graceful stop (removed `-t 0` flag)
+  - Added `kill_container()` method for immediate termination
+  - Updated `delete_container()` to use kill instead of stop for immediate cleanup
+- Updated `scheduler_manager.py`:
+  - Added `remove_container()` method to remove containers from scheduled tasks
+  - Enhanced `get_config()` method with container validation to filter out non-existent containers
+  - Automatic cleanup of invalid container IDs from scheduler configuration
+- Updated `app.py`:
+  - Added kill route for kill endpoint
+  - Delete container endpoint now calls scheduler cleanup to remove deleted containers from scheduled tasks
+  - Scheduler config endpoint validates containers when loading
+- Added `killContainer()` and `killSelectedContainers()` functions in frontend JavaScript
+
+### Version Update
+- Updated version number to 0.2.7 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.6
 
 ### Bug Fixes

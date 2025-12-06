@@ -372,19 +372,37 @@ class ContainerManager:
         return {'error': 'Docker client not available'}
     
     def stop_container(self, container_id: str) -> Dict[str, Any]:
-        """Stop a container"""
+        """Stop a container gracefully"""
         docker_api_client = docker_utils.docker_api_client
         if docker_api_client:
             try:
                 result = subprocess.run(
-                    ['docker', 'stop', '-t', '0', container_id],
+                    ['docker', 'stop', container_id],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode != 0:
+                    return {'error': result.stderr}
+                return {'success': True, 'message': 'Container stopped gracefully'}
+            except Exception as e:
+                return {'error': str(e)}
+        return {'error': 'Docker client not available'}
+    
+    def kill_container(self, container_id: str) -> Dict[str, Any]:
+        """Kill a container immediately"""
+        docker_api_client = docker_utils.docker_api_client
+        if docker_api_client:
+            try:
+                result = subprocess.run(
+                    ['docker', 'kill', container_id],
                     capture_output=True,
                     text=True,
                     timeout=10
                 )
                 if result.returncode != 0:
                     return {'error': result.stderr}
-                return {'success': True, 'message': 'Container stopped'}
+                return {'success': True, 'message': 'Container killed'}
             except Exception as e:
                 return {'error': str(e)}
         return {'error': 'Docker client not available'}
@@ -426,7 +444,7 @@ class ContainerManager:
                     except:
                         pass
                 
-                subprocess.run(['docker', 'stop', '-t', '0', container_id], 
+                subprocess.run(['docker', 'kill', container_id], 
                               capture_output=True, timeout=10)
                 
                 result = subprocess.run(

@@ -1,35 +1,20 @@
 # Container Monkey 🐵
 
-**Version 0.2.6**
+**Version 0.2.7**
 
 The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups or automated scheduling. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
 ## Features
 
-- **Container Management**: Start, stop, restart, delete containers with bulk operations
+- **Container Management**: Start, stop (graceful), kill (immediate), restart, delete containers with bulk operations
 - **Volume Management**: Explore, download, and manage Docker volumes
 - **Image Management**: View and delete Docker images, cleanup dangling images
 - **Network Management**: Backup and restore Docker networks
-- **Backup & Restore**: 
-  - Full container backup with volumes, port mappings, and restore functionality
-  - Sequential backup queue system for bulk operations
-  - Real-time backup progress tracking
-  - Backup completion verification (ensures tar.gz files are fully written)
+- **Backup & Restore**: Full container backup with volumes, port mappings, and restore functionality
 - **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules
-  - Select containers to include in scheduled backups
-  - Configure schedule (daily at specific hour, or weekly on specific day/hour)
-  - Set lifecycle (number of scheduled backups to keep)
-  - Manual backups never auto-deleted, scheduled backups cleaned up based on lifecycle
-  - Test scheduler button with progress tracking for immediate testing
-  - Real-time system clock display on scheduler page
-  - Cleanup runs automatically after backups complete (not fixed delay)
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
 - **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
 - **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled
-- **UI Reliability**: Automatic detection and fixing of stuck UI elements
-  - ESC key closes all modals and hides spinners
-  - Debug mode (Ctrl+Shift+D) to identify blocking elements
-  - Automatic cleanup of stuck spinners and modals
 - **Web Console**: Interactive terminal access to containers
 - **Logs Viewer**: Real-time container logs viewing
 - **Bulk Operations**: Select multiple containers/volumes/images for batch operations
@@ -127,7 +112,11 @@ docker run -d \
 ### Container Operations
 
 1. **View Containers**: Navigate to the Containers section
-2. **Start/Stop/Restart**: Use quick action buttons or bulk operations
+2. **Start/Stop/Kill/Restart**: Use quick action buttons or bulk operations
+   - **Start**: Start stopped containers
+   - **Stop**: Gracefully stop containers (SIGTERM with default timeout)
+   - **Kill**: Immediately terminate containers (SIGKILL)
+   - **Restart**: Gracefully stop then restart containers
 3. **Backup**: Click backup button to create a full container backup
 4. **Delete**: Delete containers with options to remove associated volumes/images
 5. **View Logs**: Click logs icon to view real-time container logs
@@ -166,7 +155,8 @@ The application provides a RESTful API. Key endpoints include:
 
 - `GET /api/containers` - List all containers
 - `POST /api/container/<id>/start` - Start container
-- `POST /api/container/<id>/stop` - Stop container
+- `POST /api/container/<id>/stop` - Stop container gracefully (SIGTERM)
+- `POST /api/container/<id>/kill` - Kill container immediately (SIGKILL)
 - `POST /api/backup/<container_id>` - Backup container (supports `?queue=true` for bulk operations)
 - `GET /api/backup-progress/<progress_id>` - Get backup progress (exempt from rate limiting)
 - `GET /api/backup/status` - Get backup system status

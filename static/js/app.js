@@ -2239,6 +2239,26 @@ async function stopContainer(containerId) {
     }
 }
 
+async function killContainer(containerId) {
+    try {
+        const response = await fetch(`/api/container/${containerId}/kill`, {
+            method: 'POST',
+        });
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to kill container');
+        }
+        
+        // Small delay to ensure Docker has processed the change
+        setTimeout(() => {
+            loadContainers();
+        }, 300);
+    } catch (error) {
+        console.error(`Error killing container: ${error.message}`);
+    }
+}
+
 // Show delete options modal
 async function showDeleteOptions(containerId, containerName) {
     currentContainerId = containerId;
@@ -4469,6 +4489,20 @@ async function stopSelectedContainers() {
 
     for (const containerId of selectedIds) {
         await stopContainer(containerId);
+    }
+    resetSelection();
+    loadContainers();
+}
+
+async function killSelectedContainers() {
+    const selectedIds = getSelectedContainerIds();
+    if (selectedIds.length === 0) {
+        console.warn('No containers selected.');
+        return;
+    }
+
+    for (const containerId of selectedIds) {
+        await killContainer(containerId);
     }
     resetSelection();
     loadContainers();
