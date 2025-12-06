@@ -1,5 +1,30 @@
 # Release Notes
 
+## Version 0.2.8
+
+### Bug Fixes
+- **Fixed JSON parsing errors on authentication failure**: Resolved "Unexpected token '<', "<!doctype "... is not valid JSON" errors when session expires
+  - Updated `loadContainers()`, `loadSchedulerContainers()`, and `loadSchedulerConfig()` functions to check response status before parsing JSON
+  - Added graceful error handling for HTML error responses (when server returns HTML instead of JSON)
+  - Improved error messages to guide users when authentication is required
+  - Prevents application crashes when session expires or authentication fails
+
+- **Fixed spinnerData ReferenceError**: Resolved "ReferenceError: spinnerData is not defined" in console
+  - Fixed scope issue in `checkForStuckElements()` function where `spinnerData` was declared inside if block but used in else block
+  - Moved `spinnerData` declaration outside if/else block to ensure proper scope
+  - Eliminates console errors during spinner cleanup operations
+
+### Technical Changes
+- Updated `static/js/app.js`:
+  - Enhanced error handling in API response parsing to check status before JSON parsing
+  - Fixed variable scope issue in spinner cleanup function
+  - Improved error messages for authentication failures
+
+### Version Update
+- Updated version number to 0.2.8 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.7
 
 ### New Features

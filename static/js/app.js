@@ -450,31 +450,52 @@ async function loadContainers() {
     
     try {
         const response = await fetch('/api/containers');
-        const data = await response.json();
         
+        // Check response status before parsing JSON
         if (!response.ok) {
-            // Handle Docker client not available error specially
-            if (response.status === 503 && data.error === 'Docker client not available') {
-                errorEl.innerHTML = `
-                    <h3>❌ Docker Client Not Available</h3>
-                    <p><strong>${data.message || 'Docker daemon is not accessible'}</strong></p>
-                    <p>To fix this issue:</p>
-                    <ol style="text-align: left; display: inline-block; margin: 10px 0;">
-                        <li>Run: <code>./add-to-docker-group.sh</code></li>
-                        <li>Or manually: <code>sudo usermod -aG docker $USER</code></li>
-                        <li>Then run: <code>newgrp docker</code> (or log out/in)</li>
-                        <li>Verify: <code>docker ps</code></li>
-                    </ol>
-                    <p>After fixing, refresh this page.</p>
-                `;
-                errorEl.style.display = 'block';
-                if (containersSpinner) containersSpinner.style.display = 'none';
-                if (containersWrapper) containersWrapper.style.overflow = '';
-                isLoadingContainers = false;
-                return;
+            // Try to parse JSON error response, but handle HTML errors gracefully
+            let errorMessage = 'Failed to load containers';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+                
+                // Handle Docker client not available error specially
+                if (response.status === 503 && errorData.error === 'Docker client not available') {
+                    errorEl.innerHTML = `
+                        <h3>❌ Docker Client Not Available</h3>
+                        <p><strong>${errorData.message || 'Docker daemon is not accessible'}</strong></p>
+                        <p>To fix this issue:</p>
+                        <ol style="text-align: left; display: inline-block; margin: 10px 0;">
+                            <li>Run: <code>./add-to-docker-group.sh</code></li>
+                            <li>Or manually: <code>sudo usermod -aG docker $USER</code></li>
+                            <li>Then run: <code>newgrp docker</code> (or log out/in)</li>
+                            <li>Verify: <code>docker ps</code></li>
+                        </ol>
+                        <p>After fixing, refresh this page.</p>
+                    `;
+                    errorEl.style.display = 'block';
+                    if (containersSpinner) containersSpinner.style.display = 'none';
+                    if (containersWrapper) containersWrapper.style.overflow = '';
+                    isLoadingContainers = false;
+                    return;
+                }
+                
+                // Handle authentication errors
+                if (response.status === 401) {
+                    errorMessage = 'Authentication required. Please refresh the page and log in again.';
+                }
+            } catch (jsonError) {
+                // Response is not JSON (likely HTML error page)
+                if (response.status === 401) {
+                    errorMessage = 'Authentication required. Please refresh the page and log in again.';
+                } else {
+                    errorMessage = `Server error (${response.status}). Please refresh the page.`;
+                }
             }
-            throw new Error(data.error || 'Failed to load containers');
+            throw new Error(errorMessage);
         }
+        
+        const data = await response.json();
         
         if (data.containers.length === 0) {
             containersList.innerHTML = '<p style="text-align: center; padding: 40px; color: #666;">No containers found</p>';
@@ -2152,9 +2173,9 @@ function checkForStuckElements() {
     const spinners = document.querySelectorAll('.grid-spinner-container');
     spinners.forEach(spinner => {
         const display = window.getComputedStyle(spinner).display;
+        const spinnerData = spinner.dataset; // Declare outside if/else block
         if (display === 'flex' || display === 'block') {
             // Check if spinner has been visible for more than 30 seconds
-            const spinnerData = spinner.dataset;
             if (!spinnerData.shownAt) {
                 spinnerData.shownAt = Date.now();
             } else if (Date.now() - parseInt(spinnerData.shownAt) > 30000) {
@@ -5027,9 +5048,30 @@ let schedulerConfig = null;
 async function loadSchedulerConfig() {
     try {
         const response = await fetch('/api/scheduler/config');
+        
+        // Check response status before parsing JSON
         if (!response.ok) {
-            throw new Error('Failed to load scheduler config');
+            // Try to parse JSON error response, but handle HTML errors gracefully
+            let errorMessage = 'Failed to load scheduler config';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+                
+                // Handle authentication errors
+                if (response.status === 401) {
+                    errorMessage = 'Authentication required. Please refresh the page and log in again.';
+                }
+            } catch (jsonError) {
+                // Response is not JSON (likely HTML error page)
+                if (response.status === 401) {
+                    errorMessage = 'Authentication required. Please refresh the page and log in again.';
+                } else {
+                    errorMessage = `Server error (${response.status}). Please refresh the page.`;
+                }
+            }
+            throw new Error(errorMessage);
         }
+        
         schedulerConfig = await response.json();
         
         // Update UI with config
@@ -5059,9 +5101,30 @@ async function loadSchedulerContainers() {
     
     try {
         const response = await fetch('/api/containers');
+        
+        // Check response status before parsing JSON
         if (!response.ok) {
-            throw new Error('Failed to load containers');
+            // Try to parse JSON error response, but handle HTML errors gracefully
+            let errorMessage = 'Failed to load containers';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+                
+                // Handle authentication errors
+                if (response.status === 401) {
+                    errorMessage = 'Authentication required. Please refresh the page and log in again.';
+                }
+            } catch (jsonError) {
+                // Response is not JSON (likely HTML error page)
+                if (response.status === 401) {
+                    errorMessage = 'Authentication required. Please refresh the page and log in again.';
+                } else {
+                    errorMessage = `Server error (${response.status}). Please refresh the page.`;
+                }
+            }
+            throw new Error(errorMessage);
         }
+        
         const data = await response.json();
         
         if (data.error) {

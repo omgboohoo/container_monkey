@@ -1,6 +1,6 @@
 # Container Monkey 🐵
 
-**Version 0.2.7**
+**Version 0.2.8**
 
 The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups or automated scheduling. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
@@ -44,8 +44,8 @@ For deploying to cloud servers:
 
 1. **Build the image and create tar file:**
 ```bash
-chmod +x build_image.sh
-./build_image.sh
+sudo docker build -t container-monkey ./
+sudo docker save -o container-monkey.tar container-monkey
 ```
 
 2. **Upload the tar file to your server:**
@@ -145,9 +145,6 @@ docker run -d \
 - **Dashboard**: Overview of containers, images, volumes, networks
 - **System Stats**: Real-time CPU and RAM utilization in top bar
 - **Statistics Page**: View all containers with detailed stats including CPU %, RAM, Network I/O, and Block I/O
-  - Refreshes automatically when visiting the page
-  - Manual refresh button available
-  - Shows running/stopped status for each container
 
 ## API Endpoints
 
