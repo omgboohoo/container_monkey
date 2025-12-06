@@ -38,9 +38,7 @@ Access the web UI at: http://localhost:666
 - Username: `monkeysee`
 - Password: `monkeydo`
 
-### Cloud Deployment (build_image.sh)
-
-For deploying to cloud servers:
+### Docker / Cloud Deployment
 
 1. **Build the image and create tar file:**
 ```bash
@@ -74,20 +72,6 @@ Access the web UI at: http://your-server:666
 **Default login credentials:**
 - Username: `monkeysee`
 - Password: `monkeydo`
-
-### Manual Build
-
-```bash
-docker build -t container-monkey .
-docker volume create container-monkey
-docker run -d \
-  --name container-monkey \
-  -p 666:80 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v container-monkey:/backups \
-  --restart unless-stopped \
-  container-monkey
-```
 
 ## Requirements
 
@@ -198,9 +182,8 @@ The application has been refactored into a modular architecture with separate ma
 ## Security Notes
 
 - Runs with Docker socket access (requires appropriate permissions)
-- Built-in authentication with default credentials (username: `monkeysee`, password: `monkeydo`) - change in production
-- Use nginx reverse proxy with TLS termination and IP-based access control
-- Backups stored in Docker volume for persistence
+- Built-in authentication (configurable)
+- Suggest use nginx reverse proxy with TLS termination and IP-based access control if public
 
 ## Development
 
