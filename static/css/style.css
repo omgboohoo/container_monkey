@@ -202,7 +202,7 @@ body {
 }
 
 .top-bar-title {
-    font-size: 1.75em;
+    font-size: 1.25rem;
     margin: 0;
     font-weight: 700;
     letter-spacing: -0.02em;
@@ -211,30 +211,24 @@ body {
     line-height: 1;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 0.35rem;
 }
 
-.top-bar-title .text-gradient {
-    background: linear-gradient(to right, #fff, #94a3b8);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+.top-bar-title span {
+    color: white;
     display: inline-block;
     line-height: 1;
 }
 
 .top-bar-title i {
-    background: linear-gradient(to right, #fff, #94a3b8);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: #38bdf8;
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     vertical-align: middle;
     line-height: 1;
-    font-size: 1.8em;
+    font-size: 1.75rem;
 }
 
 .top-bar-right {
