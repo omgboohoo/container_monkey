@@ -1,5 +1,42 @@
 # Release Notes
 
+## Version 0.2.6
+
+### Bug Fixes
+- **Fixed scheduler date format ambiguity**: Resolved date display confusion in backup scheduler
+  - Changed all scheduler date displays to unambiguous DD-MM-YYYY HH:MM:SS format
+  - Updated "Next backup" display to use DD-MM-YYYY format (e.g., "06-12-2025 01:00:00")
+  - Fixed real-time clock display to use DD-MM-YYYY HH:MM:SS format instead of ambiguous locale format
+  - All backend scheduler logs now use DD-MM-YYYY HH:MM:SS format for consistency
+  - Eliminates confusion between MM/DD/YYYY and DD/MM/YYYY date formats
+
+- **Enhanced scheduler debugging**: Added comprehensive logging to help diagnose scheduler issues
+  - Added periodic scheduler check logs every 5 minutes showing current time vs next run time
+  - Added detailed logging when backup time is reached
+  - Added logging when waiting for scheduled backup (when less than 5 minutes away)
+  - Added logging when calculating next run time with current time comparison
+  - All logs use DD-MM-YYYY HH:MM:SS format for easy comparison
+
+- **Improved scheduler reliability**: Added thread health checking and better initialization
+  - Added verification that scheduler thread is alive when starting scheduler
+  - Automatically restarts scheduler thread if it dies unexpectedly
+  - Ensures next_run is calculated when scheduler starts
+  - Better error handling and recovery for scheduler thread failures
+
+### Storage Improvements
+- **Reorganized directory structure**: Improved organization of files in the Docker volume
+  - Created `backups/` subdirectory for all backup files (container backups and network backups)
+  - Created `config/` subdirectory for configuration files (users.db and scheduler_config.json)
+  - Automatic migration of existing files from volume root to appropriate subdirectories on startup
+  - Cleaner volume structure with clear separation between backups and configuration
+  - All managers updated to use the new organized structure
+  - Migration is idempotent and safe to run multiple times
+
+### Version Update
+- Updated version number to 0.2.6 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.5
 
 ### New Features

@@ -17,9 +17,11 @@ class NetworkManager:
         Initialize NetworkManager
         
         Args:
-            backup_dir: Directory to store network backups
+            backup_dir: Base directory (network backups go in backups/ subdirectory)
         """
-        self.backup_dir = backup_dir
+        # Network backups go in backups/ subdirectory
+        self.backup_dir = os.path.join(backup_dir, 'backups')
+        os.makedirs(self.backup_dir, exist_ok=True)
     
     def list_networks(self) -> Dict[str, Any]:
         """List all Docker networks with detailed information"""
@@ -278,6 +280,7 @@ class NetworkManager:
             }
         except Exception as e:
             return {'error': str(e)}
+
 
 
 

@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.2.5**
+**Version 0.2.6**
 
 ## Overview
 
@@ -25,7 +25,9 @@ Container Monkey is a web-based Docker management platform providing container l
   - `system_manager.py` - System monitoring and statistics
   - `scheduler_manager.py` - Scheduled backup management and lifecycle cleanup
 - **Storage**: Docker volumes for backup persistence
-- **Database**: SQLite database for user management (stored in backup volume)
+  - Organized directory structure: `backups/` subdirectory for backup files, `config/` subdirectory for configuration
+  - Automatic migration of existing files to organized structure on startup
+- **Database**: SQLite database for user management (stored in `config/` subdirectory of backup volume)
 - **Rate Limiting**: Flask-Limiter 3.5.0 for API protection (progress endpoint exempt)
 - **Server**: Flask development server (container port 80, host port 666 by default)
 
@@ -88,6 +90,10 @@ Container Monkey is a web-based Docker management platform providing container l
 - Network listing
 - Network backup/restore
 - Network deletion
+
+### Stack Management
+- Stack listing (Docker Swarm stacks and Compose-based stacks)
+- Stack deletion
 
 ### System Monitoring
 - Dashboard with resource overview
@@ -160,6 +166,12 @@ DELETE /api/image/<id>/delete                   # Delete image
 POST   /api/cleanup/dangling-images             # Cleanup dangling images
 ```
 
+### Stack Endpoints
+```
+GET    /api/stacks                              # List all Docker stacks
+DELETE /api/stack/<name>/delete                  # Delete stack
+```
+
 ### Network Endpoints
 ```
 GET    /api/networks                            # List all networks
@@ -175,6 +187,7 @@ POST   /api/upload-network-backup               # Upload network backup
 GET    /api/dashboard-stats                     # Get dashboard statistics
 GET    /api/system-stats                        # Get system CPU/RAM stats
 GET    /api/statistics                          # Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
+GET    /api/system-time                         # Get current system time
 GET    /api/check-environment                   # Check Docker environment
 POST   /api/cleanup/temp-containers             # Cleanup temporary containers
 ```

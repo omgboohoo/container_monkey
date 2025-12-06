@@ -23,9 +23,11 @@ class BackupFileManager:
         Initialize BackupFileManager
         
         Args:
-            backup_dir: Directory where backups are stored
+            backup_dir: Base directory (backups go in backups/ subdirectory)
         """
-        self.backup_dir = backup_dir
+        # Backup files go in backups/ subdirectory
+        self.backup_dir = os.path.join(backup_dir, 'backups')
+        os.makedirs(self.backup_dir, exist_ok=True)
         self.download_all_progress = {}
     
     def list_backups(self) -> Dict[str, Any]:

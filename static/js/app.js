@@ -5170,7 +5170,14 @@ function updateSchedulerStatus() {
         
         if (schedulerConfig.next_run) {
             const nextRunDate = new Date(schedulerConfig.next_run);
-            nextRun.textContent = `Next backup: ${nextRunDate.toLocaleString()}`;
+            // Use DD-MM-YYYY HH:MM:SS format
+            const year = nextRunDate.getFullYear();
+            const month = String(nextRunDate.getMonth() + 1).padStart(2, '0');
+            const day = String(nextRunDate.getDate()).padStart(2, '0');
+            const hours = String(nextRunDate.getHours()).padStart(2, '0');
+            const minutes = String(nextRunDate.getMinutes()).padStart(2, '0');
+            const seconds = String(nextRunDate.getSeconds()).padStart(2, '0');
+            nextRun.textContent = `Next backup: ${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
             nextRun.style.display = 'block';
         } else {
             nextRun.style.display = 'none';
@@ -5264,15 +5271,14 @@ function updateTimeDisplay() {
     const timeEl = document.getElementById('current-time');
     if (timeEl) {
         const now = new Date();
-        const formatted = now.toLocaleString('en-US', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        });
+        // Use DD-MM-YYYY HH:MM:SS format
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const formatted = `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
         timeEl.textContent = `🕐 ${formatted}`;
     }
 }

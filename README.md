@@ -1,6 +1,6 @@
 # Container Monkey 🐵
 
-**Version 0.2.5**
+**Version 0.2.6**
 
 The ultimate backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups or automated scheduling. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 

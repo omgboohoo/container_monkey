@@ -23,7 +23,10 @@ class SchedulerManager:
         """
         self.backup_manager = backup_manager
         self.backup_dir = backup_dir
-        self.config_file = os.path.join(backup_dir, 'scheduler_config.json')
+        # Config files go in config/ subdirectory
+        config_dir = os.path.join(backup_dir, 'config')
+        os.makedirs(config_dir, exist_ok=True)
+        self.config_file = os.path.join(config_dir, 'scheduler_config.json')
         
         # Schedule configuration
         self.schedule_type = 'daily'  # 'daily' or 'weekly'
@@ -114,6 +117,7 @@ class SchedulerManager:
             next_run = now.replace(hour=self.hour, minute=0, second=0, microsecond=0)
             if next_run <= now:
                 next_run += timedelta(days=1)
+            print(f"📅 Calculated next run: {next_run.strftime('%d-%m-%Y %H:%M:%S')} (current: {now.strftime('%d-%m-%Y %H:%M:%S')}, hour: {self.hour:02d}:00)")
         else:  # weekly
             # Find next occurrence of specified day and hour
             days_ahead = (self.day_of_week - now.weekday()) % 7
@@ -156,13 +160,23 @@ class SchedulerManager:
             return
         
         if self.scheduler_running:
-            print("ℹ️  Scheduler already running")
-            return
+            # Check if thread is still alive
+            if self.scheduler_thread and self.scheduler_thread.is_alive():
+                print("ℹ️  Scheduler already running")
+                return
+            else:
+                print("⚠️  Scheduler flag is True but thread is dead, restarting...")
+                self.scheduler_running = False
+        
+        # Ensure next_run is calculated
+        if not self.next_run:
+            self.calculate_next_run()
         
         self.scheduler_running = True
         self.scheduler_thread = threading.Thread(target=self._scheduler_loop, daemon=True)
         self.scheduler_thread.start()
         print(f"✅ Scheduler started: {self.schedule_type} at {self.hour:02d}:00, {len(self.selected_containers)} containers")
+        print(f"   Next run scheduled for: {self.next_run.strftime('%d-%m-%Y %H:%M:%S') if self.next_run else 'Not calculated'}")
     
     def stop_scheduler(self):
         """Stop the scheduler thread"""
@@ -186,13 +200,23 @@ class SchedulerManager:
                 
                 now = datetime.now()
                 
+                # Debug logging every 5 minutes to verify scheduler is running
+                if now.minute % 5 == 0 and now.second < 5:
+                    print(f"🕐 Scheduler check: Current time: {now.strftime('%d-%m-%Y %H:%M:%S')}, Next run: {self.next_run.strftime('%d-%m-%Y %H:%M:%S') if self.next_run else 'None'}")
+                
                 # Check if it's time to run backups
                 if self.next_run and now >= self.next_run:
-                    print(f"⏰ Scheduled backup time reached: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+                    print(f"⏰ Scheduled backup time reached: {now.strftime('%d-%m-%Y %H:%M:%S')}")
+                    print(f"   Next run was: {self.next_run.strftime('%d-%m-%Y %H:%M:%S')}")
                     self._run_scheduled_backups()
                     self.last_run = now
                     self.calculate_next_run()
-                    print(f"📅 Next scheduled backup: {self.next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+                    print(f"📅 Next scheduled backup: {self.next_run.strftime('%d-%m-%Y %H:%M:%S')}")
+                elif self.next_run and now < self.next_run:
+                    # Log when we're waiting (only occasionally to avoid spam)
+                    time_until = (self.next_run - now).total_seconds()
+                    if time_until < 300:  # Log when less than 5 minutes away
+                        print(f"⏳ Waiting for scheduled backup: {time_until/60:.1f} minutes until {self.next_run.strftime('%d-%m-%Y %H:%M:%S')}")
                 
                 # Sleep for 1 minute
                 time.sleep(60)
@@ -283,15 +307,16 @@ class SchedulerManager:
     def cleanup_old_backups(self):
         """Cleanup old scheduled backups based on lifecycle"""
         try:
-            # List all scheduled backup files
-            if not os.path.exists(self.backup_dir):
+            # Scheduled backups are in backups/ subdirectory
+            backups_dir = os.path.join(self.backup_dir, 'backups')
+            if not os.path.exists(backups_dir):
                 print("ℹ️  Backup directory does not exist, skipping cleanup")
                 return
             
             scheduled_backups = []
-            for filename in os.listdir(self.backup_dir):
+            for filename in os.listdir(backups_dir):
                 if filename.startswith('scheduled_') and filename.endswith('.tar.gz'):
-                    file_path = os.path.join(self.backup_dir, filename)
+                    file_path = os.path.join(backups_dir, filename)
                     if os.path.isfile(file_path):
                         stat = os.stat(file_path)
                         scheduled_backups.append({

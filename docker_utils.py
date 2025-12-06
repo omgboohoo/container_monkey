@@ -202,13 +202,67 @@ def init_docker_client():
 
 def setup_backup_directory():
     """Setup backup directory - always use Docker volume mount at /backups"""
+    import shutil
+    
     volume_mount_path = '/backups'
     
     # Always use the volume mount path (app always runs in Docker)
     backup_dir = volume_mount_path
     
-    # Ensure backup directory exists
-    os.makedirs(backup_dir, exist_ok=True)
+    # Create subdirectories
+    backups_subdir = os.path.join(backup_dir, 'backups')
+    config_subdir = os.path.join(backup_dir, 'config')
+    
+    os.makedirs(backups_subdir, exist_ok=True)
+    os.makedirs(config_subdir, exist_ok=True)
+    
+    # Migrate existing files from root to subdirectories (one-time migration)
+    if os.path.exists(backup_dir):
+        migrated = False
+        
+        # Move backup files (.tar.gz, network_*.json) to backups/
+        for filename in os.listdir(backup_dir):
+            if filename == 'backups' or filename == 'config':
+                continue  # Skip directories we just created
+            
+            file_path = os.path.join(backup_dir, filename)
+            if not os.path.isfile(file_path):
+                continue
+            
+            # Check if it's a backup file
+            is_backup_file = (
+                filename.endswith(('.tar.gz', '.zip', '.tar')) or
+                (filename.startswith('network_') and filename.endswith('.json'))
+            )
+            
+            # Check if it's a config file
+            is_config_file = (
+                filename in ['users.db', 'scheduler_config.json'] or
+                filename.endswith(('.db', '.db-journal'))
+            )
+            
+            if is_backup_file:
+                dest_path = os.path.join(backups_subdir, filename)
+                if not os.path.exists(dest_path):
+                    try:
+                        shutil.move(file_path, dest_path)
+                        print(f"📦 Migrated backup file: {filename} -> backups/")
+                        migrated = True
+                    except Exception as e:
+                        print(f"⚠️  Warning: Could not migrate {filename}: {e}")
+            
+            elif is_config_file:
+                dest_path = os.path.join(config_subdir, filename)
+                if not os.path.exists(dest_path):
+                    try:
+                        shutil.move(file_path, dest_path)
+                        print(f"⚙️  Migrated config file: {filename} -> config/")
+                        migrated = True
+                    except Exception as e:
+                        print(f"⚠️  Warning: Could not migrate {filename}: {e}")
+        
+        if migrated:
+            print("✅ Migration complete: Files moved to backups/ and config/ subdirectories")
     
     # Verify we can write to it
     try:
@@ -217,6 +271,8 @@ def setup_backup_directory():
             f.write('test')
         os.remove(test_file)
         print(f"📁 Backup directory: {backup_dir} (writable)")
+        print(f"   Backups: {backups_subdir}")
+        print(f"   Config: {config_subdir}")
     except Exception as e:
         print(f"❌ ERROR: Cannot write to backup directory {backup_dir}: {e}")
         print(f"   Make sure the Docker volume is mounted at {backup_dir}")

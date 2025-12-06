@@ -31,7 +31,9 @@ class RestoreManager:
             generate_docker_compose_fn: Function to generate docker-compose yaml
         """
         self.docker_api_client = docker_api_client
-        self.backup_dir = backup_dir
+        # Backup files are in backups/ subdirectory
+        self.backup_dir = os.path.join(backup_dir, 'backups')
+        os.makedirs(self.backup_dir, exist_ok=True)
         self.app_container_name = app_container_name
         self.app_volume_name = app_volume_name
         self.reconstruct_docker_run_command = reconstruct_docker_run_command_fn

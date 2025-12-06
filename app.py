@@ -56,7 +56,8 @@ init_docker_client()
 docker_api_client = docker_utils.docker_api_client
 
 # Initialize managers
-auth_manager = AuthManager(os.path.join(app.config['BACKUP_DIR'], 'users.db'))
+# Config files go in config/ subdirectory
+auth_manager = AuthManager(os.path.join(app.config['BACKUP_DIR'], 'config', 'users.db'))
 container_manager = ContainerManager()
 volume_manager = VolumeManager()
 network_manager = NetworkManager(app.config['BACKUP_DIR'])

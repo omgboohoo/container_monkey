@@ -206,9 +206,11 @@ def get_dashboard_stats(backup_dir: str) -> Dict[str, Any]:
     total_backups_size_bytes = 0
     
     # Get backup files count
-    if os.path.exists(backup_dir):
-        backup_files = [name for name in os.listdir(backup_dir) 
-                       if os.path.isfile(os.path.join(backup_dir, name)) 
+    # Backup files are in backups/ subdirectory
+    backups_subdir = os.path.join(backup_dir, 'backups')
+    if os.path.exists(backups_subdir):
+        backup_files = [name for name in os.listdir(backups_subdir) 
+                       if os.path.isfile(os.path.join(backups_subdir, name)) 
                        and (name.endswith(('.zip', '.tar.gz')) 
                             or (name.startswith('network_') and name.endswith('.json')))]
         backups_qty = len(backup_files)
@@ -250,10 +252,10 @@ def get_dashboard_stats(backup_dir: str) -> Dict[str, Any]:
         print(f"Warning: Could not get backup vault size from volume: {e}")
     
     # Fallback: try direct du on the backup directory mountpoint
-    if total_backups_size_bytes == 0 and os.path.exists(backup_dir):
+    if total_backups_size_bytes == 0 and os.path.exists(backups_subdir):
         try:
             du_result = subprocess.run(
-                ['du', '-sb', backup_dir],
+                ['du', '-sb', backups_subdir],
                 capture_output=True, text=True, timeout=5
             )
             if du_result.returncode == 0:
