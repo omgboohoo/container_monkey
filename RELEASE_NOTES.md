@@ -1,5 +1,42 @@
 # Release Notes
 
+## Version 0.2.9
+
+### UI/Design Improvements
+- **Updated branding and visual consistency**:
+  - Removed monkey emojis from website navbar and footer
+  - Removed monkey emojis from app UI and markdown files
+  - Applied gradient text styling to "Container Monkey" text to match "Secure Your Docker Environment" hero text
+  - Increased Container Monkey text size on website for better visibility
+  - Added Phosphor cube icon (`ph-cube`) to the left of "Container Monkey" text on both website and app
+  - Improved icon alignment and spacing (reduced gap by 50%)
+  - Updated favicon to accurately match Phosphor cube icon style for better brand consistency
+
+### Content Updates
+- Updated hero subtitle text to use "open-source" (with hyphen) for proper terminology
+- Increased hero subtitle max-width from 600px to 750px for better readability
+
+### Technical Changes
+- Updated `website/index.html`:
+  - Removed emoji elements from navbar and footer
+  - Added Phosphor cube icon with proper CSS styling
+  - Updated favicon SVG to match Phosphor icon style
+- Updated `website/css/styles.css`:
+  - Added icon styling with gradient matching text
+  - Improved alignment and spacing for logo elements
+- Updated `templates/index.html`:
+  - Removed emoji from top bar title
+  - Added Phosphor cube icon with matching styling
+  - Updated favicon to match website
+- Updated `static/css/style.css`:
+  - Added icon styling to match website design
+  - Improved logo alignment and spacing
+
+### Version Update
+- Updated version number to 0.2.9 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.8
 
 ### Bug Fixes
