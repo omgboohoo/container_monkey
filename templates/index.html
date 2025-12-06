@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Container Monkey - Secure Your Docker Environment</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.1.3.1">
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -19,10 +19,15 @@
         <!-- Top Bar - Full Width -->
         <div class="top-bar">
             <div class="top-bar-content">
-                <h1 class="top-bar-title">
-                    <i class="ph-fill ph-cube"></i>
-                    <span>Container Monkey</span>
-                </h1>
+                <div class="top-bar-title-wrapper">
+                    <h1 class="top-bar-title">
+                        <i class="ph-fill ph-cube"></i>
+                        <span>Container Monkey</span>
+                    </h1>
+                    <div class="top-bar-tagline">
+                        Secure Your <span class="tagline-accent">Docker Environment</span>
+                    </div>
+                </div>
                 <div class="top-bar-right">
                     <div class="top-bar-stats" id="top-bar-stats">
                         <div class="stat-item">
@@ -100,10 +105,14 @@
             </nav>
             <div class="sidebar-footer">
                 <a href="https://ko-fi.com/containermonkey" target="_blank" rel="noopener noreferrer" class="coffee-link">
-                    <i class="ph ph-coffee" style="font-size: 1.2em;"></i>
+                    <i class="ph-fill ph-coffee"></i>
                     <span>Buy me a Coffee</span>
                 </a>
-                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.10</span>
+                <a href="https://github.com/omgboohoo/container_monkey" target="_blank" rel="noopener noreferrer" class="github-link">
+                    <i class="ph-fill ph-github-logo"></i>
+                    <span>GitHub</span>
+                </a>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.11</span>
             </div>
         </aside>
 
@@ -203,6 +212,20 @@
                             <div class="card-label">Backup Vault</div>
                             <div class="card-subtext">
                                 <i class="ph ph-database" style="margin-right: 4px;"></i> {{ total_backups_size }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Backup Schedule -->
+                    <div class="panel dashboard-card" style="cursor: pointer;" onclick="showSection('backup-scheduler', document.querySelector('.nav-item[onclick*=\'backup-scheduler\']'))">
+                        <div class="card-icon">
+                            <i class="ph ph-clock-clockwise"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-number">{{ scheduled_containers_qty }}</div>
+                            <div class="card-label">Backup Schedule</div>
+                            <div class="card-subtext">
+                                <i class="ph ph-cube" style="margin-right: 4px;"></i> Scheduled containers
                             </div>
                         </div>
                     </div>

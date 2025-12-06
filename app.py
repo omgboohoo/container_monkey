@@ -166,6 +166,11 @@ def auth_status():
 @app.route('/')
 def index():
     stats = get_dashboard_stats(app.config['BACKUP_DIR'])
+    # Add scheduled containers count
+    if scheduler_manager:
+        stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
+    else:
+        stats['scheduled_containers_qty'] = 0
     return render_template('index.html', **stats)
 
 @app.route('/console/<container_id>')
@@ -176,6 +181,11 @@ def console_page(container_id):
 @app.route('/api/dashboard-stats')
 def dashboard_stats():
     stats = get_dashboard_stats(app.config['BACKUP_DIR'])
+    # Add scheduled containers count
+    if scheduler_manager:
+        stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
+    else:
+        stats['scheduled_containers_qty'] = 0
     return jsonify(stats)
 
 @app.route('/api/system-stats')

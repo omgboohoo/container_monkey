@@ -31,6 +31,7 @@
     --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
     --sidebar-width: 280px;
     --top-bar-height: 80px;
+    --gradient-primary: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
 }
 
 body {
@@ -87,25 +88,49 @@ body {
     justify-content: center;
     gap: 8px;
     padding: 10px 16px;
-    background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
-    color: white;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
     text-decoration: none;
     border-radius: 8px;
     font-size: 0.9em;
     font-weight: 600;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(5px);
 }
 
 .coffee-link:hover {
-    background: linear-gradient(135deg, #ff5252, #e53935);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--text-muted);
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
 }
 
 .coffee-link i {
     font-size: 1.2em;
     display: inline-block;
+}
+
+.github-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(5px);
+}
+
+.github-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--text-muted);
+    transform: translateY(-2px);
 }
 
 .version-text {
@@ -124,7 +149,7 @@ body {
     text-decoration: none;
     transition: all 0.2s ease;
     border-left: 3px solid transparent;
-    margin: 4px 0;
+    margin: 2px 0;
     position: relative;
 }
 
@@ -229,6 +254,32 @@ body {
     vertical-align: middle;
     line-height: 1;
     font-size: 1.75rem;
+}
+
+.top-bar-title-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.top-bar-tagline {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1;
+    letter-spacing: 0.02em;
+    padding-left: calc(1.75rem + 0.35rem); /* Icon width + gap to align with "Container Monkey" text */
+}
+
+.tagline-accent {
+    color: #38bdf8;
+}
+
+.text-gradient {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 
 .top-bar-right {
@@ -377,7 +428,7 @@ body {
 .btn {
     padding: 12px 26px;
     border: 1px solid transparent;
-    border-radius: 999px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 0.95em;
     font-weight: 700;
@@ -426,15 +477,16 @@ body {
     width: 100%;
 }
 
-/* Button Color Variants - Uniform Dark Theme */
+/* Button Color Variants - Outline Style (matching GitHub button) */
 .btn-primary,
 .btn-success,
 .btn-secondary,
 .btn-danger,
 .btn-warning {
-    background: linear-gradient(135deg, #334155, #1e293b);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border);
     color: var(--text-primary);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(5px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
 }
 
@@ -443,10 +495,10 @@ body {
 .btn-secondary:hover:not(:disabled),
 .btn-danger:hover:not(:disabled),
 .btn-warning:hover:not(:disabled) {
-    background: linear-gradient(135deg, #475569, #334155);
-    border-color: rgba(255, 255, 255, 0.3);
-    color: white;
-    transform: translateY(-2px) scale(1.01);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+    transform: translateY(-2px);
     box-shadow: 0 8px 15px rgba(0, 0, 0, 0.3);
 }
 
@@ -455,7 +507,7 @@ body {
 .btn-secondary:active:not(:disabled),
 .btn-danger:active:not(:disabled),
 .btn-warning:active:not(:disabled) {
-    transform: translateY(0) scale(0.99);
+    transform: translateY(0);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 

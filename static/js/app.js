@@ -392,7 +392,7 @@ async function loadDashboardStats() {
         document.querySelector('.dashboard-card .card-subtext').textContent = stats.docker_sock_url;
         
         const cards = document.querySelectorAll('.dashboard-card');
-        if (cards.length > 6) {
+        if (cards.length > 7) {
             cards[1].querySelector('.card-number').textContent = stats.containers_qty;
             cards[1].querySelector('.card-subtext').innerHTML = `
                 <span class="status-dot running" title="Running"></span> ${stats.running_containers}
@@ -406,6 +406,7 @@ async function loadDashboardStats() {
             cards[5].querySelector('.card-number').textContent = stats.stacks_qty || 0;
             cards[6].querySelector('.card-number').textContent = stats.backups_qty;
             cards[6].querySelector('.card-subtext').innerHTML = `<i class="ph ph-database" style="margin-right: 4px;"></i> ${stats.total_backups_size}`;
+            cards[7].querySelector('.card-number').textContent = stats.scheduled_containers_qty || 0;
         }
 
     } catch (error) {

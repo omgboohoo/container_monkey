@@ -1,6 +1,85 @@
 # Release Notes
 
+## Version 0.2.11
+
+### UI/Design Improvements
+- **Unified button styling across entire application**:
+  - Updated all buttons to use consistent outline style matching GitHub button design
+  - Changed all button backgrounds to transparent with subtle overlay (`rgba(255, 255, 255, 0.03)`)
+  - Applied consistent border styling using `var(--border)` across all buttons
+  - Added backdrop blur effect for glass morphism look on all buttons
+  - Updated border radius from pill-shaped (999px) to rounded corners (8px) for consistency
+  - Standardized hover effects across all button variants (background lightens, border color changes)
+  - "Buy me a Coffee" button now matches GitHub button style (previously had blue-purple gradient)
+  - Changed coffee button icon to filled variant (`ph-fill ph-coffee`)
+
+- **Added GitHub button to sidebar**:
+  - Added GitHub link button below "Buy me a Coffee" button in sidebar footer
+  - Styled with outline button design matching website's GitHub button
+  - Uses filled GitHub logo icon (`ph-fill ph-github-logo`)
+
+- **Enhanced top bar branding**:
+  - Added tagline "Secure Your Docker Environment" below logo in top bar
+  - Tagline text aligned with "Container Monkey" text (excluding icon)
+  - "Docker Environment" text styled with logo blue color (#38bdf8) for visual consistency
+  - Matches website hero tagline styling
+
+- **Updated favicon to match logo**:
+  - Updated favicon design to match logo with filled faces
+  - Left face: Blue fill (#38bdf8) with blue stroke outline
+  - Top and right faces: Black fill with blue stroke outline
+  - Maintains blue stroke outlines on all faces for consistency
+  - Updated in both website and app templates
+
+- **Improved sidebar navigation**:
+  - Reduced gap between menu items by 50% (from 4px to 2px) for more compact layout
+
+- **Enhanced dashboard**:
+  - Added new "Backup Schedule" panel showing total quantity of containers included in backup schedule
+  - Panel displays scheduled containers count with clock icon
+  - Clicking panel navigates to Backup Scheduler section
+
+### Technical Changes
+- Updated `templates/index.html`:
+  - Updated "Buy me a Coffee" button icon to `ph-fill ph-coffee`
+  - Added GitHub button link in sidebar footer
+  - Added Backup Schedule dashboard panel
+  - Added tagline "Secure Your Docker Environment" to top bar
+  - Updated favicon SVG to match logo with filled faces and blue outlines
+- Updated `static/css/style.css`:
+  - Updated `.coffee-link` styles to match GitHub button's outline design (removed gradient, added transparent background)
+  - Added `.github-link` styles matching website's `.btn-outline` design
+  - Reduced `.nav-item` margin from 4px to 2px
+  - Updated all button variants (`.btn-primary`, `.btn-success`, `.btn-secondary`, `.btn-danger`, `.btn-warning`) to use outline style matching GitHub button
+  - Changed `.btn` border-radius from 999px to 8px for consistent corner radius
+  - Applied transparent background with backdrop blur to all buttons including coffee button
+  - Added `--gradient-primary` CSS variable for gradient effects
+  - Added `.text-gradient` class for gradient text styling
+  - Added `.top-bar-title-wrapper` and `.top-bar-tagline` styles for tagline layout
+  - Added `.tagline-accent` class for blue accent color matching logo
+- Updated `website/index.html`:
+  - Updated favicon SVG to match logo with filled faces and blue outlines
+- Updated `app.py`:
+  - Added `scheduled_containers_qty` to dashboard stats API endpoint
+  - Added scheduled containers count to initial page render
+- Updated `static/js/app.js`:
+  - Updated `loadDashboardStats()` to display scheduled containers count
+  - Adjusted card count check to accommodate new Backup Schedule panel
+
+### Version Update
+- Updated version number to 0.2.11 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.10
+
+### UI/Design Improvements
+- **Updated logo and branding to match website**:
+  - Changed top bar icon from `ph ph-cube` to `ph-fill ph-cube` to match website styling
+  - Updated icon color to blue (#38bdf8) matching website primary color
+  - Removed gradient styling from logo text (now plain white text like website)
+  - Adjusted logo sizing and spacing to match website proportions
+  - Updated favicon color from black to blue (#38bdf8) to match website
 
 ### UI/Design Improvements
 - **Updated logo and branding to match website**:
