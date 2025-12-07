@@ -17,48 +17,11 @@ class AuthManager:
         Initialize AuthManager
         
         Args:
-            db_path: Path to SQLite database file
+            db_path: Path to SQLite database file (monkey.db)
         """
         self.db_path = db_path
-        self.init_database()
-    
-    def init_database(self):
-        """Initialize SQLite database in storage volume if it doesn't exist"""
-        # Check if database already exists
-        if os.path.exists(self.db_path):
-            print(f"✅ Database already exists at {self.db_path}")
-            return self.db_path
-        
-        # Create database and table
-        print(f"📦 Creating database at {self.db_path}")
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Create users table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        # Insert default user (username: monkeysee, password: monkeydo)
-        default_password_hash = generate_password_hash('monkeydo')
-        try:
-            cursor.execute('''
-                INSERT INTO users (username, password_hash)
-                VALUES (?, ?)
-            ''', ('monkeysee', default_password_hash))
-            conn.commit()
-            print(f"✅ Created default user (username: monkeysee, password: monkeydo)")
-        except sqlite3.IntegrityError:
-            # User already exists (shouldn't happen on first run, but handle gracefully)
-            print(f"ℹ️  Default admin user already exists")
-        
-        conn.close()
-        return self.db_path
+        # Database initialization is handled by DatabaseManager
+        # Users table should already exist in the unified database
     
     def login_required(self, f):
         """Decorator to require login for routes"""

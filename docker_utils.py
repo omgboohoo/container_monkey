@@ -237,7 +237,7 @@ def setup_backup_directory():
             
             # Check if it's a config file
             is_config_file = (
-                filename in ['users.db', 'scheduler_config.json'] or
+                filename in ['users.db', 'audit_log.db', 'monkey.db', 'scheduler_config.json'] or
                 filename.endswith(('.db', '.db-journal'))
             )
             

@@ -17,75 +17,11 @@ class AuditLogManager:
         Initialize AuditLogManager
         
         Args:
-            db_path: Path to SQLite database file
+            db_path: Path to SQLite database file (monkey.db)
         """
         self.db_path = db_path
-        self.init_database()
-    
-    def init_database(self):
-        """Initialize SQLite database for audit logs if it doesn't exist"""
-        # Ensure directory exists
-        db_dir = os.path.dirname(self.db_path)
-        if db_dir and not os.path.exists(db_dir):
-            os.makedirs(db_dir, exist_ok=True)
-        
-        if os.path.exists(self.db_path):
-            # Check if table exists, if not create it
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='audit_logs'
-            ''')
-            if not cursor.fetchone():
-                self._create_table(cursor)
-                conn.commit()
-            conn.close()
-            return
-        
-        # Create database and table
-        print(f"📦 Creating audit log database at {self.db_path}")
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        self._create_table(cursor)
-        conn.commit()
-        conn.close()
-        print(f"✅ Audit log database created")
-    
-    def _create_table(self, cursor):
-        """Create the audit_logs table"""
-        # Create table
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                operation_type TEXT NOT NULL,
-                container_id TEXT,
-                container_name TEXT,
-                backup_filename TEXT,
-                status TEXT NOT NULL,
-                error_message TEXT,
-                user TEXT,
-                details TEXT
-            )
-        ''')
-        
-        # Create indexes separately
-        indexes = [
-            ('idx_timestamp', 'timestamp'),
-            ('idx_operation_type', 'operation_type'),
-            ('idx_container_id', 'container_id'),
-            ('idx_status', 'status')
-        ]
-        
-        for idx_name, column in indexes:
-            try:
-                cursor.execute(f'''
-                    CREATE INDEX IF NOT EXISTS {idx_name} ON audit_logs ({column})
-                ''')
-            except sqlite3.OperationalError:
-                # Index might already exist, ignore
-                pass
+        # Database initialization is handled by DatabaseManager
+        # Audit_logs table should already exist in the unified database
     
     def log_event(self, operation_type: str, status: str, container_id: Optional[str] = None,
                   container_name: Optional[str] = None, backup_filename: Optional[str] = None,

@@ -1,5 +1,21 @@
 # Release Notes
 
+## Version 0.2.14
+
+### Database Improvements
+- **Unified database architecture**: Consolidated all data into a single `monkey.db` database
+  - Created unified `monkey.db` database replacing separate `users.db` and `audit_log.db` files
+  - Added `backup_schedules` table to store scheduler configuration in database instead of JSON
+  - Automatic migration from old databases (`users.db`, `audit_log.db`) and JSON config (`scheduler_config.json`)
+  - Migration is idempotent and safe to run multiple times
+  - All managers now use the unified database for better scalability and future multi-user support
+  - Database schema includes: `users` table, `audit_logs` table, and `backup_schedules` table
+
+### Version Update
+- Updated version number to 0.2.14 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.13
 
 ### Bug Fixes

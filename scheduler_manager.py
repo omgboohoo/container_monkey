@@ -4,6 +4,7 @@ Handles scheduled backup operations with simple single-schedule approach
 """
 import json
 import os
+import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta
@@ -13,22 +14,20 @@ from typing import Dict, List, Optional, Any
 class SchedulerManager:
     """Manages scheduled backups with a single schedule configuration"""
     
-    def __init__(self, backup_manager, backup_dir: str, audit_log_manager=None):
+    def __init__(self, backup_manager, backup_dir: str, db_path: str, audit_log_manager=None):
         """
         Initialize SchedulerManager
         
         Args:
             backup_manager: BackupManager instance
             backup_dir: Directory where backups are stored
+            db_path: Path to unified database (monkey.db)
             audit_log_manager: Optional AuditLogManager instance for logging
         """
         self.backup_manager = backup_manager
         self.backup_dir = backup_dir
+        self.db_path = db_path
         self.audit_log_manager = audit_log_manager
-        # Config files go in config/ subdirectory
-        config_dir = os.path.join(backup_dir, 'config')
-        os.makedirs(config_dir, exist_ok=True)
-        self.config_file = os.path.join(config_dir, 'scheduler_config.json')
         
         # Schedule configuration
         self.schedule_type = 'daily'  # 'daily' or 'weekly'
@@ -43,46 +42,101 @@ class SchedulerManager:
         self.last_run: Optional[datetime] = None
         self.next_run: Optional[datetime] = None
         
-        # Load configuration
+        # Load configuration from database
         self.load_config()
     
     def load_config(self):
-        """Load scheduler configuration from file"""
+        """Load scheduler configuration from database"""
         try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r') as f:
-                    config = json.load(f)
-                    self.schedule_type = config.get('schedule_type', 'daily')
-                    self.hour = config.get('hour', 2)
-                    self.day_of_week = config.get('day_of_week', 0)
-                    self.lifecycle = config.get('lifecycle', 7)
-                    self.selected_containers = config.get('selected_containers', [])
-                    last_run_str = config.get('last_run')
-                    if last_run_str:
-                        self.last_run = datetime.fromisoformat(last_run_str)
-                    next_run_str = config.get('next_run')
-                    if next_run_str:
-                        self.next_run = datetime.fromisoformat(next_run_str)
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Get the most recent schedule (should only be one, but get latest just in case)
+            cursor.execute('''
+                SELECT schedule_type, hour, day_of_week, lifecycle, selected_containers, last_run, next_run
+                FROM backup_schedules
+                ORDER BY updated_at DESC
+                LIMIT 1
+            ''')
+            
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row:
+                schedule_type, hour, day_of_week, lifecycle, selected_containers_json, last_run, next_run = row
+                self.schedule_type = schedule_type or 'daily'
+                self.hour = hour or 2
+                self.day_of_week = day_of_week
+                self.lifecycle = lifecycle or 7
+                self.selected_containers = json.loads(selected_containers_json) if selected_containers_json else []
+                
+                if last_run:
+                    try:
+                        self.last_run = datetime.fromisoformat(last_run) if isinstance(last_run, str) else last_run
+                    except:
+                        self.last_run = None
+                
+                if next_run:
+                    try:
+                        self.next_run = datetime.fromisoformat(next_run) if isinstance(next_run, str) else next_run
+                    except:
+                        self.next_run = None
+                
                 print(f"✅ Loaded scheduler config: {self.schedule_type} at {self.hour:02d}:00, {len(self.selected_containers)} containers")
             else:
-                print("ℹ️  No scheduler config found, using defaults")
+                # No config in database, use defaults and save them
+                print("ℹ️  No scheduler config found in database, using defaults")
+                self.save_config()
         except Exception as e:
             print(f"⚠️  Error loading scheduler config: {e}")
     
     def save_config(self):
-        """Save scheduler configuration to file"""
+        """Save scheduler configuration to database"""
         try:
-            config = {
-                'schedule_type': self.schedule_type,
-                'hour': self.hour,
-                'day_of_week': self.day_of_week,
-                'lifecycle': self.lifecycle,
-                'selected_containers': self.selected_containers,
-                'last_run': self.last_run.isoformat() if self.last_run else None,
-                'next_run': self.next_run.isoformat() if self.next_run else None
-            }
-            with open(self.config_file, 'w') as f:
-                json.dump(config, f, indent=2)
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if a schedule already exists
+            cursor.execute('SELECT COUNT(*) FROM backup_schedules')
+            exists = cursor.fetchone()[0] > 0
+            
+            selected_containers_json = json.dumps(self.selected_containers)
+            
+            if exists:
+                # Update existing schedule
+                cursor.execute('''
+                    UPDATE backup_schedules
+                    SET schedule_type = ?, hour = ?, day_of_week = ?, lifecycle = ?,
+                        selected_containers = ?, last_run = ?, next_run = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = (SELECT id FROM backup_schedules ORDER BY updated_at DESC LIMIT 1)
+                ''', (
+                    self.schedule_type,
+                    self.hour,
+                    self.day_of_week,
+                    self.lifecycle,
+                    selected_containers_json,
+                    self.last_run.isoformat() if self.last_run else None,
+                    self.next_run.isoformat() if self.next_run else None
+                ))
+            else:
+                # Insert new schedule
+                cursor.execute('''
+                    INSERT INTO backup_schedules 
+                    (schedule_type, hour, day_of_week, lifecycle, selected_containers, last_run, next_run)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    self.schedule_type,
+                    self.hour,
+                    self.day_of_week,
+                    self.lifecycle,
+                    selected_containers_json,
+                    self.last_run.isoformat() if self.last_run else None,
+                    self.next_run.isoformat() if self.next_run else None
+                ))
+            
+            conn.commit()
+            conn.close()
         except Exception as e:
             print(f"⚠️  Error saving scheduler config: {e}")
     

@@ -29,6 +29,7 @@ from backup_file_manager import BackupFileManager
 from restore_manager import RestoreManager
 from scheduler_manager import SchedulerManager
 from audit_log_manager import AuditLogManager
+from database_manager import DatabaseManager
 from system_manager import (
     get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
@@ -55,10 +56,15 @@ init_docker_client()
 # Get docker_api_client after initialization (access through module to get updated value)
 docker_api_client = docker_utils.docker_api_client
 
+# Initialize unified database manager
+# This creates monkey.db and migrates data from old databases/JSON
+db_path = os.path.join(app.config['BACKUP_DIR'], 'config', 'monkey.db')
+database_manager = DatabaseManager(db_path)
+
 # Initialize managers
-# Config files go in config/ subdirectory
-auth_manager = AuthManager(os.path.join(app.config['BACKUP_DIR'], 'config', 'users.db'))
-audit_log_manager = AuditLogManager(os.path.join(app.config['BACKUP_DIR'], 'config', 'audit_log.db'))
+# All managers now use the unified monkey.db database
+auth_manager = AuthManager(db_path)
+audit_log_manager = AuditLogManager(db_path)
 container_manager = ContainerManager()
 volume_manager = VolumeManager()
 network_manager = NetworkManager(app.config['BACKUP_DIR'])
@@ -100,6 +106,7 @@ if backup_manager:
     scheduler_manager = SchedulerManager(
         backup_manager=backup_manager,
         backup_dir=app.config['BACKUP_DIR'],
+        db_path=db_path,
         audit_log_manager=audit_log_manager
     )
     # Start scheduler if enabled
