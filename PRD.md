@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.2.11**
+**Version 0.2.12**
 
 ## Overview
 
@@ -71,7 +71,7 @@ The ultimate open-source backup and recovery solution for Docker. Protect your c
   - Manual backups never auto-deleted
   - Scheduled backups automatically cleaned up based on lifecycle
   - Cleanup runs after all backups complete (monitored, not fixed delay)
-  - Test scheduler button with progress modal for immediate testing
+  - Real-time auto-save: configuration saves automatically as changes are made
   - Real-time system clock display on scheduler page
   - Scheduler enabled when one or more containers are selected
 
@@ -84,7 +84,13 @@ The ultimate open-source backup and recovery solution for Docker. Protect your c
 ### Image Management
 - Image listing with size information
 - Image deletion
-- Dangling image cleanup
+- Dangling image cleanup (button automatically disables when no dangling images exist)
+
+### Network Management
+- Network listing with container counts (includes all containers: running and stopped)
+- Network backup and restore
+- Network deletion (automatically disabled when networks have containers)
+- View Containers button filters container view to show containers using selected network
 
 ### Network Management
 - Network listing
@@ -96,7 +102,7 @@ The ultimate open-source backup and recovery solution for Docker. Protect your c
 - Stack deletion
 
 ### System Monitoring
-- Dashboard with resource overview
+- Dashboard with resource overview and backup schedule next run time
 - Real-time system CPU/RAM stats in top bar
 - **Statistics Page**: Comprehensive container statistics view
   - All containers displayed in a grid format

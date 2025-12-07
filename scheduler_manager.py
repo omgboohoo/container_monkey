@@ -13,16 +13,18 @@ from typing import Dict, List, Optional, Any
 class SchedulerManager:
     """Manages scheduled backups with a single schedule configuration"""
     
-    def __init__(self, backup_manager, backup_dir: str):
+    def __init__(self, backup_manager, backup_dir: str, audit_log_manager=None):
         """
         Initialize SchedulerManager
         
         Args:
             backup_manager: BackupManager instance
             backup_dir: Directory where backups are stored
+            audit_log_manager: Optional AuditLogManager instance for logging
         """
         self.backup_manager = backup_manager
         self.backup_dir = backup_dir
+        self.audit_log_manager = audit_log_manager
         # Config files go in config/ subdirectory
         config_dir = os.path.join(backup_dir, 'config')
         os.makedirs(config_dir, exist_ok=True)
@@ -385,6 +387,7 @@ class SchedulerManager:
             
             # Cleanup backups for each container
             deleted_count = 0
+            deleted_backups = []
             for container_name, container_backup_list in container_backups.items():
                 # Sort by created date (newest first)
                 container_backup_list.sort(key=lambda x: x['created'], reverse=True)
@@ -398,9 +401,22 @@ class SchedulerManager:
                             if os.path.exists(file_path):
                                 os.remove(file_path)
                                 deleted_count += 1
+                                deleted_backups.append(backup_to_delete['filename'])
                                 print(f"🗑️  Deleted old scheduled backup: {backup_to_delete['filename']}")
                         except Exception as e:
                             print(f"⚠️  Error deleting backup {backup_to_delete['filename']}: {e}")
+            
+            # Log cleanup operation
+            if self.audit_log_manager and deleted_count > 0:
+                self.audit_log_manager.log_event(
+                    operation_type='cleanup',
+                    status='completed',
+                    details={
+                        'deleted_count': deleted_count,
+                        'lifecycle': self.lifecycle,
+                        'deleted_backups': deleted_backups
+                    }
+                )
             
             if deleted_count > 0:
                 print(f"✅ Cleanup complete: Deleted {deleted_count} old scheduled backups")

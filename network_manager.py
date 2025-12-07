@@ -36,6 +36,35 @@ class NetworkManager:
             if result.returncode != 0:
                 return {'error': result.stderr}
             
+            # Get all containers (running and stopped) to count network usage
+            container_network_map = {}  # network_name -> count
+            try:
+                containers_result = subprocess.run(
+                    ['docker', 'ps', '-a', '--format', '{{.ID}}'],
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if containers_result.returncode == 0:
+                    container_ids = [cid.strip() for cid in containers_result.stdout.strip().split('\n') if cid.strip()]
+                    for container_id in container_ids:
+                        try:
+                            inspect_result = subprocess.run(
+                                ['docker', 'inspect', container_id, '--format', '{{range $net, $conf := .NetworkSettings.Networks}}{{$net}} {{end}}'],
+                                capture_output=True,
+                                text=True,
+                                timeout=5
+                            )
+                            if inspect_result.returncode == 0:
+                                networks = inspect_result.stdout.strip().split()
+                                for network_name in networks:
+                                    if network_name:
+                                        container_network_map[network_name] = container_network_map.get(network_name, 0) + 1
+                        except:
+                            pass
+            except:
+                pass
+            
             networks = []
             for line in result.stdout.strip().split('\n'):
                 if not line.strip():
@@ -53,7 +82,7 @@ class NetworkManager:
                         'subnet': '',
                         'gateway': '',
                         'ip_range': '',
-                        'containers': 0,
+                        'containers': container_network_map.get(network_name, 0),
                     }
                     
                     try:
@@ -81,12 +110,6 @@ class NetworkManager:
                                     network_info['subnet'] = config.get('Subnet', '')
                                     network_info['gateway'] = config.get('Gateway', '')
                                     network_info['ip_range'] = config.get('IPRange', '')
-                                
-                                containers = net_data.get('Containers', {}) or {}
-                                if isinstance(containers, dict):
-                                    network_info['containers'] = len(containers)
-                                elif isinstance(containers, list):
-                                    network_info['containers'] = len(containers)
                     except:
                         pass
                     

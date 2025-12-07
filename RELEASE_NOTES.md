@@ -1,5 +1,164 @@
 # Release Notes
 
+## Version 0.2.13
+
+### Backup Audit Log Feature
+- **Comprehensive audit logging**: New Backup Audit Log section tracks all backup-related operations
+  - Logs manual backups (started, completed, error)
+  - Logs scheduled backups (started, completed, error)
+  - Logs restore operations (started, completed, error)
+  - Logs lifecycle cleanup operations
+  - Logs backup deletion operations (individual and bulk)
+  - All logs include timestamps, container info, backup filenames, status, and error messages
+
+- **Audit Log UI**:
+  - New "Backup Audit Log" menu item in sidebar
+  - Filterable table with operation type and status filters
+  - Statistics cards showing total logs, last 24 hours, and last 7 days activity
+  - Pagination support with "Load More" button
+  - Clear Logs button with confirmation modal to permanently delete all audit logs
+  - Clean, organized display of all backup-related activities
+
+- **Database storage**: Audit logs stored in SQLite database (`audit_log.db`) in config directory
+  - Efficient querying with indexed fields (timestamp, operation_type, container_id, status)
+  - Persistent storage across container restarts
+  - Automatic database and table creation on first run
+
+- **Integration**: Audit logging automatically integrated into all backup operations
+  - No manual intervention required
+  - Logs created automatically for all backup, restore, cleanup, and deletion operations
+  - Error tracking for failed operations
+
+### UI Improvements
+- **Reduced sidebar spacing**: Menu items now have reduced spacing (50% less) to fit all items without scrollbar
+- **Audit log layout**: Statistics panels displayed in single row, filters and refresh button aligned horizontally
+- **Menu item renamed**: "Audit Log" renamed to "Backup Audit Log" for clarity
+
+### Technical Changes
+- Added `audit_log_manager.py` module for audit log management
+- Updated `backup_manager.py` to log manual and scheduled backup operations
+- Updated `scheduler_manager.py` to log lifecycle cleanup operations
+- Updated `restore_manager.py` to log restore operations
+- Updated `backup_file_manager.py` to log backup deletion operations
+- Added API endpoints: `/api/audit-logs`, `/api/audit-logs/statistics`, and `/api/audit-logs/clear`
+- Added `clear_all_logs()` method to `audit_log_manager.py` for clearing all audit logs
+- Updated CSS for reduced sidebar spacing and improved audit log layout
+- Updated JavaScript for audit log display, filtering, and clear functionality
+
+## Version 0.2.12
+
+### Backup Scheduler Improvements
+- **Real-time auto-save**: Scheduler configuration now saves automatically as users make changes
+  - Removed "Save Schedule" button - changes are saved automatically 500ms after last change
+  - Removed "Test Scheduler" button - scheduled backups run automatically based on configuration
+  - All scheduler settings (schedule type, hour, day of week, lifecycle, container selections) auto-save in real-time
+  - Debounced save prevents excessive API calls (500ms delay after last change)
+  - Container checkboxes automatically checked when loading scheduler page if they're in the schedule
+  - Silent save operation - no status messages, just seamless background saving
+
+- **Improved scheduler UX**:
+  - Scheduler configuration loads before container list to ensure checkboxes are properly checked
+  - Auto-save prevents accidental loss of configuration changes
+  - Streamlined interface with fewer buttons for cleaner UI
+
+- **Enhanced dashboard schedule panel**: Dashboard Backup Schedule panel now shows detailed information
+  - Displays scheduled containers count on first line
+  - Shows "Scheduled Containers" label on second line
+  - Displays next run date/time with clock icon on third line (format: DD-MM-YYYY HH:MM)
+  - Shows "No schedule configured" when no schedule is set
+  - Next run time updates automatically when dashboard stats refresh
+
+### Bug Fixes
+- **Fixed images table layout**: Fixed issue where "In use by" text for images was appearing on its own grid row
+  - Added `vertical-align: top` to image table cells for proper multi-line content alignment
+  - "In use by" text now displays correctly within the same cell as image name
+
+- **Fixed "In use by" display**: "In use by" text now shows for all images including the app's own image
+  - Removed condition that prevented showing "In use by" for self images
+  - Users can now see which containers are using the container-monkey image
+
+- **Improved cleanup dangling images button**: Cleanup Dangling Images button now automatically disables when there are no dangling images
+  - Button state updates automatically when images are loaded
+  - Prevents unnecessary cleanup attempts when no dangling images exist
+  - Button re-enables automatically if dangling images appear
+
+### Network Management Improvements
+- **Enhanced network container counting**: Network container count now includes ALL containers (running and stopped)
+  - Backend now inspects all containers to accurately count network usage
+  - Container count reflects total containers using each network regardless of state
+  - More accurate representation of network dependencies
+
+- **Improved network delete protection**: Delete button automatically disabled/ghosted when networks have containers
+  - Delete button shows disabled state (opacity 0.5, cursor not-allowed) when container count > 0
+  - Prevents accidental deletion of networks in use
+  - Tooltip shows container count when button is disabled
+
+- **View Containers button**: Added "View Containers" button for networks with containers
+  - Button appears automatically when network has containers (count > 0)
+  - Clicking button filters container view to show only containers using that network
+  - Seamless navigation from network to filtered container view
+  - Clear filter button appears to restore full container list
+
+### UI/UX Improvements
+- **Exec console auto-focus**: Terminal window automatically receives focus when exec console opens
+  - Users can start typing immediately without clicking on the terminal
+  - Improved workflow for interactive container console access
+
+- **Container ID display**: Container IDs in all grids now prefixed with "ID: " for clarity
+  - Applied to containers grid, statistics grid, and scheduler containers grid
+  - Makes container IDs easier to identify at a glance
+
+- **Consistent grid text colors**: Image and created date columns use consistent grey color
+  - Matches styling used in other grids throughout the application
+  - Improved visual consistency across all grid views
+
+- **Statistics grid color improvements**: Statistics grid now uses consistent color scheme
+  - Container names displayed in white for better visibility
+  - All other columns (Image, CPU, RAM, Network I/O, Block I/O) use grey text
+  - Improved readability and visual hierarchy
+
+### Technical Changes
+- Updated `static/js/app.js`:
+  - Added `autoSaveSchedulerConfig()` function with debouncing (500ms delay)
+  - Modified `saveSchedulerConfig()` to support silent saves
+  - Updated `loadSchedulerConfig()` to call `loadSchedulerContainers()` after config loads
+  - Added `schedulerLoadingConfig` flag to prevent auto-save during initial load
+  - Removed `testScheduler()`, `updateSchedulerTestProgress()`, and `closeSchedulerTestModal()` functions
+  - Updated `createImageRow()` to show "In use by" for all images and fixed cell alignment
+  - Added auto-save triggers to all scheduler form controls and container checkboxes
+  - Updated `loadImages()` to detect dangling images and enable/disable cleanup button accordingly
+  - Added safety check in `cleanupDanglingImages()` to prevent execution when button is disabled
+  - Updated `createNetworkRow()` to use container count for all containers (running and stopped)
+  - Modified delete button styling to show disabled state when containers > 0
+  - Added "View Containers" button that appears when container count > 0
+  - Improved `viewNetworkContainers()` function to ensure containers are loaded before filtering
+  - Updated `loadDashboardStats()` to format and display scheduler next run date/time with clock icon
+  - Added `term.focus()` to `openAttachConsole()` to auto-focus terminal window
+  - Updated container ID displays in all grids to include "ID: " prefix
+  - Changed image and created column colors to use `var(--text-secondary)` for consistency
+  - Updated `createStatisticsRow()` to use white for container names and grey for all other columns
+- Updated `templates/index.html`:
+  - Removed "Test Scheduler" and "Save Schedule" buttons from scheduler header
+  - Added `onchange` and `oninput` handlers to scheduler form controls for auto-save
+  - Removed scheduler test modal (no longer needed)
+  - Added `id="cleanup-dangling-images-btn"` to cleanup dangling images button for state management
+  - Updated Backup Schedule dashboard panel to show "Scheduled Containers" label and next run date/time
+  - Added `id="scheduler-next-run-dashboard"` for dynamic next run time updates
+- Updated `app.py`:
+  - Added `scheduler_next_run` to dashboard stats API endpoint and initial page render
+  - Dashboard now includes next scheduled backup time from scheduler config
+- Updated `network_manager.py`:
+  - Modified `list_networks()` to count ALL containers (running and stopped) for each network
+  - Added logic to inspect all containers and build network-to-container mapping
+  - Network container count now accurately reflects total containers using each network
+- Updated `static/css/style.css`:
+  - No CSS changes required
+
+### Version Update
+- Updated version number to 0.2.12 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.11
 
 ### UI/Design Improvements

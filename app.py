@@ -14,7 +14,6 @@ from datetime import timedelta
 
 # Import all managers
 import docker_utils
-import docker_utils
 from docker_utils import (
     init_docker_client,
     setup_backup_directory
@@ -29,6 +28,7 @@ from backup_manager import BackupManager
 from backup_file_manager import BackupFileManager
 from restore_manager import RestoreManager
 from scheduler_manager import SchedulerManager
+from audit_log_manager import AuditLogManager
 from system_manager import (
     get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
@@ -58,12 +58,13 @@ docker_api_client = docker_utils.docker_api_client
 # Initialize managers
 # Config files go in config/ subdirectory
 auth_manager = AuthManager(os.path.join(app.config['BACKUP_DIR'], 'config', 'users.db'))
+audit_log_manager = AuditLogManager(os.path.join(app.config['BACKUP_DIR'], 'config', 'audit_log.db'))
 container_manager = ContainerManager()
 volume_manager = VolumeManager()
 network_manager = NetworkManager(app.config['BACKUP_DIR'])
 image_manager = ImageManager()
 stack_manager = StackManager()
-backup_file_manager = BackupFileManager(app.config['BACKUP_DIR'])
+backup_file_manager = BackupFileManager(app.config['BACKUP_DIR'], audit_log_manager=audit_log_manager)
 
 # Initialize backup manager
 backup_manager = None
@@ -74,7 +75,8 @@ if docker_api_client:
         app_container_name=docker_utils.APP_CONTAINER_NAME,
         app_volume_name=docker_utils.APP_VOLUME_NAME,
         reconstruct_docker_run_command_fn=docker_utils.reconstruct_docker_run_command,
-        generate_docker_compose_fn=docker_utils.generate_docker_compose
+        generate_docker_compose_fn=docker_utils.generate_docker_compose,
+        audit_log_manager=audit_log_manager
     )
     print("✅ Backup manager initialized")
 
@@ -87,7 +89,8 @@ if docker_api_client:
         app_container_name=docker_utils.APP_CONTAINER_NAME,
         app_volume_name=docker_utils.APP_VOLUME_NAME,
         reconstruct_docker_run_command_fn=docker_utils.reconstruct_docker_run_command,
-        generate_docker_compose_fn=docker_utils.generate_docker_compose
+        generate_docker_compose_fn=docker_utils.generate_docker_compose,
+        audit_log_manager=audit_log_manager
     )
     print("✅ Restore manager initialized")
 
@@ -96,7 +99,8 @@ scheduler_manager = None
 if backup_manager:
     scheduler_manager = SchedulerManager(
         backup_manager=backup_manager,
-        backup_dir=app.config['BACKUP_DIR']
+        backup_dir=app.config['BACKUP_DIR'],
+        audit_log_manager=audit_log_manager
     )
     # Start scheduler if enabled
     if scheduler_manager.is_enabled():
@@ -166,11 +170,14 @@ def auth_status():
 @app.route('/')
 def index():
     stats = get_dashboard_stats(app.config['BACKUP_DIR'])
-    # Add scheduled containers count
+    # Add scheduled containers count and next run
     if scheduler_manager:
         stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
+        config = scheduler_manager.get_config()
+        stats['scheduler_next_run'] = config.get('next_run')
     else:
         stats['scheduled_containers_qty'] = 0
+        stats['scheduler_next_run'] = None
     return render_template('index.html', **stats)
 
 @app.route('/console/<container_id>')
@@ -181,11 +188,14 @@ def console_page(container_id):
 @app.route('/api/dashboard-stats')
 def dashboard_stats():
     stats = get_dashboard_stats(app.config['BACKUP_DIR'])
-    # Add scheduled containers count
+    # Add scheduled containers count and next run
     if scheduler_manager:
         stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
+        config = scheduler_manager.get_config()
+        stats['scheduler_next_run'] = config.get('next_run')
     else:
         stats['scheduled_containers_qty'] = 0
+        stats['scheduler_next_run'] = None
     return jsonify(stats)
 
 @app.route('/api/system-stats')
@@ -540,7 +550,8 @@ def download_backup(filename):
 
 @app.route('/api/backup/<filename>', methods=['DELETE'])
 def delete_backup(filename):
-    result = backup_file_manager.delete_backup(filename)
+    user = session.get('username')
+    result = backup_file_manager.delete_backup(filename, user=user)
     if 'error' in result:
         status_code = 404 if 'not found' in result['error'].lower() else 500
         return jsonify(result), status_code
@@ -548,7 +559,8 @@ def delete_backup(filename):
 
 @app.route('/api/backups/delete-all', methods=['DELETE'])
 def delete_all_backups():
-    result = backup_file_manager.delete_all_backups()
+    user = session.get('username')
+    result = backup_file_manager.delete_all_backups(user=user)
     if 'error' in result:
         return jsonify(result), 500
     return jsonify(result)
@@ -598,6 +610,7 @@ def restore_backup():
     new_name = data.get('new_name', '')
     overwrite_volumes = data.get('overwrite_volumes', None)
     port_overrides = data.get('port_overrides', None)
+    user = session.get('username')
     
     if not filename:
         return jsonify({'error': 'Filename required'}), 400
@@ -606,7 +619,7 @@ def restore_backup():
     if not file_path:
         return jsonify({'error': 'Backup file not found'}), 404
     
-    result = restore_manager.restore_backup(file_path, new_name, overwrite_volumes, port_overrides)
+    result = restore_manager.restore_backup(file_path, new_name, overwrite_volumes, port_overrides, user=user)
     
     if 'error' in result:
         status_code = 400 if 'Invalid' in result['error'] else (409 if 'conflict' in result['error'].lower() or 'already exists' in result['error'].lower() else 500)
@@ -757,19 +770,60 @@ def get_system_time():
         'time': datetime.now().isoformat(),
         'formatted': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
-    archive_path = backup_file_manager.get_download_all_file(session_id)
-    if not archive_path:
-        return jsonify({'error': 'Archive file not ready'}), 400
-    
-    progress = backup_file_manager.download_all_progress.get(session_id, {})
-    archive_filename = progress.get('archive_filename', 'all_backups.tar.gz')
-    
-    @after_this_request
-    def cleanup(response):
-        backup_file_manager.cleanup_download_session(session_id)
-        return response
-    
-    return send_file(archive_path, as_attachment=True, download_name=archive_filename)
+
+# Audit Log API endpoints
+@app.route('/api/audit-logs', methods=['GET'])
+@login_required
+def get_audit_logs():
+    """Get audit logs with optional filtering"""
+    try:
+        limit = request.args.get('limit', 1000, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        operation_type = request.args.get('operation_type')
+        container_id = request.args.get('container_id')
+        status = request.args.get('status')
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        result = audit_log_manager.get_logs(
+            limit=limit,
+            offset=offset,
+            operation_type=operation_type,
+            container_id=container_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date
+        )
+        
+        if 'error' in result:
+            return jsonify(result), 500
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/audit-logs/statistics', methods=['GET'])
+@login_required
+def get_audit_log_statistics():
+    """Get audit log statistics"""
+    try:
+        result = audit_log_manager.get_statistics()
+        if 'error' in result:
+            return jsonify(result), 500
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/audit-logs/clear', methods=['DELETE'])
+@login_required
+def clear_audit_logs():
+    """Clear all audit logs"""
+    try:
+        result = audit_log_manager.clear_all_logs()
+        if 'error' in result:
+            return jsonify(result), 500
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Error handler removed - was causing issues with error propagation
 # Errors are now handled at the route level

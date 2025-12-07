@@ -18,7 +18,8 @@ class BackupManager:
     """Manages container backups with queue support"""
     
     def __init__(self, docker_api_client, backup_dir: str, app_container_name: str, app_volume_name: str,
-                 reconstruct_docker_run_command_fn: Callable, generate_docker_compose_fn: Callable):
+                 reconstruct_docker_run_command_fn: Callable, generate_docker_compose_fn: Callable,
+                 audit_log_manager=None):
         """
         Initialize BackupManager
         
@@ -29,6 +30,7 @@ class BackupManager:
             app_volume_name: Name of the app volume (to skip in backups)
             reconstruct_docker_run_command_fn: Function to reconstruct docker run command
             generate_docker_compose_fn: Function to generate docker-compose yaml
+            audit_log_manager: Optional AuditLogManager instance for logging
         """
         self.docker_api_client = docker_api_client
         # Backup files go in backups/ subdirectory
@@ -38,6 +40,7 @@ class BackupManager:
         self.app_volume_name = app_volume_name
         self.reconstruct_docker_run_command = reconstruct_docker_run_command_fn
         self.generate_docker_compose = generate_docker_compose_fn
+        self.audit_log_manager = audit_log_manager
         
         # Progress tracking
         self.backup_progress: Dict[str, Dict] = {}
@@ -142,6 +145,17 @@ class BackupManager:
                     
                     # Get is_scheduled from progress tracking
                     is_scheduled = self.backup_progress.get(progress_id, {}).get('is_scheduled', False)
+                    
+                    # Log backup start (for queued backups)
+                    if self.audit_log_manager:
+                        operation_type = 'backup_scheduled' if is_scheduled else 'backup_manual'
+                        self.audit_log_manager.log_event(
+                            operation_type=operation_type,
+                            status='started',
+                            container_id=container_id,
+                            container_name=container_name,
+                            details={'progress_id': progress_id, 'queued': True}
+                        )
                     
                     # Process the backup (don't release lock - we'll do it here)
                     print(f"🚀 Starting backup for {container_name} (scheduled: {is_scheduled})")
@@ -281,6 +295,17 @@ class BackupManager:
                 'progress_id': progress_id,
                 'start_time': datetime.now().isoformat()
             })
+            
+            # Log backup start
+            if self.audit_log_manager:
+                operation_type = 'backup_scheduled' if is_scheduled else 'backup_manual'
+                self.audit_log_manager.log_event(
+                    operation_type=operation_type,
+                    status='started',
+                    container_id=container_id,
+                    container_name=container_name,
+                    details={'progress_id': progress_id}
+                )
             
             # Start backup in background thread
             thread = threading.Thread(
@@ -609,12 +634,37 @@ class BackupManager:
             self.backup_progress[progress_id]['current_step'] = 6
             print(f"✅ Backup completed: {backup_filename}")
             
+            # Log backup completion
+            if self.audit_log_manager:
+                operation_type = 'backup_scheduled' if is_scheduled else 'backup_manual'
+                self.audit_log_manager.log_event(
+                    operation_type=operation_type,
+                    status='completed',
+                    container_id=container_id,
+                    container_name=container_name_raw,
+                    backup_filename=backup_filename,
+                    details={'progress_id': progress_id}
+                )
+            
         except Exception as e:
             import traceback
             traceback.print_exc()
             self.backup_progress[progress_id]['status'] = 'error'
             self.backup_progress[progress_id]['error'] = str(e)
             print(f"❌ Backup failed: {e}")
+            
+            # Log backup error
+            if self.audit_log_manager:
+                operation_type = 'backup_scheduled' if is_scheduled else 'backup_manual'
+                self.audit_log_manager.log_event(
+                    operation_type=operation_type,
+                    status='error',
+                    container_id=container_id,
+                    container_name=container_name_raw if 'container_name_raw' in locals() else None,
+                    backup_filename=backup_filename if 'backup_filename' in locals() else None,
+                    error_message=str(e),
+                    details={'progress_id': progress_id}
+                )
         finally:
             # Release lock and clear current backup info
             # This allows the next item in queue to proceed

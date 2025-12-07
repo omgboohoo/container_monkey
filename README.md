@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.2.11**
+**Version 0.2.13**
 
 The ultimate open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups or automated scheduling. Restore instantly when disaster strikes. Move containers between servers effortlessly.
 
@@ -9,9 +9,10 @@ The ultimate open-source backup and recovery solution for Docker. Protect your c
 - **Container Management**: Start, stop (graceful), kill (immediate), restart, delete containers with bulk operations
 - **Volume Management**: Explore, download, and manage Docker volumes
 - **Image Management**: View and delete Docker images, cleanup dangling images
-- **Network Management**: Backup and restore Docker networks
+- **Network Management**: Backup and restore Docker networks, view containers using each network
 - **Backup & Restore**: Full container backup with volumes, port mappings, and restore functionality
 - **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules
+- **Backup Audit Log**: Comprehensive audit logging for all backup operations, restores, and lifecycle management
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
 - **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
 - **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled
@@ -122,13 +123,22 @@ Access the web UI at: http://your-server:666
 1. **Explore Volumes**: Browse volume contents through the web UI
 2. **Download Files**: Download individual files from volumes
 3. **View Files**: View file contents directly in the browser
-4. **Delete**: Remove volumes (with confirmation)
+4. **Delete**: Remove volumes
 
 ### System Monitoring
 
-- **Dashboard**: Overview of containers, images, volumes, networks
+- **Dashboard**: Overview of containers, images, volumes, networks, backup schedule
 - **System Stats**: Real-time CPU and RAM utilization in top bar
 - **Statistics Page**: View all containers with detailed stats including CPU %, RAM, Network I/O, and Block I/O
+
+### Backup Audit Log
+
+1. **View Audit Logs**: Navigate to Backup Audit Log section to view all backup-related operations
+2. **Filter Operations**: Filter by operation type (Manual Backups, Scheduled Backups, Restores, Lifecycle Cleanup, Backup Deletion)
+3. **Filter Status**: Filter by status (Started, Completed, Error)
+4. **Statistics**: View total logs, last 24 hours, and last 7 days activity
+5. **Clear Logs**: Clear all audit logs with confirmation prompt (permanently deletes all log entries)
+6. **Comprehensive Tracking**: All backup operations, restores, cleanup, and deletions are automatically logged with timestamps and details
 
 ## API Endpoints
 
@@ -152,6 +162,9 @@ The application provides a RESTful API. Key endpoints include:
 - `POST /api/scheduler/config` - Update scheduler configuration
 - `POST /api/scheduler/test` - Trigger scheduled backups immediately (for testing)
 - `POST /api/scheduler/cleanup` - Manually trigger cleanup of old scheduled backups
+- `GET /api/audit-logs` - Get audit logs with optional filtering (operation_type, status, container_id, date range)
+- `GET /api/audit-logs/statistics` - Get audit log statistics
+- `DELETE /api/audit-logs/clear` - Clear all audit logs
 - `POST /api/change-password` - Change username/password
 
 See PRD.md for complete API documentation.
@@ -174,8 +187,10 @@ The application has been refactored into a modular architecture with separate ma
   - `network_manager.py` - Network management
   - `stack_manager.py` - Docker stack management
   - `system_manager.py` - System monitoring and stats
+  - `scheduler_manager.py` - Scheduled backup management
+  - `audit_log_manager.py` - Audit logging for backup operations
 - **Storage**: Docker volumes for backup persistence
-- **Database**: SQLite for user management
+- **Database**: SQLite for user management and audit logs
 - **Rate Limiting**: Flask-Limiter for API protection
 - **Authentication**: Session-based with password hashing
 

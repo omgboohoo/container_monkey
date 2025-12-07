@@ -334,7 +334,9 @@ function showSection(sectionName, navElement) {
         const navItems = document.querySelectorAll('.nav-item');
         navItems.forEach(item => {
             const itemText = item.querySelector('.nav-text').textContent.toLowerCase().trim();
-            if (itemText === sectionName.toLowerCase()) {
+            const sectionNameLower = sectionName.toLowerCase();
+            // Handle spaces/dashes in section names (e.g., "audit log" vs "audit-log")
+            if (itemText === sectionNameLower || itemText.replace(/\s+/g, '-') === sectionNameLower || itemText === sectionNameLower.replace(/-/g, ' ')) {
                 item.classList.add('active');
             }
         });
@@ -363,11 +365,13 @@ function showSection(sectionName, navElement) {
         loadBackups();
     } else if (sectionName === 'statistics') {
         loadStatistics();
+    } else if (sectionName === 'audit-log') {
+        loadAuditLogs();
     } else if (sectionName === 'backup-scheduler') {
         // Safety check: ensure no spinners are blocking
         hideAllSpinners();
+        // Load config first - it will call loadSchedulerContainers() after config loads
         loadSchedulerConfig();
-        loadSchedulerContainers();
         startTimeDisplay();
         loadStatistics();
     }
@@ -407,6 +411,18 @@ async function loadDashboardStats() {
             cards[6].querySelector('.card-number').textContent = stats.backups_qty;
             cards[6].querySelector('.card-subtext').innerHTML = `<i class="ph ph-database" style="margin-right: 4px;"></i> ${stats.total_backups_size}`;
             cards[7].querySelector('.card-number').textContent = stats.scheduled_containers_qty || 0;
+            const schedulerNextRunEl = document.getElementById('scheduler-next-run-dashboard');
+            if (schedulerNextRunEl && stats.scheduler_next_run) {
+                const nextRunDate = new Date(stats.scheduler_next_run);
+                const year = nextRunDate.getFullYear();
+                const month = String(nextRunDate.getMonth() + 1).padStart(2, '0');
+                const day = String(nextRunDate.getDate()).padStart(2, '0');
+                const hours = String(nextRunDate.getHours()).padStart(2, '0');
+                const minutes = String(nextRunDate.getMinutes()).padStart(2, '0');
+                schedulerNextRunEl.innerHTML = `<i class="ph ph-clock" style="margin-right: 4px;"></i>${day}-${month}-${year} ${hours}:${minutes}`;
+            } else if (schedulerNextRunEl) {
+                schedulerNextRunEl.textContent = 'No schedule configured';
+            }
         }
 
     } catch (error) {
@@ -614,7 +630,7 @@ function createContainerCard(container) {
         </td>
         <td>
             <div class="container-name" style="font-weight: 600; color: var(--text-primary);">${escapeHtml(container.name)} ${container.is_self ? '<span style="color: #999; font-size: 0.8em;">(self)</span>' : ''}</div>
-            <div style="font-size: 0.8em; color: var(--text-secondary); font-family: monospace;">${container.id.substring(0, 12)}</div>
+            <div style="font-size: 0.8em; color: var(--text-secondary); font-family: monospace;">ID: ${container.id.substring(0, 12)}</div>
         </td>
         <td>
             <div class="container-status ${statusClass}">${statusDisplay}</div>
@@ -624,7 +640,7 @@ function createContainerCard(container) {
             ${stackInfo && stackInfo.service ? `<div style="font-size: 0.75em; color: var(--text-secondary); margin-top: 2px;">${escapeHtml(stackInfo.service)}</div>` : ''}
         </td>
         <td>
-            <div style="color: var(--secondary); font-size: 0.9em;">${escapeHtml(imageName)}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(imageName)}</div>
         </td>
         <td>
             <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
@@ -1543,17 +1559,207 @@ function createStatisticsRow(container) {
     
     tr.innerHTML = `
         <td>
-            <div style="font-weight: 500;">${escapeHtml(container.name)}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">${container.id}</div>
+            <div style="font-weight: 500; color: #fff;">${escapeHtml(container.name)}</div>
+            <div style="font-size: 0.85em; color: var(--text-secondary);">ID: ${container.id}</div>
         </td>
-        <td>${escapeHtml(container.image)}</td>
+        <td style="color: var(--text-secondary);">${escapeHtml(container.image)}</td>
         <td>
             <div class="container-status ${statusClass}">${statusText}</div>
         </td>
-        <td>${cpuDisplay}</td>
-        <td>${ramDisplay}</td>
-        <td>${networkIO}</td>
-        <td>${blockIO}</td>
+        <td style="color: var(--text-secondary);">${cpuDisplay}</td>
+        <td style="color: var(--text-secondary);">${ramDisplay}</td>
+        <td style="color: var(--text-secondary);">${networkIO}</td>
+        <td style="color: var(--text-secondary);">${blockIO}</td>
+    `;
+    
+    return tr;
+}
+
+// Audit Log functions
+let auditLogOffset = 0;
+const auditLogLimit = 100;
+
+async function loadAuditLogs(reset = true) {
+    const errorEl = document.getElementById('audit-log-error');
+    const auditLogList = document.getElementById('audit-log-list');
+    const auditLogSpinner = document.getElementById('audit-log-spinner');
+    const auditLogWrapper = document.getElementById('audit-log-table-wrapper');
+    
+    errorEl.style.display = 'none';
+    
+    if (reset) {
+        auditLogOffset = 0;
+        auditLogList.innerHTML = '';
+    }
+    
+    // Show spinner
+    if (auditLogSpinner && reset) auditLogSpinner.style.display = 'flex';
+    if (auditLogWrapper && reset) auditLogWrapper.style.overflow = 'hidden';
+    
+    try {
+        const operationTypeEl = document.getElementById('audit-filter-operation');
+        const statusEl = document.getElementById('audit-filter-status');
+        const operationType = (operationTypeEl && operationTypeEl.value) || '';
+        const status = (statusEl && statusEl.value) || '';
+        
+        let url = `/api/audit-logs?limit=${auditLogLimit}&offset=${auditLogOffset}`;
+        if (operationType) url += `&operation_type=${encodeURIComponent(operationType)}`;
+        if (status) url += `&status=${encodeURIComponent(status)}`;
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load audit logs');
+        }
+        
+        if (!data.logs || data.logs.length === 0) {
+            if (reset) {
+                auditLogList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666;">No audit logs found</td></tr>';
+            }
+            document.getElementById('audit-load-more-btn').style.display = 'none';
+        } else {
+            data.logs.forEach(log => {
+                const row = createAuditLogRow(log);
+                auditLogList.appendChild(row);
+            });
+            
+            // Show load more button if there are more logs
+            if (data.logs.length >= auditLogLimit && auditLogOffset + data.logs.length < data.total) {
+                document.getElementById('audit-load-more-btn').style.display = 'inline-block';
+            } else {
+                document.getElementById('audit-load-more-btn').style.display = 'none';
+            }
+            
+            auditLogOffset += data.logs.length;
+        }
+        
+        // Load statistics
+        await loadAuditLogStatistics();
+        
+    } catch (error) {
+        errorEl.textContent = `Error: ${error.message}`;
+        errorEl.style.display = 'block';
+    } finally {
+        // Hide spinner
+        if (auditLogSpinner) auditLogSpinner.style.display = 'none';
+        if (auditLogWrapper) auditLogWrapper.style.overflow = '';
+    }
+}
+
+async function loadMoreAuditLogs() {
+    await loadAuditLogs(false);
+}
+
+async function clearAuditLogs() {
+    showConfirmationModal(
+        'Are you sure you want to clear all audit logs?\n\nThis will permanently delete all audit log entries. This action cannot be undone.',
+        async () => {
+            try {
+                const response = await fetch('/api/audit-logs/clear', {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to clear audit logs');
+                }
+                
+                // Show success notification
+                showNotification(`Successfully cleared ${data.deleted_count || 0} audit log(s)`, 'success');
+                
+                // Reload audit logs (will show empty state)
+                await loadAuditLogs(true);
+            } catch (error) {
+                showNotification(`Error clearing audit logs: ${error.message}`, 'error');
+            }
+        }
+    );
+}
+
+async function loadAuditLogStatistics() {
+    try {
+        const response = await fetch('/api/audit-logs/statistics');
+        const data = await response.json();
+        
+        if (response.ok && data) {
+            document.getElementById('audit-total-logs').textContent = data.total_logs || 0;
+            document.getElementById('audit-last-24h').textContent = data.last_24h || 0;
+            document.getElementById('audit-last-7d').textContent = data.last_7d || 0;
+        }
+    } catch (error) {
+        console.error('Error loading audit log statistics:', error);
+    }
+}
+
+function createAuditLogRow(log) {
+    const tr = document.createElement('tr');
+    
+    // Format timestamp
+    const timestamp = new Date(log.timestamp);
+    const formattedTime = timestamp.toLocaleString();
+    
+    // Format operation type
+    const operationLabels = {
+        'backup_manual': 'Manual Backup',
+        'backup_scheduled': 'Scheduled Backup',
+        'restore': 'Restore',
+        'cleanup': 'Lifecycle Cleanup',
+        'delete_backup': 'Delete Backup'
+    };
+    const operationLabel = operationLabels[log.operation_type] || log.operation_type;
+    
+    // Format status with badge
+    const statusClass = log.status === 'completed' ? 'status-running' : 
+                       log.status === 'error' ? 'status-stopped' : 
+                       'status-stopped'; // Use existing class for started/pending
+    const statusText = log.status.charAt(0).toUpperCase() + log.status.slice(1);
+    
+    // Format container info
+    const containerInfo = log.container_name || log.container_id || '-';
+    const containerId = log.container_id ? ` (${log.container_id.substring(0, 12)})` : '';
+    
+    // Format backup filename
+    const backupFile = log.backup_filename || '-';
+    
+    // Format details
+    let detailsHtml = '-';
+    if (log.details) {
+        const details = [];
+        if (log.details.deleted_count !== undefined) {
+            details.push(`Deleted: ${log.details.deleted_count}`);
+        }
+        if (log.details.lifecycle !== undefined) {
+            details.push(`Lifecycle: ${log.details.lifecycle}`);
+        }
+        if (log.details.new_name) {
+            details.push(`New name: ${log.details.new_name}`);
+        }
+        if (log.details.overwrite_volumes !== undefined) {
+            details.push(`Overwrite volumes: ${log.details.overwrite_volumes}`);
+        }
+        if (details.length > 0) {
+            detailsHtml = details.join(', ');
+        }
+    }
+    
+    // Error message
+    const errorMsg = log.error_message ? `<div style="color: var(--danger); font-size: 0.9em; margin-top: 4px;">${escapeHtml(log.error_message)}</div>` : '';
+    
+    tr.innerHTML = `
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${formattedTime}</td>
+        <td style="font-weight: 500;">${escapeHtml(operationLabel)}</td>
+        <td>
+            <div style="font-weight: 500;">${escapeHtml(containerInfo)}</div>
+            ${containerId ? `<div style="font-size: 0.85em; color: var(--text-secondary);">${escapeHtml(containerId)}</div>` : ''}
+        </td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(backupFile)}</td>
+        <td>
+            <div class="container-status ${statusClass}">${statusText}</div>
+            ${errorMsg}
+        </td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${detailsHtml}</td>
     `;
     
     return tr;
@@ -2468,6 +2674,9 @@ function openAttachConsole(containerId, containerName) {
         if (fitAddon) {
             fitAddon.fit();
         }
+        
+        // Focus the terminal so typing works immediately
+        term.focus();
 
         term.writeln('\x1b[1;32mWelcome to Container Monkey Console\x1b[0m');
         term.writeln('Connected to: ' + containerName);
@@ -3447,6 +3656,19 @@ async function loadImages() {
             throw new Error(data.error || 'Failed to load images');
         }
         
+        // Check for dangling images (images with <none> tag)
+        const cleanupBtn = document.getElementById('cleanup-dangling-images-btn');
+        const hasDanglingImages = data.images.some(image => {
+            // Dangling images have <none> tag (tag field) or repository is <none>
+            return (image.tag && image.tag === '<none>') || 
+                   (image.repository && image.repository === '<none>') ||
+                   image.name === '<none>:<none>';
+        });
+        
+        if (cleanupBtn) {
+            cleanupBtn.disabled = !hasDanglingImages;
+        }
+        
         if (data.images.length === 0) {
             imagesList.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #666;">No images found</td></tr>';
         } else {
@@ -3484,18 +3706,18 @@ function createImageRow(image) {
         <td class="checkbox-cell">
             <input type="checkbox" class="image-checkbox" data-image-id="${image.id}" data-in-use="${inUse ? 'true' : 'false'}" onclick="handleImageCheckboxClick(this);" ${isDisabled ? 'disabled' : ''}>
         </td>
-        <td>
+        <td style="vertical-align: top;">
             <div style="font-weight: 600; color: var(--text-primary);">${imageName} ${image.is_self ? '<span style="color: #999; font-size: 0.8em;">(self)</span>' : ''}</div>
             ${image.tags && image.tags.length > 1 ? `<div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 4px;">${image.tags.join(', ')}</div>` : ''}
-            ${inUse && !image.is_self && image.containers && image.containers.length > 0 ? `<div style="font-size: 0.8em; color: #999; margin-top: 4px;"><em>In use by ${image.containers.map(c => `<a href="#" onclick="event.stopPropagation(); viewContainerByName('${escapeHtml(c)}'); return false;" style="color: var(--secondary); text-decoration: underline; cursor: pointer;">${escapeHtml(c)}</a>`).join(', ')}</em></div>` : ''}
+            ${inUse && image.containers && image.containers.length > 0 ? `<div style="font-size: 0.8em; color: #999; margin-top: 4px;"><em>In use by ${image.containers.map(c => `<a href="#" onclick="event.stopPropagation(); viewContainerByName('${escapeHtml(c)}'); return false;" style="color: var(--secondary); text-decoration: underline; cursor: pointer;">${escapeHtml(c)}</a>`).join(', ')}</em></div>` : ''}
         </td>
-        <td>
+        <td style="vertical-align: top;">
             <div style="font-family: monospace; color: var(--text-secondary); font-size: 0.9em; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; display: inline-block;">${escapeHtml(image.id.substring(0, 12))}</div>
         </td>
-        <td>
+        <td style="vertical-align: top;">
             <div style="color: var(--text-secondary);">${escapeHtml(image.size)}</div>
         </td>
-        <td>
+        <td style="vertical-align: top;">
             <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
         </td>
     `;
@@ -3611,6 +3833,11 @@ async function deleteImage(imageId, imageName) {
 
 // Cleanup dangling images
 async function cleanupDanglingImages() {
+    const cleanupBtn = document.getElementById('cleanup-dangling-images-btn');
+    if (cleanupBtn && cleanupBtn.disabled) {
+        return; // Don't proceed if button is disabled
+    }
+    
     showConfirmationModal('Clean up dangling images?\n\nThis will remove all <none> images that are not used by any container. This action cannot be undone.', async () => {
     
     try {
@@ -3624,6 +3851,7 @@ async function cleanupDanglingImages() {
         }
         
         console.log(data.message);
+        // Reload images to update button state
         loadImages();
     } catch (error) {
         console.error(`Error cleaning up dangling images: ${error.message}`);
@@ -3682,14 +3910,14 @@ function createNetworkRow(network) {
     const isDefault = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress'].includes(network.name) || 
                       (network.scope === 'swarm' && network.name.startsWith('docker_gwbridge'));
     
-    // Check if network has containers using it
-    const hasContainers = network.containers !== undefined && network.containers > 0;
+    // Count ALL containers using this network (including stopped containers)
+    // network.containers from backend includes all containers (running and stopped)
+    const containerCount = network.containers !== undefined ? network.containers : 0;
     
     // Show container count for bridge, host, and none networks (can be used by user containers) and non-built-in networks
     // Hide for docker_gwbridge and ingress which only have Docker Swarm system containers
     const shouldShowContainerCount = !isDefault || network.name === 'bridge' || network.name === 'host' || network.name === 'none';
-    const containerCount = (shouldShowContainerCount && network.containers !== undefined) ? network.containers : 0;
-    const containerDisplay = shouldShowContainerCount && network.containers !== undefined ? network.containers : '-';
+    const containerDisplay = shouldShowContainerCount && containerCount > 0 ? containerCount : (shouldShowContainerCount ? '0' : '-');
     
     // Build subnet/gateway display
     let subnetDisplay = '-';
@@ -3703,8 +3931,8 @@ function createNetworkRow(network) {
     // Build actions column - buttons side by side
     let actionsHtml = '<div class="btn-group" style="display: flex; gap: 4px; flex-wrap: nowrap;">';
     
-    // View Containers button if network has containers
-    if (hasContainers && containerCount > 0) {
+    // View Containers button if network has containers (count > 0)
+    if (containerCount > 0) {
         actionsHtml += `<button class="btn btn-secondary btn-sm" onclick="viewNetworkContainers('${escapeHtml(network.name)}')" title="View containers using this network"><i class="ph ph-cube"></i> View Containers</button>`;
     }
     
@@ -3713,10 +3941,10 @@ function createNetworkRow(network) {
         actionsHtml += `<button class="btn btn-warning btn-sm" onclick="backupNetwork('${escapeHtml(network.id)}', '${escapeHtml(network.name)}')" title="Backup network"><i class="ph ph-floppy-disk"></i> Backup</button>`;
     }
     
-    // Delete button for non-default networks
+    // Delete button for non-default networks - disabled/ghosted when containers > 0
     if (!isDefault) {
-        if (hasContainers) {
-            actionsHtml += `<button class="btn btn-danger btn-sm disabled" title="Cannot delete network with containers using it" disabled><i class="ph ph-trash"></i> Delete</button>`;
+        if (containerCount > 0) {
+            actionsHtml += `<button class="btn btn-danger btn-sm" style="opacity: 0.5; cursor: not-allowed;" title="Cannot delete network with ${containerCount} container(s) using it" disabled><i class="ph ph-trash"></i> Delete</button>`;
         } else {
             actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteNetwork('${escapeHtml(network.id)}', '${escapeHtml(network.name)}')" title="Delete network"><i class="ph ph-trash"></i> Delete</button>`;
         }
@@ -4209,9 +4437,15 @@ function viewNetworkContainers(networkName) {
     // Switch to containers section
     showSection('containers', document.querySelector('.nav-item[onclick*="containers"]'));
     
-    // Wait for containers to load, then filter
-    setTimeout(() => {
+    // Ensure containers are loaded, then filter
+    const filterContainers = () => {
         const rows = document.querySelectorAll('.container-row');
+        if (rows.length === 0) {
+            // Containers not loaded yet, wait a bit more
+            setTimeout(filterContainers, 200);
+            return;
+        }
+        
         let visibleCount = 0;
         rows.forEach(row => {
             const networksAttr = row.getAttribute('data-networks');
@@ -4239,7 +4473,10 @@ function viewNetworkContainers(networkName) {
         
         // Show notification
         showNotification(`Showing ${visibleCount} container(s) using network "${networkName}"`, 'info');
-    }, 500);
+    };
+    
+    // Start filtering after a short delay to allow containers to load
+    setTimeout(filterContainers, 500);
 }
 
 async function deleteStack(stackName, stackType) {
@@ -5045,8 +5282,10 @@ function showNotification(message, type = 'info') {
 
 // --- Backup Scheduler ---
 let schedulerConfig = null;
+let schedulerLoadingConfig = false; // Flag to prevent auto-save during initial load
 
 async function loadSchedulerConfig() {
+    schedulerLoadingConfig = true; // Prevent auto-save during load
     try {
         const response = await fetch('/api/scheduler/config');
         
@@ -5083,9 +5322,16 @@ async function loadSchedulerConfig() {
         
         updateScheduleUI();
         updateSchedulerStatus();
+        
+        // Load containers after config is loaded so checkboxes can be set correctly
+        loadSchedulerContainers();
     } catch (error) {
         console.error('Error loading scheduler config:', error);
         showError('scheduler-error', `Error loading scheduler config: ${error.message}`);
+        // Still load containers even if config fails (will show unchecked)
+        loadSchedulerContainers();
+    } finally {
+        schedulerLoadingConfig = false; // Re-enable auto-save after load completes
     }
 }
 
@@ -5178,17 +5424,17 @@ async function loadSchedulerContainers() {
                                class="container-checkbox scheduler-container-checkbox"
                                data-container-id="${container.id}" 
                                ${isSelected ? 'checked' : ''} 
-                               onclick="event.stopPropagation(); updateSelectAllCheckbox();">
+                               onclick="event.stopPropagation(); updateSelectAllCheckbox(); autoSaveSchedulerConfig();">
                     </td>
                     <td>
                         <div class="container-name" style="font-weight: 600; color: var(--text-primary);">${escapeHtml(container.name)}</div>
-                        <div style="font-size: 0.8em; color: var(--text-secondary); font-family: monospace;">${container.id.substring(0, 12)}</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); font-family: monospace;">ID: ${container.id.substring(0, 12)}</div>
                     </td>
                     <td>
                         <div class="container-status ${statusClass}">${statusDisplay}</div>
                     </td>
                     <td>
-                        <div style="color: var(--secondary); font-size: 0.9em;">${escapeHtml(imageName)}</div>
+                        <div style="color: #fff; font-size: 0.9em;">${escapeHtml(imageName)}</div>
                     </td>
                 `;
                 
@@ -5219,6 +5465,8 @@ function toggleSelectAllSchedulerContainers() {
     checkboxes.forEach(checkbox => {
         checkbox.checked = isChecked;
     });
+    updateSelectAllCheckbox();
+    autoSaveSchedulerConfig();
 }
 
 function updateSelectAllCheckbox() {
@@ -5245,6 +5493,9 @@ function updateScheduleUI() {
     } else {
         dayOfWeekContainer.style.display = 'none';
     }
+    
+    // Auto-save when schedule type changes
+    autoSaveSchedulerConfig();
 }
 
 function updateSchedulerStatus() {
@@ -5287,7 +5538,27 @@ function updateSchedulerStatus() {
     }
 }
 
-async function saveSchedulerConfig() {
+// Debounce timer for auto-save
+let schedulerAutoSaveTimer = null;
+
+function autoSaveSchedulerConfig() {
+    // Don't auto-save during initial config load
+    if (schedulerLoadingConfig) {
+        return;
+    }
+    
+    // Clear existing timer
+    if (schedulerAutoSaveTimer) {
+        clearTimeout(schedulerAutoSaveTimer);
+    }
+    
+    // Debounce: wait 500ms after last change before saving
+    schedulerAutoSaveTimer = setTimeout(() => {
+        saveSchedulerConfig(true); // true = silent save (no notification)
+    }, 500);
+}
+
+async function saveSchedulerConfig(silent = false) {
     const errorEl = document.getElementById('scheduler-error');
     errorEl.style.display = 'none';
     
@@ -5328,7 +5599,10 @@ async function saveSchedulerConfig() {
         schedulerConfig = result.config;
         
         updateSchedulerStatus();
-        showNotification('Scheduler configuration saved successfully!', 'success');
+        
+        if (!silent) {
+            showNotification('Scheduler configuration saved successfully!', 'success');
+        }
     } catch (error) {
         console.error('Error saving scheduler config:', error);
         showError('scheduler-error', `Error saving scheduler config: ${error.message}`);
@@ -5381,150 +5655,3 @@ function updateTimeDisplay() {
     }
 }
 
-async function testScheduler() {
-    const errorEl = document.getElementById('scheduler-error');
-    errorEl.style.display = 'none';
-    
-    if (!schedulerConfig) {
-        showError('scheduler-error', 'Scheduler configuration not loaded. Please refresh the page.');
-        return;
-    }
-    
-    const selectedCount = schedulerConfig.selected_containers ? schedulerConfig.selected_containers.length : 0;
-    if (selectedCount === 0) {
-        showError('scheduler-error', 'No containers selected. Please select at least one container and save the configuration.');
-        return;
-    }
-    
-    // Show progress modal
-    const modal = document.getElementById('scheduler-test-modal');
-    const statusEl = document.getElementById('scheduler-test-status');
-    const stepEl = document.getElementById('scheduler-test-step');
-    const countEl = document.getElementById('scheduler-test-count');
-    const progressBar = document.getElementById('scheduler-test-progress-bar');
-    const containersEl = document.getElementById('scheduler-test-containers');
-    
-    modal.style.display = 'block';
-    statusEl.textContent = 'Triggering scheduled backups...';
-    stepEl.textContent = `Queuing backups for ${selectedCount} container(s)...`;
-    countEl.textContent = `0 / ${selectedCount}`;
-    progressBar.style.width = '0%';
-    containersEl.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px;">Loading...</div>';
-    
-    // Track container progress
-    const containerStatuses = {};
-    const selectedContainers = schedulerConfig.selected_containers || [];
-    
-    // Initialize container statuses
-    selectedContainers.forEach(containerId => {
-        containerStatuses[containerId] = {
-            status: 'queued',
-            progress: null
-        };
-    });
-    
-    updateSchedulerTestProgress(containerStatuses, selectedContainers.length);
-    
-    try {
-        const response = await fetch('/api/scheduler/test', {
-            method: 'POST'
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to trigger scheduled backups');
-        }
-        
-        const result = await response.json();
-        statusEl.textContent = 'Backups triggered successfully!';
-        stepEl.textContent = 'Monitoring backup progress...';
-        
-        // Poll backup status to track progress
-        let completedCount = 0;
-        const maxWaitTime = 600000; // 10 minutes max
-        const startTime = Date.now();
-        const checkInterval = setInterval(async () => {
-            try {
-                // Check backup status
-                const statusResponse = await fetch('/api/backup/status');
-                const statusData = await statusResponse.json();
-                
-                // Update container statuses based on backup progress
-                // Note: We can't directly track which backup belongs to which container
-                // So we'll show overall progress
-                
-                if (statusData.status === 'idle' && completedCount === 0) {
-                    // All backups queued, now waiting for completion
-                    statusEl.textContent = 'All backups queued';
-                    stepEl.textContent = 'Waiting for backups to complete...';
-                }
-                
-                // Check if we've exceeded max wait time
-                if (Date.now() - startTime > maxWaitTime) {
-                    clearInterval(checkInterval);
-                    statusEl.textContent = 'Monitoring timeout';
-                    stepEl.textContent = 'Some backups may still be in progress. Check the Backup Vault for status.';
-                    progressBar.style.width = '100%';
-                    countEl.textContent = `${selectedContainers.length} / ${selectedContainers.length}`;
-                    return;
-                }
-                
-                // If idle and we've been waiting, assume done
-                if (statusData.status === 'idle' && Date.now() - startTime > 5000) {
-                    completedCount = selectedContainers.length;
-                    clearInterval(checkInterval);
-                    statusEl.textContent = 'All backups completed!';
-                    stepEl.textContent = 'Scheduled backups have been queued and processed.';
-                    progressBar.style.width = '100%';
-                    countEl.textContent = `${selectedContainers.length} / ${selectedContainers.length}`;
-                    
-                    // Refresh backup list
-                    setTimeout(() => {
-                        loadBackups();
-                        loadSchedulerConfig(); // Refresh scheduler config to update next_run
-                    }, 1000);
-                }
-            } catch (error) {
-                console.error('Error checking backup status:', error);
-            }
-        }, 2000); // Check every 2 seconds
-        
-        // Auto-close after reasonable time or when done
-        setTimeout(() => {
-            clearInterval(checkInterval);
-            if (modal.style.display === 'block') {
-                // Don't auto-close, let user close manually
-            }
-        }, maxWaitTime);
-        
-    } catch (error) {
-        console.error('Error testing scheduler:', error);
-        modal.style.display = 'none';
-        showError('scheduler-error', `Error triggering scheduled backups: ${error.message}`);
-    }
-}
-
-function updateSchedulerTestProgress(containerStatuses, totalCount) {
-    const countEl = document.getElementById('scheduler-test-count');
-    const progressBar = document.getElementById('scheduler-test-progress-bar');
-    const containersEl = document.getElementById('scheduler-test-containers');
-    
-    const completed = Object.values(containerStatuses).filter(s => s.status === 'complete').length;
-    const percentage = totalCount > 0 ? Math.round((completed / totalCount) * 100) : 0;
-    
-    countEl.textContent = `${completed} / ${totalCount}`;
-    progressBar.style.width = `${percentage}%`;
-    
-    // Update container list (simplified - we don't have container names here)
-    containersEl.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 10px;">
-        ${completed} of ${totalCount} backups completed
-    </div>`;
-}
-
-function closeSchedulerTestModal() {
-    const modal = document.getElementById('scheduler-test-modal');
-    modal.style.display = 'none';
-    // Refresh backup list when closing
-    loadBackups();
-    loadSchedulerConfig();
-}

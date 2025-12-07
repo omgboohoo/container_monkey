@@ -18,17 +18,19 @@ from werkzeug.utils import secure_filename
 class BackupFileManager:
     """Manages backup file operations"""
     
-    def __init__(self, backup_dir: str):
+    def __init__(self, backup_dir: str, audit_log_manager=None):
         """
         Initialize BackupFileManager
         
         Args:
             backup_dir: Base directory (backups go in backups/ subdirectory)
+            audit_log_manager: Optional AuditLogManager instance for logging
         """
         # Backup files go in backups/ subdirectory
         self.backup_dir = os.path.join(backup_dir, 'backups')
         os.makedirs(self.backup_dir, exist_ok=True)
         self.download_all_progress = {}
+        self.audit_log_manager = audit_log_manager
     
     def list_backups(self) -> Dict[str, Any]:
         """List all available backups (containers and networks)"""
@@ -83,7 +85,7 @@ class BackupFileManager:
             return file_path
         return None
     
-    def delete_backup(self, filename: str) -> Dict[str, Any]:
+    def delete_backup(self, filename: str, user: Optional[str] = None) -> Dict[str, Any]:
         """Delete a backup file"""
         filename = os.path.basename(filename)
         file_path = os.path.join(self.backup_dir, filename)
@@ -93,17 +95,37 @@ class BackupFileManager:
         
         try:
             os.remove(file_path)
+            
+            # Log backup deletion
+            if self.audit_log_manager:
+                self.audit_log_manager.log_event(
+                    operation_type='delete_backup',
+                    status='completed',
+                    backup_filename=filename,
+                    user=user
+                )
+            
             return {'success': True, 'message': 'Backup deleted'}
         except Exception as e:
+            # Log deletion error
+            if self.audit_log_manager:
+                self.audit_log_manager.log_event(
+                    operation_type='delete_backup',
+                    status='error',
+                    backup_filename=filename,
+                    error_message=str(e),
+                    user=user
+                )
             return {'error': str(e)}
     
-    def delete_all_backups(self) -> Dict[str, Any]:
+    def delete_all_backups(self, user: Optional[str] = None) -> Dict[str, Any]:
         """Delete all backup files"""
         try:
             if not os.path.exists(self.backup_dir):
                 return {'success': True, 'message': 'Backup directory empty', 'deleted_count': 0}
             
             deleted_count = 0
+            deleted_files = []
             for filename in os.listdir(self.backup_dir):
                 file_path = os.path.join(self.backup_dir, filename)
                 if os.path.isfile(file_path):
@@ -111,8 +133,18 @@ class BackupFileManager:
                         try:
                             os.remove(file_path)
                             deleted_count += 1
+                            deleted_files.append(filename)
                         except Exception:
                             pass
+            
+            # Log deletion of all backups
+            if self.audit_log_manager and deleted_count > 0:
+                self.audit_log_manager.log_event(
+                    operation_type='delete_backup',
+                    status='completed',
+                    user=user,
+                    details={'deleted_count': deleted_count, 'deleted_files': deleted_files, 'all': True}
+                )
             
             return {
                 'success': True,
@@ -120,6 +152,14 @@ class BackupFileManager:
                 'deleted_count': deleted_count
             }
         except Exception as e:
+            if self.audit_log_manager:
+                self.audit_log_manager.log_event(
+                    operation_type='delete_backup',
+                    status='error',
+                    error_message=str(e),
+                    user=user,
+                    details={'all': True}
+                )
             return {'error': str(e)}
     
     def upload_backup(self, file_content: bytes, filename: str) -> Dict[str, Any]:

@@ -18,7 +18,8 @@ class RestoreManager:
     """Manages container restore operations from backup files"""
     
     def __init__(self, docker_api_client, backup_dir: str, app_container_name: str, app_volume_name: str,
-                 reconstruct_docker_run_command_fn: Callable, generate_docker_compose_fn: Callable):
+                 reconstruct_docker_run_command_fn: Callable, generate_docker_compose_fn: Callable,
+                 audit_log_manager=None):
         """
         Initialize RestoreManager
         
@@ -29,6 +30,7 @@ class RestoreManager:
             app_volume_name: Name of the app volume (to skip in restores)
             reconstruct_docker_run_command_fn: Function to reconstruct docker run command
             generate_docker_compose_fn: Function to generate docker-compose yaml
+            audit_log_manager: Optional AuditLogManager instance for logging
         """
         self.docker_api_client = docker_api_client
         # Backup files are in backups/ subdirectory
@@ -38,6 +40,7 @@ class RestoreManager:
         self.app_volume_name = app_volume_name
         self.reconstruct_docker_run_command = reconstruct_docker_run_command_fn
         self.generate_docker_compose = generate_docker_compose_fn
+        self.audit_log_manager = audit_log_manager
     
     def preview_backup(self, filename: str) -> Dict:
         """Preview backup contents without restoring"""
@@ -150,7 +153,7 @@ class RestoreManager:
             return {'error': f'Failed to preview backup: {str(e)}'}
     
     def restore_backup(self, backup_file_path: str, new_name: str = '', overwrite_volumes: Optional[bool] = None, 
-                      port_overrides: Optional[Dict[str, str]] = None) -> Dict:
+                      port_overrides: Optional[Dict[str, str]] = None, user: Optional[str] = None) -> Dict:
         """
         Restore a backup and deploy the container
         
@@ -159,12 +162,25 @@ class RestoreManager:
             new_name: Optional new name for the container
             overwrite_volumes: Whether to overwrite existing volumes (None = prompt, True = overwrite, False = skip)
             port_overrides: Optional dict of port mappings to override (e.g., {'80/tcp': '8080'})
+            user: Username performing the restore (for audit log)
             
         Returns:
             Dict with success status and container info
         """
+        backup_filename = os.path.basename(backup_file_path)
+        
         if not os.path.exists(backup_file_path):
             return {'error': 'Backup file not found'}
+        
+        # Log restore start
+        if self.audit_log_manager:
+            self.audit_log_manager.log_event(
+                operation_type='restore',
+                status='started',
+                backup_filename=backup_filename,
+                user=user,
+                details={'new_name': new_name, 'overwrite_volumes': overwrite_volumes}
+            )
         
         try:
             with tarfile.open(backup_file_path, 'r:gz') as tar:
@@ -416,11 +432,13 @@ class RestoreManager:
                         # Use short ID (12 chars) for display
                         container_id = verified_id[:12]
                 
+                container_name_final = new_name or inspect_data.get('Name', '').lstrip('/')
+                
                 response_data = {
                     'success': True,
                     'message': 'Container restored successfully',
                     'container_id': container_id,
-                    'container_name': new_name or inspect_data.get('Name', '').lstrip('/')
+                    'container_name': container_name_final
                 }
                 
                 if stack_info:
@@ -428,14 +446,53 @@ class RestoreManager:
                     if not stack_info.get('exists'):
                         response_data['stack_warning'] = f"Stack '{stack_info['project']}' does not exist. Container restored with stack labels but may need to be added back to the stack manually."
                 
+                # Log restore completion
+                if self.audit_log_manager:
+                    self.audit_log_manager.log_event(
+                        operation_type='restore',
+                        status='completed',
+                        container_id=container_id,
+                        container_name=container_name_final,
+                        backup_filename=backup_filename,
+                        user=user,
+                        details={'new_name': new_name, 'overwrite_volumes': overwrite_volumes}
+                    )
+                
                 return response_data
                 
         except tarfile.TarError:
-            return {'error': 'Invalid tar.gz file'}
+            error_msg = 'Invalid tar.gz file'
+            if self.audit_log_manager:
+                self.audit_log_manager.log_event(
+                    operation_type='restore',
+                    status='error',
+                    backup_filename=backup_filename,
+                    error_message=error_msg,
+                    user=user
+                )
+            return {'error': error_msg}
         except subprocess.TimeoutExpired:
-            return {'error': 'Restore operation timed out'}
+            error_msg = 'Restore operation timed out'
+            if self.audit_log_manager:
+                self.audit_log_manager.log_event(
+                    operation_type='restore',
+                    status='error',
+                    backup_filename=backup_filename,
+                    error_message=error_msg,
+                    user=user
+                )
+            return {'error': error_msg}
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return {'error': f'Restore failed: {str(e)}'}
+            error_msg = f'Restore failed: {str(e)}'
+            if self.audit_log_manager:
+                self.audit_log_manager.log_event(
+                    operation_type='restore',
+                    status='error',
+                    backup_filename=backup_filename,
+                    error_message=error_msg,
+                    user=user
+                )
+            return {'error': error_msg}
 
