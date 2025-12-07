@@ -1457,9 +1457,11 @@ select.form-control:focus option:checked {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    pointer-events: none;
 }
 
 .notification {
+    pointer-events: auto;
     background-color: var(--primary-light);
     color: var(--text-primary);
     padding: 15px 20px;

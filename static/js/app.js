@@ -1361,7 +1361,7 @@ function hideAllSpinners() {
     });
     
     // Also hide any spinners found by class
-    const allSpinners = document.querySelectorAll('.grid-spinner-container');
+    const allSpinners = document.querySelectorAll('.grid-spinner-container, .spinner-container');
     allSpinners.forEach(spinner => {
         spinner.style.display = 'none';
         delete spinner.dataset.shownAt;
@@ -2265,8 +2265,9 @@ let clickBlockedCount = 0;
 let lastClickTime = 0;
 
 document.addEventListener('click', function(event) {
-    const now = Date.now();
-    const target = event.target;
+    try {
+        const now = Date.now();
+        const target = event.target;
     const isInteractive = target.tagName === 'BUTTON' || 
                          target.tagName === 'A' || 
                          target.closest('button') || 
@@ -2372,21 +2373,24 @@ document.addEventListener('click', function(event) {
         
         lastClickTime = now;
     }
+    } catch (e) {
+        console.error('Error in safety check click handler:', e);
+    }
 }, true);
 
 // Additional safety: Check for stuck elements on page load and periodically
 function checkForStuckElements() {
     // Check for visible spinners that shouldn't be visible
-    const spinners = document.querySelectorAll('.grid-spinner-container');
+    const spinners = document.querySelectorAll('.grid-spinner-container, .spinner-container');
     spinners.forEach(spinner => {
         const display = window.getComputedStyle(spinner).display;
         const spinnerData = spinner.dataset; // Declare outside if/else block
         if (display === 'flex' || display === 'block') {
-            // Check if spinner has been visible for more than 30 seconds
+            // Check if spinner has been visible for more than 5 seconds
             if (!spinnerData.shownAt) {
                 spinnerData.shownAt = Date.now();
-            } else if (Date.now() - parseInt(spinnerData.shownAt) > 30000) {
-                console.warn('Spinner has been visible for >30s, hiding:', spinner.id || 'unknown');
+            } else if (Date.now() - parseInt(spinnerData.shownAt) > 5000) {
+                console.warn('Spinner has been visible for >5s, hiding:', spinner.id || 'unknown');
                 spinner.style.display = 'none';
                 delete spinnerData.shownAt;
             }

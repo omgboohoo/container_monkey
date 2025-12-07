@@ -1,5 +1,33 @@
 # Release Notes
 
+## Version 0.2.15
+
+### Bug Fixes
+- **Fixed unresponsive buttons issue**: Resolved critical UI issue where buttons would stop working and require a page refresh
+  - Fixed notification container overlay blocking clicks on underlying elements by setting `pointer-events: none` on the container
+  - Notification items remain interactive (`pointer-events: auto`)
+  - Reduced stuck spinner detection threshold from 30s to 5s to quickly clear blocking loading overlays
+  - Enhanced spinner cleanup to target all types of loading spinners
+  - Added error handling to safety check click listeners to prevent crashes
+
+### Code Cleanup
+- **Removed unused code**: Cleaned up unused imports and methods
+  - Removed unused `wraps` import from `app.py`
+  - Removed unused `database_manager` variable assignment (initialization still occurs)
+  - Removed unused `get_connection()` method from `DatabaseManager` class
+  - Cleaner, more maintainable codebase
+
+### Database Improvements
+- **Simplified database initialization**: Removed migration code from database manager
+  - Database manager now simply creates `monkey.db` with required tables if it doesn't exist
+  - Cleaner, simpler codebase without migration complexity
+  - Default user is created automatically if no users exist
+
+### Version Update
+- Updated version number to 0.2.15 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.14
 
 ### Database Improvements
