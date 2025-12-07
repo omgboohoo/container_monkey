@@ -2125,36 +2125,9 @@ async function submitRestore() {
                     <h3>✅ Container Restored Successfully!</h3>
                     <p>Container name: <strong>${escapeHtml(data.container_name || 'Unknown')}</strong></p>
                     ${data.container_id ? `<p>Container ID: <strong>${escapeHtml(data.container_id)}</strong></p>` : ''}
-                    <p>Refreshing containers list...</p>
                 </div>
             `;
         }
-        
-        // Immediately switch to containers tab and refresh (with error handling)
-        try {
-            showTab('containers');
-        } catch (tabError) {
-            console.error('Error switching to containers tab:', tabError);
-        }
-        
-        // Refresh containers with retries
-        const refreshContainers = async (retries = 3) => {
-            try {
-                await loadContainers();
-            } catch (loadError) {
-                console.error('Error loading containers:', loadError);
-                if (retries > 0) {
-                    setTimeout(() => refreshContainers(retries - 1), 1000);
-                }
-            }
-        };
-        
-        // Refresh immediately
-        refreshContainers();
-        
-        // Refresh again after delays to ensure container appears
-        setTimeout(() => refreshContainers(), 1000);
-        setTimeout(() => refreshContainers(), 3000);
         
         // Close modal after showing success message
         setTimeout(() => {

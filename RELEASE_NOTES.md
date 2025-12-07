@@ -23,6 +23,12 @@
   - Cleaner, simpler codebase without migration complexity
   - Default user is created automatically if no users exist
 
+### UI Improvements
+- **Content title update**: Audit Log section header now displays "Backup Audit Log" for consistency with menu item
+- **Improved restore workflow**: After restoring a backup, users now stay on the Backup Vault page
+  - No automatic navigation to containers page after successful restore
+  - Better workflow continuity when managing backups
+
 ### Version Update
 - Updated version number to 0.2.15 across application, website, README.md, and PRD.md
 

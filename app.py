@@ -6,7 +6,6 @@ from flask import Flask, render_template, jsonify, send_file, request, after_thi
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
-from functools import wraps
 import os
 import secrets
 import socket
@@ -57,9 +56,9 @@ init_docker_client()
 docker_api_client = docker_utils.docker_api_client
 
 # Initialize unified database manager
-# This creates monkey.db and migrates data from old databases/JSON
+# This creates monkey.db with required tables if it doesn't exist
 db_path = os.path.join(app.config['BACKUP_DIR'], 'config', 'monkey.db')
-database_manager = DatabaseManager(db_path)
+DatabaseManager(db_path)
 
 # Initialize managers
 # All managers now use the unified monkey.db database
