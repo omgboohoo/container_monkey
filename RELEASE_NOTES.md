@@ -1,6 +1,6 @@
 # Release Notes
 
-## Version 0.2.13
+## Version 0.2.12
 
 ### Backup Audit Log Feature
 - **Comprehensive audit logging**: New Backup Audit Log section tracks all backup-related operations
