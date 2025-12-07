@@ -1,5 +1,18 @@
 # Release Notes
 
+## Version 0.2.13
+
+### Bug Fixes
+- **Fixed weekly backup schedule calculation**: Corrected day-of-week calculation bug in weekly backup scheduler
+  - Fixed mismatch between app's day-of-week numbering (Sunday=0) and Python's weekday() numbering (Monday=0)
+  - Weekly backups now correctly calculate the next scheduled date
+  - Example: If today is Sunday and schedule is set to Monday, next backup correctly shows Monday (not Tuesday)
+
+### Version Update
+- Updated version number to 0.2.13 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.12
 
 ### Backup Audit Log Feature

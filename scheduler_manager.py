@@ -122,7 +122,12 @@ class SchedulerManager:
             print(f"📅 Calculated next run: {next_run.strftime('%d-%m-%Y %H:%M:%S')} (current: {now.strftime('%d-%m-%Y %H:%M:%S')}, hour: {self.hour:02d}:00)")
         else:  # weekly
             # Find next occurrence of specified day and hour
-            days_ahead = (self.day_of_week - now.weekday()) % 7
+            # Convert app's day_of_week (Sunday=0) to Python's weekday (Monday=0)
+            # App: Sunday=0, Monday=1, ..., Saturday=6
+            # Python: Monday=0, Tuesday=1, ..., Sunday=6
+            # Conversion: python_weekday = (app_day_of_week + 6) % 7
+            target_weekday = (self.day_of_week + 6) % 7
+            days_ahead = (target_weekday - now.weekday()) % 7
             if days_ahead == 0:
                 # Today is the scheduled day, check if hour has passed
                 next_run = now.replace(hour=self.hour, minute=0, second=0, microsecond=0)
