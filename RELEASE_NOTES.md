@@ -28,6 +28,20 @@
 - **Improved restore workflow**: After restoring a backup, users now stay on the Backup Vault page
   - No automatic navigation to containers page after successful restore
   - Better workflow continuity when managing backups
+- **Content section title updates**: Simplified section titles for cleaner interface
+  - "Available Backups" changed to "Backup Vault" for consistency
+  - "Docker Stacks" simplified to "Stacks"
+  - "Docker Images" simplified to "Images"
+  - "Docker Networks" simplified to "Networks"
+  - "Docker Volumes" simplified to "Volumes"
+  - More concise and modern interface
+- **Fixed unnecessary scrollbar**: Resolved issue where vertical scrollbar appeared even when content didn't exceed viewport
+  - Removed bottom padding from content sections to prevent overflow
+  - Changed main-content from min-height to fixed height with overflow control
+  - Reduced top padding from 32px to 24px for better fit
+  - Reduced section-header margin-bottom from 32px to 24px
+  - Added min-height: 0 to content-section for proper flex behavior
+  - Scrollbar now only appears when content actually exceeds screen size
 
 ### Version Update
 - Updated version number to 0.2.15 across application, website, README.md, and PRD.md
