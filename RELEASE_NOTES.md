@@ -34,19 +34,6 @@
 - **Audit log layout**: Statistics panels displayed in single row, filters and refresh button aligned horizontally
 - **Menu item renamed**: "Audit Log" renamed to "Backup Audit Log" for clarity
 
-### Technical Changes
-- Added `audit_log_manager.py` module for audit log management
-- Updated `backup_manager.py` to log manual and scheduled backup operations
-- Updated `scheduler_manager.py` to log lifecycle cleanup operations
-- Updated `restore_manager.py` to log restore operations
-- Updated `backup_file_manager.py` to log backup deletion operations
-- Added API endpoints: `/api/audit-logs`, `/api/audit-logs/statistics`, and `/api/audit-logs/clear`
-- Added `clear_all_logs()` method to `audit_log_manager.py` for clearing all audit logs
-- Updated CSS for reduced sidebar spacing and improved audit log layout
-- Updated JavaScript for audit log display, filtering, and clear functionality
-
-## Version 0.2.12
-
 ### Backup Scheduler Improvements
 - **Real-time auto-save**: Scheduler configuration now saves automatically as users make changes
   - Removed "Save Schedule" button - changes are saved automatically 500ms after last change
@@ -118,6 +105,15 @@
   - Improved readability and visual hierarchy
 
 ### Technical Changes
+- Added `audit_log_manager.py` module for audit log management
+- Updated `backup_manager.py` to log manual and scheduled backup operations
+- Updated `scheduler_manager.py` to log lifecycle cleanup operations
+- Updated `restore_manager.py` to log restore operations
+- Updated `backup_file_manager.py` to log backup deletion operations
+- Added API endpoints: `/api/audit-logs`, `/api/audit-logs/statistics`, and `/api/audit-logs/clear`
+- Added `clear_all_logs()` method to `audit_log_manager.py` for clearing all audit logs
+- Updated CSS for reduced sidebar spacing and improved audit log layout
+- Updated JavaScript for audit log display, filtering, and clear functionality
 - Updated `static/js/app.js`:
   - Added `autoSaveSchedulerConfig()` function with debouncing (500ms delay)
   - Modified `saveSchedulerConfig()` to support silent saves
