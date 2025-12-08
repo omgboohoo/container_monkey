@@ -2,7 +2,7 @@
 
 **Version 0.2.15**
 
-The ultimate open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups or automated scheduling. Restore instantly when disaster strikes. Move containers between servers effortlessly.
+The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
 ## Features
 
