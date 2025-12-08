@@ -18,59 +18,103 @@ from werkzeug.utils import secure_filename
 class BackupFileManager:
     """Manages backup file operations"""
     
-    def __init__(self, backup_dir: str, audit_log_manager=None):
+    def __init__(self, backup_dir: str, audit_log_manager=None, storage_settings_manager=None):
         """
         Initialize BackupFileManager
         
         Args:
             backup_dir: Base directory (backups go in backups/ subdirectory)
             audit_log_manager: Optional AuditLogManager instance for logging
+            storage_settings_manager: Optional StorageSettingsManager instance for S3 storage
         """
         # Backup files go in backups/ subdirectory
         self.backup_dir = os.path.join(backup_dir, 'backups')
         os.makedirs(self.backup_dir, exist_ok=True)
+        # Temp directory for S3 downloads (outside backups directory)
+        self.temp_dir = os.path.join(backup_dir, 'temp')
+        os.makedirs(self.temp_dir, exist_ok=True)
         self.download_all_progress = {}
         self.audit_log_manager = audit_log_manager
+        self.storage_settings_manager = storage_settings_manager
     
     def list_backups(self) -> Dict[str, Any]:
         """List all available backups (containers and networks)"""
         try:
             backups = []
             
-            if not os.path.exists(self.backup_dir):
-                return {'backups': []}
+            # Check if S3 storage is enabled
+            use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
             
-            for filename in os.listdir(self.backup_dir):
-                file_path = os.path.join(self.backup_dir, filename)
-                if not os.path.isfile(file_path):
-                    continue
+            if use_s3:
+                # List backups from S3
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                    s3_result = s3_manager.list_files()
+                    if s3_result.get('success'):
+                        for file_info in s3_result.get('files', []):
+                            filename = file_info['key']
+                            if filename.endswith(('.zip', '.tar.gz')):
+                                backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
+                                backups.append({
+                                    'filename': filename,
+                                    'size': file_info['size'],
+                                    'created': file_info['last_modified'],
+                                    'type': 'container',
+                                    'backup_type': backup_type,
+                                    'storage_location': 's3'
+                                })
+                            elif filename.startswith('network_') and filename.endswith('.json'):
+                                backups.append({
+                                    'filename': filename,
+                                    'size': file_info['size'],
+                                    'created': file_info['last_modified'],
+                                    'type': 'network',
+                                    'backup_type': 'manual',
+                                    'storage_location': 's3'
+                                })
+                except Exception as e:
+                    print(f"⚠️  Error listing S3 backups: {e}")
+                    # Fall through to local listing if S3 fails
+            
+            # Also list local backups (for migration or fallback)
+            if os.path.exists(self.backup_dir):
+                for filename in os.listdir(self.backup_dir):
+                    file_path = os.path.join(self.backup_dir, filename)
+                    if not os.path.isfile(file_path):
+                        continue
                     
-                stat = os.stat(file_path)
-                
-                if filename.endswith(('.zip', '.tar.gz')):
-                    # Determine backup type: scheduled backups have "scheduled_" prefix
-                    # This is reliable since we set the prefix when creating backups
-                    backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
+                    # Skip if already in backups list from S3
+                    if any(b['filename'] == filename for b in backups):
+                        continue
                     
-                    # Note: We used to read metadata from inside tar.gz files, but that's slow
-                    # The filename prefix is reliable and much faster, so we use that instead
-                    # If we need metadata in the future, we can read it lazily on-demand
+                    stat = os.stat(file_path)
                     
-                    backups.append({
-                        'filename': filename,
-                        'size': stat.st_size,
-                        'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        'type': 'container',
-                        'backup_type': backup_type
-                    })
-                elif filename.startswith('network_') and filename.endswith('.json'):
-                    backups.append({
-                        'filename': filename,
-                        'size': stat.st_size,
-                        'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                        'type': 'network',
-                        'backup_type': 'manual'  # Network backups are always manual
-                    })
+                    if filename.endswith(('.zip', '.tar.gz')):
+                        backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
+                        backups.append({
+                            'filename': filename,
+                            'size': stat.st_size,
+                            'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                            'type': 'container',
+                            'backup_type': backup_type,
+                            'storage_location': 'local'
+                        })
+                    elif filename.startswith('network_') and filename.endswith('.json'):
+                        backups.append({
+                            'filename': filename,
+                            'size': stat.st_size,
+                            'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                            'type': 'network',
+                            'backup_type': 'manual',
+                            'storage_location': 'local'
+                        })
             
             backups.sort(key=lambda x: x['created'], reverse=True)
             return {'backups': backups}
@@ -78,8 +122,46 @@ class BackupFileManager:
             return {'error': str(e)}
     
     def get_backup_path(self, filename: str) -> Optional[str]:
-        """Get full path to a backup file"""
+        """Get full path to a backup file (downloads from S3 if needed)"""
         filename = os.path.basename(filename)
+        
+        # Check if S3 storage is enabled
+        use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+        
+        if use_s3:
+            # Check S3 first
+            try:
+                from s3_storage_manager import S3StorageManager
+                settings = self.storage_settings_manager.get_settings()
+                s3_manager = S3StorageManager(
+                    bucket_name=settings['s3_bucket'],
+                    region=settings['s3_region'],
+                    access_key=settings['s3_access_key'],
+                    secret_key=settings['s3_secret_key']
+                )
+                if s3_manager.file_exists(filename):
+                    # Download to temp directory (outside backups directory)
+                    temp_path = os.path.join(self.temp_dir, filename)
+                    # Ensure directory exists
+                    os.makedirs(os.path.dirname(temp_path), exist_ok=True)
+                    print(f"📥 Downloading {filename} from S3 to {temp_path}")
+                    download_result = s3_manager.download_file(filename, temp_path)
+                    if download_result.get('success'):
+                        if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                            print(f"✅ Successfully downloaded {filename} from S3 ({os.path.getsize(temp_path)} bytes)")
+                            return temp_path
+                        else:
+                            print(f"⚠️  Download reported success but file not found or empty: {temp_path}")
+                    else:
+                        print(f"⚠️  S3 download failed: {download_result.get('error', 'Unknown error')}")
+                else:
+                    print(f"ℹ️  File {filename} not found in S3, checking local storage")
+            except Exception as e:
+                print(f"⚠️  Error downloading from S3: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        # Fall back to local
         file_path = os.path.join(self.backup_dir, filename)
         if os.path.exists(file_path):
             return file_path
@@ -88,15 +170,45 @@ class BackupFileManager:
     def delete_backup(self, filename: str, user: Optional[str] = None) -> Dict[str, Any]:
         """Delete a backup file"""
         filename = os.path.basename(filename)
-        file_path = os.path.join(self.backup_dir, filename)
         
-        if not os.path.exists(file_path):
+        # Check if S3 storage is enabled
+        use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+        
+        deleted = False
+        
+        if use_s3:
+            # Delete from S3
+            try:
+                from s3_storage_manager import S3StorageManager
+                settings = self.storage_settings_manager.get_settings()
+                s3_manager = S3StorageManager(
+                    bucket_name=settings['s3_bucket'],
+                    region=settings['s3_region'],
+                    access_key=settings['s3_access_key'],
+                    secret_key=settings['s3_secret_key']
+                )
+                if s3_manager.file_exists(filename):
+                    delete_result = s3_manager.delete_file(filename)
+                    if delete_result.get('success'):
+                        deleted = True
+            except Exception as e:
+                print(f"⚠️  Error deleting from S3: {e}")
+        
+        # Also try local deletion
+        file_path = os.path.join(self.backup_dir, filename)
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                deleted = True
+            except Exception as e:
+                if not deleted:
+                    return {'error': f'Failed to delete backup: {str(e)}'}
+        
+        if not deleted:
             return {'error': 'Backup file not found'}
         
+        # Log backup deletion
         try:
-            os.remove(file_path)
-            
-            # Log backup deletion
             if self.audit_log_manager:
                 self.audit_log_manager.log_event(
                     operation_type='delete_backup',
@@ -104,38 +216,73 @@ class BackupFileManager:
                     backup_filename=filename,
                     user=user
                 )
-            
-            return {'success': True, 'message': 'Backup deleted'}
         except Exception as e:
-            # Log deletion error
-            if self.audit_log_manager:
-                self.audit_log_manager.log_event(
-                    operation_type='delete_backup',
-                    status='error',
-                    backup_filename=filename,
-                    error_message=str(e),
-                    user=user
-                )
-            return {'error': str(e)}
+            print(f"⚠️  Error logging backup deletion: {e}")
+        
+        return {'success': True, 'message': 'Backup deleted'}
     
     def delete_all_backups(self, user: Optional[str] = None) -> Dict[str, Any]:
-        """Delete all backup files"""
+        """Delete all backup files (from both S3 and local storage)"""
         try:
-            if not os.path.exists(self.backup_dir):
-                return {'success': True, 'message': 'Backup directory empty', 'deleted_count': 0}
-            
             deleted_count = 0
             deleted_files = []
-            for filename in os.listdir(self.backup_dir):
-                file_path = os.path.join(self.backup_dir, filename)
-                if os.path.isfile(file_path):
-                    if filename.endswith(('.tar.gz', '.zip')) or (filename.startswith('network_') and filename.endswith('.json')):
-                        try:
-                            os.remove(file_path)
-                            deleted_count += 1
-                            deleted_files.append(filename)
-                        except Exception:
-                            pass
+            
+            # Check if S3 storage is enabled
+            use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+            
+            if use_s3:
+                # Delete all backups from S3
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                    
+                    # List all files from S3
+                    list_result = s3_manager.list_files()
+                    if list_result.get('success'):
+                        s3_files = list_result.get('files', [])
+                        for file_info in s3_files:
+                            filename = file_info.get('key', '')  # Use 'key' not 'name'
+                            # Only delete backup files (tar.gz, zip, network JSON)
+                            if filename.endswith(('.tar.gz', '.zip')) or (filename.startswith('network_') and filename.endswith('.json')):
+                                try:
+                                    delete_result = s3_manager.delete_file(filename)
+                                    if delete_result.get('success'):
+                                        deleted_count += 1
+                                        deleted_files.append(filename)
+                                        print(f"✅ Deleted {filename} from S3")
+                                    else:
+                                        print(f"⚠️  Failed to delete {filename} from S3: {delete_result.get('error', 'Unknown error')}")
+                                except Exception as e:
+                                    print(f"⚠️  Error deleting {filename} from S3: {e}")
+                                    import traceback
+                                    traceback.print_exc()
+                    else:
+                        print(f"⚠️  Error listing S3 files: {list_result.get('error', 'Unknown error')}")
+                except Exception as e:
+                    print(f"⚠️  Error deleting from S3: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Also delete local backups
+            if os.path.exists(self.backup_dir):
+                for filename in os.listdir(self.backup_dir):
+                    file_path = os.path.join(self.backup_dir, filename)
+                    if os.path.isfile(file_path):
+                        if filename.endswith(('.tar.gz', '.zip')) or (filename.startswith('network_') and filename.endswith('.json')):
+                            try:
+                                os.remove(file_path)
+                                # Only count if not already counted from S3
+                                if filename not in deleted_files:
+                                    deleted_count += 1
+                                    deleted_files.append(filename)
+                            except Exception as e:
+                                print(f"⚠️  Error deleting local file {filename}: {e}")
             
             # Log deletion of all backups
             if self.audit_log_manager and deleted_count > 0:
@@ -145,6 +292,9 @@ class BackupFileManager:
                     user=user,
                     details={'deleted_count': deleted_count, 'deleted_files': deleted_files, 'all': True}
                 )
+            
+            if deleted_count == 0:
+                return {'success': True, 'message': 'No backups found to delete', 'deleted_count': 0}
             
             return {
                 'success': True,
@@ -169,22 +319,53 @@ class BackupFileManager:
                 return {'error': 'Only .tar.gz files are allowed'}
             
             filename = secure_filename(filename)
-            file_path = os.path.join(self.backup_dir, filename)
             
-            with open(file_path, 'wb') as f:
-                f.write(file_content)
-            
-            # Verify it's a valid backup
+            # Verify it's a valid backup first
+            import io
             try:
-                with tarfile.open(file_path, 'r:gz') as tar:
+                with tarfile.open(fileobj=io.BytesIO(file_content), mode='r:gz') as tar:
                     try:
                         metadata_file = tar.getmember('./backup_metadata.json')
+                        metadata_str = tar.extractfile(metadata_file).read().decode('utf-8')
+                        metadata = json.loads(metadata_str)
                     except KeyError:
-                        os.remove(file_path)
                         return {'error': 'Invalid backup file: missing metadata'}
+            except tarfile.TarError:
+                return {'error': 'Invalid tar.gz file'}
+            except Exception as e:
+                return {'error': f'Error processing backup: {str(e)}'}
+            
+            # Check if S3 storage is enabled
+            use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+            
+            if use_s3:
+                # Upload to S3
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                    upload_result = s3_manager.upload_fileobj(io.BytesIO(file_content), filename)
+                    if not upload_result.get('success'):
+                        return {'error': f'S3 upload failed: {upload_result.get("error", "Unknown error")}'}
                     
-                    metadata_str = tar.extractfile(metadata_file).read().decode('utf-8')
-                    metadata = json.loads(metadata_str)
+                    return {
+                        'success': True,
+                        'filename': filename,
+                        'metadata': metadata,
+                        'message': 'Backup uploaded to S3 successfully'
+                    }
+                except Exception as e:
+                    return {'error': f'S3 upload error: {str(e)}'}
+            else:
+                # Save locally
+                file_path = os.path.join(self.backup_dir, filename)
+                with open(file_path, 'wb') as f:
+                    f.write(file_content)
                 
                 return {
                     'success': True,
@@ -192,12 +373,6 @@ class BackupFileManager:
                     'metadata': metadata,
                     'message': 'Backup uploaded successfully'
                 }
-            except tarfile.TarError:
-                os.remove(file_path)
-                return {'error': 'Invalid tar.gz file'}
-            except Exception as e:
-                os.remove(file_path)
-                return {'error': f'Error processing backup: {str(e)}'}
         except Exception as e:
             return {'error': str(e)}
     
@@ -299,20 +474,79 @@ class BackupFileManager:
         except Exception as e:
             print(f"⚠️ Error in cleanup_old_download_sessions: {e}")
     
+    def cleanup_old_temp_files(self, max_age_hours: int = 24):
+        """Clean up old temp files from S3 downloads that are older than specified hours"""
+        try:
+            if not os.path.exists(self.temp_dir):
+                return
+            
+            current_time = datetime.now()
+            cleaned_count = 0
+            
+            for filename in os.listdir(self.temp_dir):
+                file_path = os.path.join(self.temp_dir, filename)
+                if not os.path.isfile(file_path):
+                    continue
+                
+                try:
+                    stat = os.stat(file_path)
+                    file_age = (current_time - datetime.fromtimestamp(stat.st_mtime)).total_seconds()
+                    age_hours = file_age / 3600
+                    
+                    if age_hours > max_age_hours:
+                        os.remove(file_path)
+                        cleaned_count += 1
+                        print(f"🧹 Cleaned up old temp file: {filename} (age: {age_hours:.1f} hours)")
+                except Exception as e:
+                    print(f"⚠️ Error cleaning temp file {filename}: {e}")
+            
+            if cleaned_count > 0:
+                print(f"✅ Cleaned up {cleaned_count} old temp file(s)")
+        except Exception as e:
+            print(f"⚠️ Error in cleanup_old_temp_files: {e}")
+    
     def prepare_download_all(self) -> Dict[str, Any]:
-        """Get list of files to download and create a session"""
+        """Get list of files to download and create a session (from both S3 and local)"""
         self.cleanup_old_download_sessions()
         
         try:
-            if not os.path.exists(self.backup_dir):
-                return {'error': 'Backup directory not found'}
-            
             files_to_backup = []
-            for filename in os.listdir(self.backup_dir):
-                file_path = os.path.join(self.backup_dir, filename)
-                if os.path.isfile(file_path):
-                    if filename.endswith(('.zip', '.tar.gz')) or (filename.startswith('network_') and filename.endswith('.json')):
-                        files_to_backup.append(filename)
+            
+            # Check if S3 storage is enabled
+            use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+            
+            if use_s3:
+                # List backups from S3
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                    s3_result = s3_manager.list_files()
+                    if s3_result.get('success'):
+                        for file_info in s3_result.get('files', []):
+                            filename = file_info.get('key', '')
+                            # Only include backup files (tar.gz, zip, network JSON)
+                            if filename.endswith(('.tar.gz', '.zip')) or (filename.startswith('network_') and filename.endswith('.json')):
+                                files_to_backup.append(filename)
+                except Exception as e:
+                    print(f"⚠️  Error listing S3 backups: {e}")
+                    import traceback
+                    traceback.print_exc()
+            
+            # Also list local backups (for migration or fallback)
+            if os.path.exists(self.backup_dir):
+                for filename in os.listdir(self.backup_dir):
+                    file_path = os.path.join(self.backup_dir, filename)
+                    if os.path.isfile(file_path):
+                        if filename.endswith(('.zip', '.tar.gz')) or (filename.startswith('network_') and filename.endswith('.json')):
+                            # Only add if not already in list from S3
+                            if filename not in files_to_backup:
+                                files_to_backup.append(filename)
             
             if not files_to_backup:
                 return {'error': 'No backups found to download'}
@@ -328,6 +562,7 @@ class BackupFileManager:
                 'archive_path': None,
                 'archive_filename': None,
                 'temp_dir': None,
+                'use_s3': use_s3,
                 'created_at': datetime.now().isoformat()
             }
             
@@ -355,27 +590,80 @@ class BackupFileManager:
         }
     
     def _create_archive_background(self, session_id: str, files_to_backup: List[str], archive_path: str, archive_filename: str):
-        """Background thread function to create a tar.gz archive"""
+        """Background thread function to create a tar.gz archive (downloads from S3 if needed)"""
         try:
             progress = self.download_all_progress[session_id]
             progress['status'] = 'archiving'
             progress['archive_path'] = archive_path
             progress['archive_filename'] = archive_filename
             
+            use_s3 = progress.get('use_s3', False)
+            s3_manager = None
+            
+            if use_s3:
+                # Initialize S3 manager if needed
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                except Exception as e:
+                    print(f"⚠️  Error initializing S3 manager: {e}")
+                    use_s3 = False
+            
             tar_thread_complete = threading.Event()
             tar_thread_error = [None]
             
             def create_tar():
                 try:
+                    # Create a temp directory for S3 downloads
+                    download_temp_dir = os.path.join(progress.get('temp_dir', tempfile.gettempdir()), 's3_downloads')
+                    os.makedirs(download_temp_dir, exist_ok=True)
+                    
                     with tarfile.open(archive_path, "w:gz") as tar:
                         for i, filename in enumerate(files_to_backup):
-                            file_path = os.path.join(self.backup_dir, filename)
-                            if os.path.exists(file_path):
-                                progress['current_file'] = filename
-                                progress['completed'] = i
+                            progress['current_file'] = filename
+                            progress['completed'] = i
+                            
+                            file_path = None
+                            
+                            # Try S3 first if enabled
+                            if use_s3 and s3_manager:
+                                try:
+                                    if s3_manager.file_exists(filename):
+                                        # Download from S3 to temp location
+                                        temp_file_path = os.path.join(download_temp_dir, filename)
+                                        download_result = s3_manager.download_file(filename, temp_file_path)
+                                        if download_result.get('success') and os.path.exists(temp_file_path):
+                                            file_path = temp_file_path
+                                            print(f"📥 Downloaded {filename} from S3 for archive")
+                                        else:
+                                            print(f"⚠️  Failed to download {filename} from S3: {download_result.get('error', 'Unknown error')}")
+                                except Exception as e:
+                                    print(f"⚠️  Error downloading {filename} from S3: {e}")
+                            
+                            # Fall back to local if not found in S3 or S3 disabled
+                            if not file_path:
+                                local_file_path = os.path.join(self.backup_dir, filename)
+                                if os.path.exists(local_file_path):
+                                    file_path = local_file_path
+                            
+                            if file_path and os.path.exists(file_path):
                                 tar.add(file_path, arcname=filename)
                             else:
-                                print(f"⚠️  Warning: File not found: {file_path}")
+                                print(f"⚠️  Warning: File not found: {filename}")
+                    
+                    # Clean up temp S3 downloads
+                    try:
+                        if os.path.exists(download_temp_dir):
+                            shutil.rmtree(download_temp_dir)
+                            print(f"🧹 Cleaned up temp S3 downloads directory")
+                    except Exception as e:
+                        print(f"⚠️  Error cleaning temp S3 downloads: {e}")
                     
                     if os.path.exists(archive_path):
                         with tarfile.open(archive_path, 'r:gz') as verify_tar:

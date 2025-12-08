@@ -59,12 +59,13 @@ def parse_size_string(size_str: str) -> int:
         return 0
 
 
-def get_dashboard_stats(backup_dir: str) -> Dict[str, Any]:
+def get_dashboard_stats(backup_dir: str, backup_file_manager=None) -> Dict[str, Any]:
     """
     Get dashboard statistics
     
     Args:
         backup_dir: Path to backup directory
+        backup_file_manager: Optional BackupFileManager instance to get backups from both local and S3
         
     Returns:
         Dict with dashboard statistics
@@ -205,63 +206,77 @@ def get_dashboard_stats(backup_dir: str) -> Dict[str, Any]:
     backups_qty = 0
     total_backups_size_bytes = 0
     
-    # Get backup files count
-    # Backup files are in backups/ subdirectory
-    backups_subdir = os.path.join(backup_dir, 'backups')
-    if os.path.exists(backups_subdir):
-        backup_files = [name for name in os.listdir(backups_subdir) 
-                       if os.path.isfile(os.path.join(backups_subdir, name)) 
-                       and (name.endswith(('.zip', '.tar.gz')) 
-                            or (name.startswith('network_') and name.endswith('.json')))]
-        backups_qty = len(backup_files)
-    
-    # Get backup vault size from the app's volume
-    try:
-        df_result = subprocess.run(
-            ['docker', 'system', 'df', '-v'],
-            capture_output=True, text=True, timeout=10
-        )
-        if df_result.returncode == 0:
-            output_lines = df_result.stdout.split('\n')
-            in_volumes_section = False
-            
-            for line in output_lines:
-                line = line.strip()
-                if 'LOCAL VOLUMES' in line.upper() or 'VOLUME NAME' in line.upper():
-                    in_volumes_section = True
-                    continue
-                if in_volumes_section:
-                    if ('BUILD CACHE' in line.upper() or 
-                        ('CONTAINER' in line.upper() and 'ID' in line.upper()) or 
-                        ('IMAGE' in line.upper() and 'REPOSITORY' in line.upper()) or
-                        (':' in line and 'USAGE' in line.upper())):
-                        break
-                    if not line or line.startswith('-') or 'VOLUME NAME' in line.upper():
-                        continue
-                    parts = line.split()
-                    if len(parts) >= 3:
-                        vol_name = parts[0]
-                        if vol_name.upper() in ['BUILD', 'CACHE', 'CONTAINER', 'IMAGE', 'LOCAL', 'VOLUMES']:
-                            break
-                        if vol_name == APP_VOLUME_NAME:
-                            size_str = parts[2]
-                            if any(unit in size_str.upper() for unit in ['B', 'K', 'M', 'G', 'T']):
-                                total_backups_size_bytes = parse_size_string(size_str)
-                                break
-    except Exception as e:
-        print(f"Warning: Could not get backup vault size from volume: {e}")
-    
-    # Fallback: try direct du on the backup directory mountpoint
-    if total_backups_size_bytes == 0 and os.path.exists(backups_subdir):
+    # Use backup_file_manager if provided to get backups from both local and S3
+    if backup_file_manager:
         try:
-            du_result = subprocess.run(
-                ['du', '-sb', backups_subdir],
-                capture_output=True, text=True, timeout=5
-            )
-            if du_result.returncode == 0:
-                total_backups_size_bytes = int(du_result.stdout.split()[0])
+            backups_result = backup_file_manager.list_backups()
+            if backups_result.get('backups'):
+                backups = backups_result['backups']
+                backups_qty = len(backups)
+                total_backups_size_bytes = sum(b.get('size', 0) for b in backups)
         except Exception as e:
-            print(f"Warning: Could not get backup vault size via du: {e}")
+            print(f"Warning: Could not get backups from backup_file_manager: {e}")
+            # Fall through to local-only counting
+    
+    # Fallback to local-only counting if backup_file_manager not provided or failed
+    if backups_qty == 0:
+        # Get backup files count
+        # Backup files are in backups/ subdirectory
+        backups_subdir = os.path.join(backup_dir, 'backups')
+        if os.path.exists(backups_subdir):
+            backup_files = [name for name in os.listdir(backups_subdir) 
+                           if os.path.isfile(os.path.join(backups_subdir, name)) 
+                           and (name.endswith(('.zip', '.tar.gz')) 
+                                or (name.startswith('network_') and name.endswith('.json')))]
+            backups_qty = len(backup_files)
+        
+        # Get backup vault size from the app's volume
+        try:
+            df_result = subprocess.run(
+                ['docker', 'system', 'df', '-v'],
+                capture_output=True, text=True, timeout=10
+            )
+            if df_result.returncode == 0:
+                output_lines = df_result.stdout.split('\n')
+                in_volumes_section = False
+                
+                for line in output_lines:
+                    line = line.strip()
+                    if 'LOCAL VOLUMES' in line.upper() or 'VOLUME NAME' in line.upper():
+                        in_volumes_section = True
+                        continue
+                    if in_volumes_section:
+                        if ('BUILD CACHE' in line.upper() or 
+                            ('CONTAINER' in line.upper() and 'ID' in line.upper()) or 
+                            ('IMAGE' in line.upper() and 'REPOSITORY' in line.upper()) or
+                            (':' in line and 'USAGE' in line.upper())):
+                            break
+                        if not line or line.startswith('-') or 'VOLUME NAME' in line.upper():
+                            continue
+                        parts = line.split()
+                        if len(parts) >= 3:
+                            vol_name = parts[0]
+                            if vol_name.upper() in ['BUILD', 'CACHE', 'CONTAINER', 'IMAGE', 'LOCAL', 'VOLUMES']:
+                                break
+                            if vol_name == APP_VOLUME_NAME:
+                                size_str = parts[2]
+                                if any(unit in size_str.upper() for unit in ['B', 'K', 'M', 'G', 'T']):
+                                    total_backups_size_bytes = parse_size_string(size_str)
+                                    break
+        except Exception as e:
+            print(f"Warning: Could not get backup vault size from volume: {e}")
+        
+        # Fallback: try direct du on the backup directory mountpoint
+        if total_backups_size_bytes == 0 and os.path.exists(backups_subdir):
+            try:
+                du_result = subprocess.run(
+                    ['du', '-sb', backups_subdir],
+                    capture_output=True, text=True, timeout=5
+                )
+                if du_result.returncode == 0:
+                    total_backups_size_bytes = int(du_result.stdout.split()[0])
+            except Exception as e:
+                print(f"Warning: Could not get backup vault size via du: {e}")
 
     total_backups_size_str = format_size(total_backups_size_bytes)
 

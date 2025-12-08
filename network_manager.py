@@ -12,16 +12,18 @@ from typing import Dict, Any, Optional
 class NetworkManager:
     """Manages Docker network operations"""
     
-    def __init__(self, backup_dir: str):
+    def __init__(self, backup_dir: str, storage_settings_manager=None):
         """
         Initialize NetworkManager
         
         Args:
             backup_dir: Base directory (network backups go in backups/ subdirectory)
+            storage_settings_manager: Optional StorageSettingsManager instance for S3 storage
         """
         # Network backups go in backups/ subdirectory
         self.backup_dir = os.path.join(backup_dir, 'backups')
         os.makedirs(self.backup_dir, exist_ok=True)
+        self.storage_settings_manager = storage_settings_manager
     
     def list_networks(self) -> Dict[str, Any]:
         """List all Docker networks with detailed information"""
@@ -149,8 +151,37 @@ class NetworkManager:
             backup_filename = f"network_{network_name}_{timestamp}.json"
             backup_path = os.path.join(self.backup_dir, backup_filename)
             
+            # Write to local file first
             with open(backup_path, 'w') as f:
                 json.dump(network_info, f, indent=2)
+            
+            # Check if S3 storage is enabled
+            use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+            
+            if use_s3:
+                # Upload to S3
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                    print(f"☁️ Uploading {backup_filename} to S3...")
+                    upload_result = s3_manager.upload_file(backup_path, backup_filename)
+                    if upload_result.get('success'):
+                        print(f"✅ Successfully uploaded {backup_filename} to S3.")
+                        # Remove local file after successful S3 upload
+                        os.remove(backup_path)
+                        print(f"🗑️ Removed local backup file: {backup_path}")
+                    else:
+                        print(f"⚠️  S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+                        # Keep local file if S3 upload fails
+                except Exception as e:
+                    print(f"⚠️  Error uploading to S3: {e}")
+                    # Keep local file if S3 upload fails
             
             return {
                 'success': True,
@@ -180,12 +211,42 @@ class NetworkManager:
             return {'error': str(e)}
     
     def restore_network(self, filename: str) -> Dict[str, Any]:
-        """Restore a network from backup file"""
+        """Restore a network from backup file (downloads from S3 if needed)"""
         if not filename:
             return {'error': 'Filename required'}
         
         filename = os.path.basename(filename)
         file_path = os.path.join(self.backup_dir, filename)
+        
+        # Check if S3 storage is enabled
+        use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+        
+        # If file doesn't exist locally, try downloading from S3
+        if not os.path.exists(file_path) and use_s3:
+            try:
+                from s3_storage_manager import S3StorageManager
+                settings = self.storage_settings_manager.get_settings()
+                s3_manager = S3StorageManager(
+                    bucket_name=settings['s3_bucket'],
+                    region=settings['s3_region'],
+                    access_key=settings['s3_access_key'],
+                    secret_key=settings['s3_secret_key']
+                )
+                if s3_manager.file_exists(filename):
+                    # Download from S3 to temp location
+                    temp_dir = os.path.join(self.backup_dir, 'temp')
+                    os.makedirs(temp_dir, exist_ok=True)
+                    temp_path = os.path.join(temp_dir, filename)
+                    print(f"📥 Downloading {filename} from S3 to {temp_path}")
+                    download_result = s3_manager.download_file(filename, temp_path)
+                    if download_result.get('success') and os.path.exists(temp_path):
+                        file_path = temp_path
+                        print(f"✅ Successfully downloaded {filename} from S3")
+                    else:
+                        return {'error': f'Failed to download backup from S3: {download_result.get("error", "Unknown error")}'}
+            except Exception as e:
+                print(f"⚠️  Error downloading from S3: {e}")
+                return {'error': f'Failed to download backup from S3: {str(e)}'}
         
         if not os.path.exists(file_path):
             return {'error': 'Backup file not found'}
@@ -193,6 +254,14 @@ class NetworkManager:
         try:
             with open(file_path, 'r') as f:
                 network_config = json.load(f)
+            
+            # Clean up temp file if it was downloaded from S3
+            if file_path.startswith(os.path.join(self.backup_dir, 'temp')):
+                try:
+                    os.remove(file_path)
+                    print(f"🧹 Cleaned up temporary file: {file_path}")
+                except Exception as e:
+                    print(f"⚠️  Error cleaning up temp file: {e}")
             
             network_name = network_config.get('Name', '')
             if not network_name:
@@ -288,19 +357,52 @@ class NetworkManager:
             if not filename.startswith('network_') or not filename.endswith('.json'):
                 return {'error': 'Invalid filename. Network backups must start with "network_" and end with ".json"'}
             
-            file_path = os.path.join(self.backup_dir, filename)
+            # Check if S3 storage is enabled
+            use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
             
-            if os.path.exists(file_path):
-                return {'error': 'File already exists'}
-            
-            with open(file_path, 'wb') as f:
-                f.write(file_content)
-            
-            return {
-                'success': True,
-                'filename': filename,
-                'message': 'Network backup uploaded successfully'
-            }
+            if use_s3:
+                # Upload to S3
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    import io
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                    
+                    # Check if file already exists in S3
+                    if s3_manager.file_exists(filename):
+                        return {'error': 'File already exists'}
+                    
+                    upload_result = s3_manager.upload_fileobj(io.BytesIO(file_content), filename)
+                    if not upload_result.get('success'):
+                        return {'error': f'S3 upload failed: {upload_result.get("error", "Unknown error")}'}
+                    
+                    return {
+                        'success': True,
+                        'filename': filename,
+                        'message': 'Network backup uploaded to S3 successfully'
+                    }
+                except Exception as e:
+                    return {'error': f'S3 upload error: {str(e)}'}
+            else:
+                # Save locally
+                file_path = os.path.join(self.backup_dir, filename)
+                
+                if os.path.exists(file_path):
+                    return {'error': 'File already exists'}
+                
+                with open(file_path, 'wb') as f:
+                    f.write(file_content)
+                
+                return {
+                    'success': True,
+                    'filename': filename,
+                    'message': 'Network backup uploaded successfully'
+                }
         except Exception as e:
             return {'error': str(e)}
 

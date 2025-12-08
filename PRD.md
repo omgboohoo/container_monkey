@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.2.15**
+**Version 0.3.0**
 
 ## Overview
 
@@ -62,18 +62,29 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - Backup download/upload (single and bulk)
 - Bulk backup operations with queue management
 - **Backup Type Tracking**: Backups tagged as Manual or Scheduled in backup vault
+- **Storage Location Tracking**: Backup vault shows storage location (Local or S3) for each backup
+- **S3 Storage Support**: Optional cloud storage for backups
+  - Toggle between local and S3 storage from backup vault interface
+  - S3 configuration modal with bucket name, region, access key, and secret key fields
+  - Test connection button to verify S3 read/write permissions
+  - S3 credentials encrypted at rest in database
+  - All backups (manual, scheduled, uploaded) automatically use selected storage type
+  - S3 backups download to temp directory for restore operations
+  - Temp files automatically cleaned up after restore completes
 - **Backup Scheduler**: Automated scheduled backups
   - Single schedule configuration (daily or weekly)
   - Select containers to include in scheduled backups
   - Daily schedule: backup at specific hour (0-23)
   - Weekly schedule: backup on specific day of week and hour
-  - Lifecycle management: specify number of scheduled backups to keep
+  - Lifecycle management: specify number of scheduled backups to keep per container
   - Manual backups never auto-deleted
-  - Scheduled backups automatically cleaned up based on lifecycle
+  - Scheduled backups automatically cleaned up based on lifecycle (per container)
   - Cleanup runs after all backups complete (monitored, not fixed delay)
   - Real-time auto-save: configuration saves automatically as changes are made
   - Real-time system clock display on scheduler page
   - Scheduler enabled when one or more containers are selected
+  - Works seamlessly with both local and S3 storage
+  - Force Backup button: Trigger scheduled backups immediately, runs in background
 
 ### Volume Management
 - Volume listing and exploration
@@ -133,17 +144,17 @@ POST   /api/container/<id>/redeploy             # Redeploy container
 ```
 POST   /api/backup/<container_id>               # Create container backup
                                                       # Query params: ?queue=true for bulk operations
-GET    /api/backups                             # List all backups
+GET    /api/backups                             # List all backups (from S3 and local)
 GET    /api/backup/<filename>/preview            # Preview backup contents
-POST   /api/restore-backup                      # Restore backup
-DELETE /api/backup/<filename>                   # Delete backup
-GET    /api/download/<filename>                 # Download backup file
-POST   /api/upload-backup                       # Upload backup file
-POST   /api/backups/download-all-prepare        # Prepare bulk download
+POST   /api/restore-backup                      # Restore backup (downloads from S3 if needed)
+DELETE /api/backup/<filename>                   # Delete backup (from S3 or local)
+GET    /api/download/<filename>                 # Download backup file (from S3 or local)
+POST   /api/upload-backup                       # Upload backup file (to S3 or local)
+POST   /api/backups/download-all-prepare        # Prepare bulk download (includes S3 backups)
 GET    /api/backups/download-all-progress/<id>  # Get bulk download progress
-POST   /api/backups/download-all-create/<id>    # Create bulk archive
+POST   /api/backups/download-all-create/<id>    # Create bulk archive (downloads S3 backups to temp)
 GET    /api/backups/download-all/<id>           # Download bulk archive
-DELETE /api/backups/delete-all                  # Delete all backups
+DELETE /api/backups/delete-all                  # Delete all backups (from S3 and local)
 GET    /api/backup-progress/<progress_id>       # Get backup progress (exempt from rate limiting)
 GET    /api/backup/status                       # Get backup status (includes queue size)
 ```
@@ -154,6 +165,13 @@ GET    /api/scheduler/config                    # Get scheduler configuration
 POST   /api/scheduler/config                    # Update scheduler configuration
 POST   /api/scheduler/test                      # Trigger scheduled backups immediately (for testing)
 POST   /api/scheduler/cleanup                   # Manually trigger cleanup of old scheduled backups
+```
+
+### Storage Settings Endpoints
+```
+GET    /api/storage/settings                    # Get storage settings (local/S3)
+POST   /api/storage/settings                    # Update storage settings
+POST   /api/storage/test-s3                     # Test S3 connection and permissions
 ```
 
 ### Volume Endpoints
@@ -182,11 +200,11 @@ DELETE /api/stack/<name>/delete                  # Delete stack
 ### Network Endpoints
 ```
 GET    /api/networks                            # List all networks
-POST   /api/network/<id>/backup                 # Backup network
-POST   /api/network/restore                     # Restore network backup
+POST   /api/network/<id>/backup                 # Backup network (uploads to S3 if enabled)
+POST   /api/network/restore                     # Restore network backup (downloads from S3 if needed)
 DELETE /api/network/<id>/delete                 # Delete network
-GET    /api/network-backups                     # List network backups
-POST   /api/upload-network-backup               # Upload network backup
+GET    /api/network-backups                     # List network backups (from S3 and local)
+POST   /api/upload-network-backup               # Upload network backup (to S3 or local)
 ```
 
 ### System Endpoints
@@ -242,12 +260,14 @@ GET    /console/<container_id>                  # Container console page
 3. **Modular Backup System**: Backup functionality separated into `backup_manager.py` and `backup_file_manager.py` modules for maintainability
 4. **Sequential Backup Queue**: Queue processor ensures backups complete fully (including tar.gz writing) before starting next
 5. **Session-based Authentication**: SQLite database stores user credentials with password hashing for security (`auth_manager.py`)
-6. **Volume-based Storage**: Backups stored in Docker volume for persistence across container restarts
-7. **Client-side Polling**: Stats updated via 5-second polling intervals for real-time updates
-8. **Rate Limiting**: Flask-Limiter protects API endpoints (progress endpoint exempt for frequent polling)
-9. **Progressive Enhancement**: Works without JavaScript for basic functionality, enhanced with JS
-10. **Self-filtering**: Application filters itself from container/image/volume listings to avoid recursion
-11. **Backup Completion Verification**: Ensures tar.gz files are fully written before marking backup complete
+6. **Volume-based Storage**: Backups stored in Docker volume for persistence across container restarts, with optional S3 cloud storage
+7. **Encrypted Credentials**: S3 access keys and secret keys encrypted at rest in database using Fernet symmetric encryption
+8. **Client-side Polling**: Stats updated via 5-second polling intervals for real-time updates
+9. **Rate Limiting**: Flask-Limiter protects API endpoints (progress endpoint exempt for frequent polling)
+10. **Progressive Enhancement**: Works without JavaScript for basic functionality, enhanced with JS
+11. **Self-filtering**: Application filters itself from container/image/volume listings to avoid recursion
+12. **Backup Completion Verification**: Ensures tar.gz files are fully written before marking backup complete
+13. **S3 Integration**: Seamless integration with AWS S3 for cloud backup storage with encrypted credentials
 
 ## Performance Considerations
 
@@ -263,7 +283,7 @@ GET    /console/<container_id>                  # Container console page
 
 - Requires Docker socket access (run with appropriate permissions)
 - **Built-in authentication**: Session-based login system with SQLite user database (`auth_manager.py`)
-- Default credentials: username `monkeysee`, password `monkeydo` (should be changed in production)
+- Default credentials: username `admin`, password `c0Nta!nerM0nK3y#Q92x` (should be changed in production)
 - All API endpoints require authentication (except `/api/login`, `/api/logout`, `/api/auth-status`)
 - File uploads validated and sanitized
 - Container commands executed with user permissions

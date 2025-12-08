@@ -42,10 +42,12 @@ class RestoreManager:
         self.generate_docker_compose = generate_docker_compose_fn
         self.audit_log_manager = audit_log_manager
     
-    def preview_backup(self, filename: str) -> Dict:
-        """Preview backup contents without restoring"""
-        backup_path = os.path.join(self.backup_dir, filename)
+    def preview_backup(self, backup_path: str) -> Dict:
+        """Preview backup contents without restoring
         
+        Args:
+            backup_path: Full path to the backup file (can be local or temp file from S3)
+        """
         if not os.path.exists(backup_path):
             return {'error': 'Backup file not found'}
         

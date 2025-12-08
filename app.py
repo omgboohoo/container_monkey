@@ -29,6 +29,7 @@ from restore_manager import RestoreManager
 from scheduler_manager import SchedulerManager
 from audit_log_manager import AuditLogManager
 from database_manager import DatabaseManager
+from storage_settings_manager import StorageSettingsManager
 from system_manager import (
     get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
@@ -64,12 +65,13 @@ DatabaseManager(db_path)
 # All managers now use the unified monkey.db database
 auth_manager = AuthManager(db_path)
 audit_log_manager = AuditLogManager(db_path)
+storage_settings_manager = StorageSettingsManager(db_path)
 container_manager = ContainerManager()
 volume_manager = VolumeManager()
-network_manager = NetworkManager(app.config['BACKUP_DIR'])
+network_manager = NetworkManager(app.config['BACKUP_DIR'], storage_settings_manager=storage_settings_manager)
 image_manager = ImageManager()
 stack_manager = StackManager()
-backup_file_manager = BackupFileManager(app.config['BACKUP_DIR'], audit_log_manager=audit_log_manager)
+backup_file_manager = BackupFileManager(app.config['BACKUP_DIR'], audit_log_manager=audit_log_manager, storage_settings_manager=storage_settings_manager)
 
 # Initialize backup manager
 backup_manager = None
@@ -81,7 +83,8 @@ if docker_api_client:
         app_volume_name=docker_utils.APP_VOLUME_NAME,
         reconstruct_docker_run_command_fn=docker_utils.reconstruct_docker_run_command,
         generate_docker_compose_fn=docker_utils.generate_docker_compose,
-        audit_log_manager=audit_log_manager
+        audit_log_manager=audit_log_manager,
+        storage_settings_manager=storage_settings_manager
     )
     print("✅ Backup manager initialized")
 
@@ -175,7 +178,7 @@ def auth_status():
 # UI routes
 @app.route('/')
 def index():
-    stats = get_dashboard_stats(app.config['BACKUP_DIR'])
+    stats = get_dashboard_stats(app.config['BACKUP_DIR'], backup_file_manager=backup_file_manager)
     # Add scheduled containers count and next run
     if scheduler_manager:
         stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
@@ -193,7 +196,7 @@ def console_page(container_id):
 # System routes
 @app.route('/api/dashboard-stats')
 def dashboard_stats():
-    stats = get_dashboard_stats(app.config['BACKUP_DIR'])
+    stats = get_dashboard_stats(app.config['BACKUP_DIR'], backup_file_manager=backup_file_manager)
     # Add scheduled containers count and next run
     if scheduler_manager:
         stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
@@ -600,7 +603,7 @@ def preview_backup(filename):
     if not file_path:
         return jsonify({'error': 'Backup file not found'}), 404
     
-    result = restore_manager.preview_backup(filename)
+    result = restore_manager.preview_backup(file_path)
     if 'error' in result:
         status_code = 404 if 'not found' in result['error'].lower() else 400
         return jsonify(result), status_code
@@ -625,7 +628,18 @@ def restore_backup():
     if not file_path:
         return jsonify({'error': 'Backup file not found'}), 404
     
+    # Check if this is a temp file from S3 download
+    is_temp_file = file_path.startswith(backup_file_manager.temp_dir)
+    
     result = restore_manager.restore_backup(file_path, new_name, overwrite_volumes, port_overrides, user=user)
+    
+    # Clean up temp file after restore (whether successful or not)
+    if is_temp_file and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            print(f"🧹 Cleaned up temp file: {file_path}")
+        except Exception as e:
+            print(f"⚠️  Error cleaning up temp file {file_path}: {e}")
     
     if 'error' in result:
         status_code = 400 if 'Invalid' in result['error'] else (409 if 'conflict' in result['error'].lower() or 'already exists' in result['error'].lower() else 500)
@@ -831,6 +845,99 @@ def clear_audit_logs():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Storage Settings API endpoints
+@app.route('/api/storage/settings', methods=['GET'])
+@login_required
+def get_storage_settings():
+    """Get storage settings"""
+    try:
+        settings = storage_settings_manager.get_settings()
+        # Return secret key for modal prepopulation (it's already decrypted and will be obscured in password field)
+        return jsonify({
+            'storage_type': settings['storage_type'],
+            's3_bucket': settings['s3_bucket'],
+            's3_region': settings['s3_region'],
+            's3_access_key': settings['s3_access_key'],
+            's3_secret_key': settings['s3_secret_key']  # Return secret key for prepopulation (obscured in password field)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/storage/settings', methods=['POST'])
+@login_required
+def update_storage_settings():
+    """Update storage settings"""
+    try:
+        data = request.get_json() or {}
+        storage_type = data.get('storage_type', 'local')
+        
+        if storage_type not in ['local', 's3']:
+            return jsonify({'error': 'Invalid storage_type. Must be "local" or "s3"'}), 400
+        
+        if storage_type == 's3':
+            s3_bucket = data.get('s3_bucket', '').strip()
+            s3_region = data.get('s3_region', '').strip()
+            s3_access_key = data.get('s3_access_key', '').strip()
+            s3_secret_key = data.get('s3_secret_key', '').strip()
+            
+            if not s3_bucket or not s3_region or not s3_access_key or not s3_secret_key:
+                return jsonify({'error': 'All S3 fields are required when storage_type is "s3"'}), 400
+            
+            result = storage_settings_manager.update_settings(
+                storage_type=storage_type,
+                s3_bucket=s3_bucket,
+                s3_region=s3_region,
+                s3_access_key=s3_access_key,
+                s3_secret_key=s3_secret_key
+            )
+        else:
+            # When switching to local, preserve existing S3 credentials
+            current_settings = storage_settings_manager.get_settings()
+            result = storage_settings_manager.update_settings(
+                storage_type='local',
+                s3_bucket=current_settings.get('s3_bucket') or None,
+                s3_region=current_settings.get('s3_region') or None,
+                s3_access_key=current_settings.get('s3_access_key') or None,
+                s3_secret_key=current_settings.get('s3_secret_key') or None
+            )
+        
+        if 'error' in result:
+            return jsonify(result), 500
+        
+        return jsonify({
+            'success': True,
+            'settings': storage_settings_manager.get_settings()
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/storage/test-s3', methods=['POST'])
+@login_required
+def test_s3_connection():
+    """Test S3 connection"""
+    try:
+        data = request.get_json() or {}
+        s3_bucket = data.get('s3_bucket', '').strip()
+        s3_region = data.get('s3_region', '').strip()
+        s3_access_key = data.get('s3_access_key', '').strip()
+        s3_secret_key = data.get('s3_secret_key', '').strip()
+        
+        if not s3_bucket or not s3_region or not s3_access_key or not s3_secret_key:
+            return jsonify({'error': 'All S3 fields are required'}), 400
+        
+        from s3_storage_manager import S3StorageManager
+        s3_manager = S3StorageManager(
+            bucket_name=s3_bucket,
+            region=s3_region,
+            access_key=s3_access_key,
+            secret_key=s3_secret_key
+        )
+        
+        result = s3_manager.test_connection()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
 # Error handler removed - was causing issues with error propagation
 # Errors are now handled at the route level
 
@@ -845,6 +952,13 @@ if __name__ == '__main__':
             print(f"⚠️  {result.get('error', 'Unknown error')}")
     except Exception as e:
         print(f"Warning: Failed to cleanup temp containers on startup: {e}")
+    
+    # Clean up old temp files from S3 downloads
+    print("🧹 Cleaning up old temp files...")
+    try:
+        backup_file_manager.cleanup_old_temp_files(max_age_hours=24)
+    except Exception as e:
+        print(f"Warning: Failed to cleanup temp files on startup: {e}")
     
     port = int(os.environ.get('FLASK_PORT', 80))
     

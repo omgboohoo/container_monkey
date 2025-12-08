@@ -72,6 +72,29 @@ class DatabaseManager:
             )
         ''')
         
+        # Create storage_settings table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS storage_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                storage_type TEXT NOT NULL DEFAULT 'local',
+                s3_bucket TEXT,
+                s3_region TEXT,
+                s3_access_key TEXT,
+                s3_secret_key TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Initialize default storage setting if none exists
+        cursor.execute('SELECT COUNT(*) FROM storage_settings')
+        storage_count = cursor.fetchone()[0]
+        if storage_count == 0:
+            cursor.execute('''
+                INSERT INTO storage_settings (storage_type)
+                VALUES (?)
+            ''', ('local',))
+        
         # Create indexes for audit_logs
         indexes = [
             ('idx_audit_timestamp', 'audit_logs', 'timestamp'),
@@ -93,13 +116,13 @@ class DatabaseManager:
         user_count = cursor.fetchone()[0]
         
         if user_count == 0:
-            default_password_hash = generate_password_hash('monkeydo')
+            default_password_hash = generate_password_hash('c0Nta!nerM0nK3y#Q92x')
             try:
                 cursor.execute('''
                     INSERT INTO users (username, password_hash)
                     VALUES (?, ?)
-                ''', ('monkeysee', default_password_hash))
-                print("✅ Created default user (username: monkeysee, password: monkeydo)")
+                ''', ('admin', default_password_hash))
+                print("✅ Created default user (username: admin, password: c0Nta!nerM0nK3y#Q92x)")
             except sqlite3.IntegrityError:
                 pass
         

@@ -19,7 +19,7 @@ class BackupManager:
     
     def __init__(self, docker_api_client, backup_dir: str, app_container_name: str, app_volume_name: str,
                  reconstruct_docker_run_command_fn: Callable, generate_docker_compose_fn: Callable,
-                 audit_log_manager=None):
+                 audit_log_manager=None, storage_settings_manager=None):
         """
         Initialize BackupManager
         
@@ -31,6 +31,7 @@ class BackupManager:
             reconstruct_docker_run_command_fn: Function to reconstruct docker run command
             generate_docker_compose_fn: Function to generate docker-compose yaml
             audit_log_manager: Optional AuditLogManager instance for logging
+            storage_settings_manager: Optional StorageSettingsManager instance for S3 storage
         """
         self.docker_api_client = docker_api_client
         # Backup files go in backups/ subdirectory
@@ -41,6 +42,7 @@ class BackupManager:
         self.reconstruct_docker_run_command = reconstruct_docker_run_command_fn
         self.generate_docker_compose = generate_docker_compose_fn
         self.audit_log_manager = audit_log_manager
+        self.storage_settings_manager = storage_settings_manager
         
         # Progress tracking
         self.backup_progress: Dict[str, Dict] = {}
@@ -627,8 +629,36 @@ class BackupManager:
                 # Check for errors
                 if tar_thread_error[0]:
                     raise tar_thread_error[0]
+                
+                # Upload to S3 if enabled
+                if self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled():
+                    self.backup_progress[progress_id]['step'] = 'Uploading to S3...'
+                    try:
+                        from s3_storage_manager import S3StorageManager
+                        settings = self.storage_settings_manager.get_settings()
+                        s3_manager = S3StorageManager(
+                            bucket_name=settings['s3_bucket'],
+                            region=settings['s3_region'],
+                            access_key=settings['s3_access_key'],
+                            secret_key=settings['s3_secret_key']
+                        )
+                        upload_result = s3_manager.upload_file(backup_path, backup_filename)
+                        if not upload_result.get('success'):
+                            raise Exception(f"S3 upload failed: {upload_result.get('error', 'Unknown error')}")
+                        print(f"✅ Backup uploaded to S3: {backup_filename}")
+                        # Remove local file after successful S3 upload
+                        try:
+                            os.remove(backup_path)
+                            print(f"🗑️  Removed local backup file after S3 upload")
+                        except:
+                            pass
+                    except Exception as e:
+                        print(f"⚠️  S3 upload error: {e}")
+                        # Continue even if S3 upload fails - local file still exists
+                        import traceback
+                        traceback.print_exc()
             
-            # Only mark complete after tar.gz is fully written
+            # Only mark complete after tar.gz is fully written (and uploaded to S3 if enabled)
             self.backup_progress[progress_id]['status'] = 'complete'
             self.backup_progress[progress_id]['step'] = 'Backup completed!'
             self.backup_progress[progress_id]['current_step'] = 6

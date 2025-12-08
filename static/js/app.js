@@ -362,6 +362,7 @@ function showSection(sectionName, navElement) {
     } else if (sectionName === 'stacks') {
         loadStacks();
     } else if (sectionName === 'backups') {
+        loadStorageSettings();
         loadBackups();
     } else if (sectionName === 'statistics') {
         loadStatistics();
@@ -1816,6 +1817,12 @@ function createBackupRow(backup) {
         </div>
     `;
     
+    // Build storage location display
+    const storageLocation = backup.storage_location || 'local';
+    const storageDisplay = storageLocation === 's3'
+        ? '<span style="color: #3b82f6; font-weight: 500;"><i class="ph ph-cloud" style="margin-right: 4px;"></i>S3</span>'
+        : '<span style="color: var(--text-secondary);"><i class="ph ph-hard-drives" style="margin-right: 4px;"></i>Local</span>';
+    
     tr.innerHTML = `
         <td>
             <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(backup.filename)}</div>
@@ -1825,6 +1832,9 @@ function createBackupRow(backup) {
         </td>
         <td>
             ${backupTypeDisplay}
+        </td>
+        <td>
+            ${storageDisplay}
         </td>
         <td>
             <div style="color: var(--text-secondary);">${sizeDisplay}</div>
@@ -4076,6 +4086,9 @@ async function uploadNetworkBackup(event) {
             throw new Error(uploadData.error || 'Upload failed');
         }
         
+        // Refresh backup grid to show the uploaded backup
+        loadBackups();
+        
         // Now restore the network
         showConfirmationModal(`Network backup uploaded. Restore network "${networkConfig.Name}"?`, async () => {
             const restoreResponse = await fetch('/api/network/restore', {
@@ -4101,6 +4114,7 @@ async function uploadNetworkBackup(event) {
             }
             
             loadNetworks();
+            loadBackups(); // Refresh backup grid after restore too
         });
     } catch (error) {
         console.error(`Error uploading/restoring network backup: ${error.message}`);
@@ -4751,6 +4765,9 @@ async function backupSelectedContainers() {
         return;
     }
 
+    // Deduplicate IDs to prevent showing containers twice
+    const uniqueIds = [...new Set(selectedIds)];
+
     // Check backup status first
     try {
         const statusResponse = await fetch('/api/backup/status');
@@ -4789,7 +4806,7 @@ async function backupSelectedContainers() {
     
     // Prepare list of selected containers
     const selectedContainers = [];
-    selectedIds.forEach(id => {
+    uniqueIds.forEach(id => {
         const checkbox = document.querySelector(`.container-checkbox[data-container-id="${id}"]`);
         const row = checkbox.closest('tr');
         const nameElement = row.querySelector('.container-name');
@@ -5515,6 +5532,55 @@ function updateSchedulerStatus() {
     }
 }
 
+async function forceBackup() {
+    const btn = document.getElementById('force-backup-btn');
+    if (!btn) return;
+    
+    // Check if scheduler is enabled
+    if (!schedulerConfig || !schedulerConfig.enabled || !schedulerConfig.selected_containers || schedulerConfig.selected_containers.length === 0) {
+        showNotification('Scheduler is disabled. Please select at least one container to backup.', 'warning');
+        return;
+    }
+    
+    // Disable button and show loading state
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-spinner" style="animation: spin 1s linear infinite;"></i> Running...';
+    
+    try {
+        const response = await fetch('/api/scheduler/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to trigger backup');
+        }
+        
+        const containerCount = schedulerConfig.selected_containers.length;
+        showNotification(`Force backup triggered for ${containerCount} container(s). Backups are running in the background.`, 'success');
+        
+        // Optionally refresh the backup list after a short delay
+        setTimeout(() => {
+            if (currentSection === 'backup-vault-section') {
+                loadBackups();
+            }
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Error triggering force backup:', error);
+        showNotification(`Failed to trigger backup: ${error.message}`, 'error');
+    } finally {
+        // Re-enable button
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+    }
+}
+
 // Debounce timer for auto-save
 let schedulerAutoSaveTimer = null;
 
@@ -5629,6 +5695,258 @@ function updateTimeDisplay() {
         const seconds = String(now.getSeconds()).padStart(2, '0');
         const formatted = `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
         timeEl.textContent = `🕐 ${formatted}`;
+    }
+}
+
+// Storage Settings Functions
+let currentStorageSettings = null;
+
+async function loadStorageSettings() {
+    try {
+        const response = await fetch('/api/storage/settings');
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load storage settings');
+        }
+        
+        currentStorageSettings = data;
+        const toggle = document.getElementById('storage-toggle');
+        if (toggle) {
+            toggle.checked = data.storage_type === 's3';
+        }
+    } catch (error) {
+        console.error('Error loading storage settings:', error);
+    }
+}
+
+async function toggleStorageType() {
+    const toggle = document.getElementById('storage-toggle');
+    if (!toggle) return;
+    
+    if (toggle.checked) {
+        // Switching to S3 - show configuration modal (will load saved settings from database)
+        await showS3ConfigModal();
+    } else {
+        // Switching to local - show confirmation modal
+        showLocalStorageConfirmModal();
+    }
+}
+
+function showLocalStorageConfirmModal() {
+    const modal = document.getElementById('local-storage-confirm-modal');
+    if (!modal) return;
+    modal.style.display = 'block';
+}
+
+function closeLocalStorageConfirmModal() {
+    const modal = document.getElementById('local-storage-confirm-modal');
+    const toggle = document.getElementById('storage-toggle');
+    
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Reset toggle if user cancelled
+    if (toggle && currentStorageSettings && currentStorageSettings.storage_type === 's3') {
+        toggle.checked = true;
+    }
+}
+
+async function confirmSwitchToLocal() {
+    const toggle = document.getElementById('storage-toggle');
+    closeLocalStorageConfirmModal();
+    
+    // Save settings to local
+    await saveStorageSettings('local');
+    
+    // Ensure toggle is unchecked (it should be already, but just in case)
+    if (toggle) {
+        toggle.checked = false;
+    }
+}
+
+async function showS3ConfigModal() {
+    const modal = document.getElementById('s3-config-modal');
+    const errorEl = document.getElementById('s3-config-error');
+    const successEl = document.getElementById('s3-config-success');
+    
+    if (!modal) return;
+    
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+    
+    // Always reload settings from database to get latest values
+    try {
+        const response = await fetch('/api/storage/settings');
+        const data = await response.json();
+        
+        if (response.ok && data) {
+            // Populate form fields with saved settings
+            document.getElementById('s3-bucket').value = data.s3_bucket || '';
+            document.getElementById('s3-region').value = data.s3_region || '';
+            document.getElementById('s3-access-key').value = data.s3_access_key || '';
+            // Populate secret key (will be obscured as password field)
+            document.getElementById('s3-secret-key').value = data.s3_secret_key || '';
+            
+            // Update currentStorageSettings
+            currentStorageSettings = data;
+        }
+    } catch (error) {
+        console.error('Error loading storage settings:', error);
+        // If loading fails, try to use cached settings
+        if (currentStorageSettings) {
+            document.getElementById('s3-bucket').value = currentStorageSettings.s3_bucket || '';
+            document.getElementById('s3-region').value = currentStorageSettings.s3_region || '';
+            document.getElementById('s3-access-key').value = currentStorageSettings.s3_access_key || '';
+            document.getElementById('s3-secret-key').value = currentStorageSettings.s3_secret_key || '';
+        }
+    }
+    
+    modal.style.display = 'block';
+}
+
+function closeS3ConfigModal() {
+    const modal = document.getElementById('s3-config-modal');
+    const toggle = document.getElementById('storage-toggle');
+    
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    
+    // Reset toggle if settings weren't saved
+    if (toggle && currentStorageSettings && currentStorageSettings.storage_type === 'local') {
+        toggle.checked = false;
+    }
+}
+
+async function testS3Connection() {
+    const bucket = document.getElementById('s3-bucket').value.trim();
+    const region = document.getElementById('s3-region').value.trim();
+    const accessKey = document.getElementById('s3-access-key').value.trim();
+    const secretKey = document.getElementById('s3-secret-key').value.trim();
+    
+    if (!bucket || !region || !accessKey || !secretKey) {
+        showS3Error('Please fill in all fields');
+        return;
+    }
+    
+    const errorEl = document.getElementById('s3-config-error');
+    const successEl = document.getElementById('s3-config-success');
+    
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+    
+    // Show loading state
+    const testBtn = event.target.closest('button');
+    const originalText = testBtn.innerHTML;
+    testBtn.disabled = true;
+    testBtn.innerHTML = '<i class="ph ph-spinner" style="animation: spin 1s linear infinite;"></i> Testing...';
+    
+    try {
+        const response = await fetch('/api/storage/test-s3', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                s3_bucket: bucket,
+                s3_region: region,
+                s3_access_key: accessKey,
+                s3_secret_key: secretKey
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            successEl.style.display = 'block';
+            successEl.querySelector('p').textContent = data.message || 'S3 connection test successful!';
+        } else {
+            showS3Error(data.message || 'S3 connection test failed');
+        }
+    } catch (error) {
+        showS3Error(`Error testing connection: ${error.message}`);
+    } finally {
+        testBtn.disabled = false;
+        testBtn.innerHTML = originalText;
+    }
+}
+
+function showS3Error(message) {
+    const errorEl = document.getElementById('s3-config-error');
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+}
+
+async function saveS3Config(event) {
+    event.preventDefault();
+    
+    const bucket = document.getElementById('s3-bucket').value.trim();
+    const region = document.getElementById('s3-region').value.trim();
+    const accessKey = document.getElementById('s3-access-key').value.trim();
+    const secretKey = document.getElementById('s3-secret-key').value.trim();
+    
+    if (!bucket || !region || !accessKey || !secretKey) {
+        showS3Error('Please fill in all fields');
+        return;
+    }
+    
+    const errorEl = document.getElementById('s3-config-error');
+    const successEl = document.getElementById('s3-config-success');
+    
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+    
+    await saveStorageSettings('s3', bucket, region, accessKey, secretKey);
+}
+
+async function saveStorageSettings(storageType, bucket = '', region = '', accessKey = '', secretKey = '') {
+    try {
+        const response = await fetch('/api/storage/settings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                storage_type: storageType,
+                s3_bucket: bucket,
+                s3_region: region,
+                s3_access_key: accessKey,
+                s3_secret_key: secretKey
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save storage settings');
+        }
+        
+        // Update current settings
+        await loadStorageSettings();
+        
+        // Show success message
+        if (storageType === 's3') {
+            const successEl = document.getElementById('s3-config-success');
+            if (successEl) {
+                successEl.style.display = 'block';
+                successEl.querySelector('p').textContent = 'S3 settings saved successfully!';
+            }
+            setTimeout(() => {
+                closeS3ConfigModal();
+                loadBackups(); // Refresh backup list
+            }, 1500);
+        } else {
+            loadBackups(); // Refresh backup list
+        }
+    } catch (error) {
+        if (storageType === 's3') {
+            showS3Error(error.message);
+        } else {
+            console.error('Error saving storage settings:', error);
+            alert(`Error: ${error.message}`);
+        }
     }
 }
 

@@ -599,48 +599,60 @@ body {
 
 /* Backup vault table column widths */
 #backups-table {
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
 }
 
 #backups-table th:nth-child(1),
 #backups-table td:nth-child(1) {
-    width: 25%;
+    width: auto;
     max-width: 300px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
 #backups-table th:nth-child(2),
 #backups-table td:nth-child(2) {
-    width: 8%;
+    width: auto;
     min-width: 80px;
+    white-space: nowrap;
 }
 
 #backups-table th:nth-child(3),
 #backups-table td:nth-child(3) {
-    width: 12%;
+    width: auto;
     min-width: 100px;
+    white-space: nowrap;
 }
 
 #backups-table th:nth-child(4),
 #backups-table td:nth-child(4) {
-    width: 10%;
+    width: auto;
     min-width: 80px;
+    white-space: nowrap;
 }
 
 #backups-table th:nth-child(5),
 #backups-table td:nth-child(5) {
-    width: 15%;
-    min-width: 140px;
+    width: auto;
+    white-space: nowrap;
 }
 
 #backups-table th:nth-child(6),
 #backups-table td:nth-child(6) {
-    width: 30%;
+    width: auto;
     white-space: nowrap;
-    min-width: 300px;
 }
 
-#backups-table td:nth-child(6) .btn-group {
+#backups-table th:nth-child(7),
+#backups-table td:nth-child(7) {
+    width: auto;
+    white-space: nowrap;
+    min-width: 200px;
+}
+
+#backups-table td:nth-child(7) .btn-group {
     white-space: nowrap;
     flex-wrap: nowrap !important;
     display: flex;
@@ -1486,4 +1498,68 @@ select.form-control:focus option:checked {
 
 .notification.error {
     border-left-color: var(--danger);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+}
+
+.toggle-switch input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 48px;
+    height: 24px;
+    background-color: var(--bg-tertiary);
+    border: 2px solid var(--border);
+    border-radius: 24px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.toggle-slider:before {
+    content: "";
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    top: 2px;
+    background-color: var(--text-primary);
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider {
+    background-color: var(--secondary);
+    border-color: var(--secondary);
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-slider:before {
+    transform: translateX(24px);
+    background-color: white;
+}
+
+.toggle-switch:hover .toggle-slider {
+    border-color: var(--border-hover);
+}
+
+.toggle-switch input[type="checkbox"]:checked:hover + .toggle-slider {
+    background-color: var(--secondary-hover);
+    border-color: var(--secondary-hover);
+}
+
+.toggle-switch input[type="checkbox"]:focus + .toggle-slider {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }

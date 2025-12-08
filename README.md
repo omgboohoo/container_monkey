@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.2.15**
+**Version 0.3.0**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -11,11 +11,12 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - **Image Management**: View and delete Docker images, cleanup dangling images
 - **Network Management**: Backup and restore Docker networks, view containers using each network
 - **Backup & Restore**: Full container backup with volumes, port mappings, and restore functionality
-- **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules
+- **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules, force backup option
+- **S3 Storage Support**: Store backups in AWS S3 with encrypted credentials, toggle between local and S3 storage
 - **Backup Audit Log**: Comprehensive audit logging for all backup operations, restores, and lifecycle management
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
 - **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
-- **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled
+- **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled and storage location (Local/S3)
 - **Web Console**: Interactive terminal access to containers
 - **Logs Viewer**: Real-time container logs viewing
 - **Bulk Operations**: Select multiple containers/volumes/images for batch operations
@@ -36,8 +37,8 @@ chmod +x build_deploy_local_docker.sh
 Access the web UI at: http://localhost:666
 
 **Default login credentials:**
-- Username: `monkeysee`
-- Password: `monkeydo`
+- Username: `admin`
+- Password: `c0Nta!nerM0nK3y#Q92x`
 
 ### Docker / Cloud Deployment
 
@@ -71,8 +72,8 @@ sudo docker run -d \
 Access the web UI at: http://your-server:666
 
 **Default login credentials:**
-- Username: `monkeysee`
-- Password: `monkeydo`
+- Username: `admin`
+- Password: `c0Nta!nerM0nK3y#Q92x`
 
 ## Requirements
 
@@ -180,19 +181,24 @@ The application has been refactored into a modular architecture with separate ma
   - `auth_manager.py` - Authentication and user management
   - `container_manager.py` - Container operations
   - `backup_manager.py` - Backup operations with queue support
-  - `backup_file_manager.py` - Backup file management
+  - `backup_file_manager.py` - Backup file management (S3 and local)
   - `restore_manager.py` - Restore operations
   - `volume_manager.py` - Volume management
   - `image_manager.py` - Image management
-  - `network_manager.py` - Network management
+  - `network_manager.py` - Network management (S3 and local backups)
   - `stack_manager.py` - Docker stack management
   - `system_manager.py` - System monitoring and stats
   - `scheduler_manager.py` - Scheduled backup management
   - `audit_log_manager.py` - Audit logging for backup operations
-- **Storage**: Docker volumes for backup persistence
-- **Database**: SQLite for user management and audit logs
+  - `storage_settings_manager.py` - Storage settings management (local vs S3)
+  - `s3_storage_manager.py` - S3 storage operations
+  - `encryption_utils.py` - Encryption utilities for securing credentials
+- **Storage**: Docker volumes for backup persistence with optional AWS S3 cloud storage
+- **Database**: SQLite for user management, audit logs, and storage settings
 - **Rate Limiting**: Flask-Limiter for API protection
 - **Authentication**: Session-based with password hashing
+- **Encryption**: Fernet symmetric encryption for S3 credentials at rest
+- **Documentation**: Includes `AWS_S3_SETUP.md` guide for S3 configuration
 
 ## Security Notes
 

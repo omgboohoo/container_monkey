@@ -159,9 +159,12 @@ class SchedulerManager:
         self.calculate_next_run()
         self.save_config()
         
-        # Restart scheduler if running
+        # Stop scheduler if it was running (to restart with new config)
         if self.scheduler_running:
             self.stop_scheduler()
+        
+        # Start scheduler if containers are selected (regardless of previous state)
+        if self.is_enabled():
             self.start_scheduler()
     
     def calculate_next_run(self):

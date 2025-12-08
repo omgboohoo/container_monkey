@@ -24,9 +24,6 @@
                         <i class="ph-fill ph-cube"></i>
                         <span>Container Monkey</span>
                     </h1>
-                    <div class="top-bar-tagline">
-                        Secure Your <span class="tagline-accent">Docker Environment</span>
-                    </div>
                 </div>
                 <div class="top-bar-right">
                     <div class="top-bar-stats" id="top-bar-stats">
@@ -116,7 +113,7 @@
                     <i class="ph-fill ph-github-logo"></i>
                     <span>GitHub</span>
                 </a>
-                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.2.15</span>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.3.0</span>
             </div>
         </aside>
 
@@ -436,18 +433,29 @@
             <section id="backups-section" class="content-section" style="display: none;">
                 <div class="section-header">
                     <h2><i class="ph ph-shield-check" style="margin-right: 12px;"></i>Backup Vault</h2>
-                    <div>
-                        <button type="button" class="btn btn-primary btn-sm" style="margin-right: 10px;" onclick="document.getElementById('backup-upload').click();">
-                            <i class="ph ph-upload-simple"></i> Upload Backup
-                        </button>
-                        <input type="file" id="backup-upload" accept=".tar.gz" style="display: none;" onchange="uploadBackup(event)" multiple>
-                        <button type="button" class="btn btn-primary btn-sm" style="margin-right: 10px;" onclick="document.getElementById('network-upload').click();">
-                            <i class="ph ph-upload-simple"></i> Upload Network Backup
-                        </button>
-                        <input type="file" id="network-upload" accept=".json" style="display: none;" onchange="uploadNetworkBackup(event)">
-                        <button class="btn btn-primary btn-sm" onclick="loadBackups()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
-                        <button class="btn btn-success btn-sm" style="margin-left: 10px;" onclick="downloadAllBackups()"><i class="ph ph-download-simple"></i> Download All</button>
-                        <button class="btn btn-danger btn-sm" style="margin-left: 10px;" onclick="deleteAllBackups()"><i class="ph ph-trash"></i> Delete All</button>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border);">
+                            <span style="font-size: 0.9em; color: var(--text-secondary);">Storage:</span>
+                            <label class="toggle-switch" for="storage-toggle">
+                                <span style="font-size: 0.9em; color: var(--text-primary);">Local</span>
+                                <input type="checkbox" id="storage-toggle" onchange="toggleStorageType()">
+                                <span class="toggle-slider"></span>
+                                <span style="font-size: 0.9em; color: var(--text-primary);">S3</span>
+                            </label>
+                        </div>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('backup-upload').click();">
+                                <i class="ph ph-upload-simple"></i> Upload Backup
+                            </button>
+                            <input type="file" id="backup-upload" accept=".tar.gz" style="display: none;" onchange="uploadBackup(event)" multiple>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('network-upload').click();">
+                                <i class="ph ph-upload-simple"></i> Upload Network Backup
+                            </button>
+                            <input type="file" id="network-upload" accept=".json" style="display: none;" onchange="uploadNetworkBackup(event)">
+                            <button class="btn btn-primary btn-sm" onclick="loadBackups()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
+                            <button class="btn btn-success btn-sm" onclick="downloadAllBackups()"><i class="ph ph-download-simple"></i> Download All</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteAllBackups()"><i class="ph ph-trash"></i> Delete All</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -463,6 +471,7 @@
                                 <th>Filename</th>
                                 <th>Type</th>
                                 <th>Backup Type</th>
+                                <th>Storage</th>
                                 <th>Size</th>
                                 <th>Created</th>
                                 <th style="white-space: nowrap;">Actions</th>
@@ -479,8 +488,13 @@
             <section id="backup-scheduler-section" class="content-section" style="display: none;">
                 <div class="section-header">
                     <h2><i class="ph ph-clock-clockwise" style="margin-right: 12px;"></i>Backup Scheduler</h2>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <div id="current-time" style="font-size: 0.9em; color: var(--text-secondary); font-family: monospace; margin-right: 10px;"></div>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <div id="current-time" style="font-size: 0.9em; color: var(--text-secondary); font-family: monospace; margin-right: 0;"></div>
+                        <div class="btn-group">
+                            <button class="btn btn-primary btn-sm" onclick="forceBackup()" id="force-backup-btn">
+                                <i class="ph ph-play"></i> Force Backup
+                            </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -542,7 +556,7 @@
                                 </select>
                             </div>
                             <div>
-                                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Lifecycle (backups to keep)</label>
+                                <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--text-primary);">Lifecycle (backups per container to keep)</label>
                                 <input type="number" id="schedule-lifecycle" class="form-control" min="1" value="7" style="width: 100%;" onchange="autoSaveSchedulerConfig();" oninput="autoSaveSchedulerConfig();">
                             </div>
                         </div>
@@ -1049,6 +1063,79 @@
                 <div class="modal-actions">
                     <button type="button" class="btn btn-secondary btn-sm" onclick="closeChangeUsernameModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary btn-sm">Change Username</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- S3 Storage Configuration Modal -->
+    <!-- Local Storage Confirmation Modal -->
+    <div id="local-storage-confirm-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close" onclick="closeLocalStorageConfirmModal()">&times;</span>
+            <h2 style="margin-top: 0; display: flex; align-items: center; gap: 10px;">
+                <i class="ph ph-hard-drive" style="font-size: 1.5em; color: var(--secondary);"></i>
+                Switch to Local Storage?
+            </h2>
+            <div style="margin: 20px 0;">
+                <p style="color: var(--text-primary); line-height: 1.6; margin-bottom: 16px;">
+                    All new backups will be stored locally on your Docker volume instead of S3.
+                </p>
+                <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+                    <p style="color: var(--text-secondary); font-size: 0.9em; margin: 0; line-height: 1.6;">
+                        <strong style="color: var(--text-primary);">Note:</strong> Existing S3 backups will remain in S3. Only new backups will be stored locally.
+                    </p>
+                </div>
+            </div>
+            <div class="modal-actions" style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeLocalStorageConfirmModal()">Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="confirmSwitchToLocal()">
+                    <i class="ph ph-check"></i> Switch to Local
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="s3-config-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" onclick="closeS3ConfigModal()">&times;</span>
+            <h2 style="margin-top: 0;">S3 Storage Configuration</h2>
+            <div id="s3-config-error" class="error" style="display: none; margin-bottom: 20px;"></div>
+            <div id="s3-config-success" class="success-message" style="display: none; margin-bottom: 20px;">
+                <h3>Success!</h3>
+                <p id="s3-config-success-message">S3 settings saved successfully.</p>
+            </div>
+            <form id="s3-config-form" onsubmit="saveS3Config(event); return false;">
+                <div style="margin-bottom: 20px;">
+                    <label for="s3-bucket" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">S3 Bucket Name <span style="color: var(--danger);">*</span></label>
+                    <input type="text" id="s3-bucket" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="my-backup-bucket">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="s3-region" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">AWS Region <span style="color: var(--danger);">*</span></label>
+                    <input type="text" id="s3-region" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="us-east-1">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label for="s3-access-key" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Access Key ID <span style="color: var(--danger);">*</span></label>
+                    <input type="text" id="s3-access-key" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="AKIAIOSFODNN7EXAMPLE">
+                </div>
+                <div style="margin-bottom: 24px;">
+                    <label for="s3-secret-key" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Secret Access Key <span style="color: var(--danger);">*</span></label>
+                    <input type="password" id="s3-secret-key" required
+                           style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                           placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY">
+                </div>
+                <div class="modal-actions" style="display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="testS3Connection()" style="flex: 1;">
+                        <i class="ph ph-check-circle"></i> Test Connection
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="closeS3ConfigModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Save Settings</button>
                 </div>
             </form>
         </div>

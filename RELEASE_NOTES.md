@@ -1,5 +1,108 @@
 # Release Notes
 
+## Version 0.3.0
+
+### New Features
+- **S3 Storage Support**: Added comprehensive AWS S3 storage integration for backups
+  - Toggle switch on backup vault screen to switch between Local and S3 storage
+  - S3 configuration modal with fields for bucket name, region, access key ID, and secret access key
+  - Test connection button to verify S3 read/write permissions before saving
+  - Settings automatically saved to `monkey.db` database
+  - All backups (uploaded, manual, scheduled) automatically use selected storage type
+  - Storage location column in backup vault showing Local or S3 for each backup
+  - S3 credentials encrypted at rest in database using Fernet symmetric encryption with static key
+  - Temp files downloaded from S3 stored in separate temp directory (not visible in vault)
+  - Automatic cleanup of temp files after restore operations complete
+  - Old temp files (>24 hours) cleaned up on application startup
+
+- **Storage Settings Management**:
+  - New `storage_settings` table in database for storing storage configuration
+  - `StorageSettingsManager` module for managing storage settings with encryption
+  - `S3StorageManager` module for S3 operations (upload, download, list, delete, test)
+  - `encryption_utils` module for encrypting/decrypting S3 credentials
+  - Settings persist across app restarts and populate modal when switching back to S3
+
+### UI Improvements
+- **Storage Toggle Switch**: Modern toggle switch UI for Local/S3 storage selection
+  - Beautiful animated toggle switch matching app design
+  - Smooth transitions and hover effects
+  - Clear visual indication of current storage type
+- **S3 Configuration Modal**: Professional modal interface for S3 settings
+  - Form fields for all required S3 configuration
+  - Test connection button with loading state
+  - Success/error message display
+  - Auto-populates saved settings (including obscured secret key) when switching back to S3
+- **Local Storage Confirmation Modal**: Proper modal dialog for switching to local storage
+  - Replaces browser confirm dialog with styled modal
+  - Clear messaging about storage behavior
+  - Professional UI matching app design
+- **Backup Vault Table**: Added Storage column showing Local or S3 for each backup
+  - Auto-sized columns for better layout
+  - Clear visual indicators with icons (cloud for S3, hard drive for Local)
+- **Force Backup Button**: Added "Force Backup" button on Backup Scheduler page
+  - Triggers scheduled backups immediately
+  - Runs in background with progress tracking
+  - Shows loading state and notifications
+- **Backup Grid Auto-Refresh**: Backup grid automatically refreshes after network backup upload
+- **Consistent Button Spacing**: Standardized button spacing across all sections
+  - Backup Scheduler and Backup Vault buttons now match Container page spacing (8px gap)
+  - All buttons wrapped in `btn-group` for consistent styling
+- **Improved Backup Vault Table**: Filename column now properly wraps long filenames
+  - Added word-wrap and overflow-wrap CSS properties
+  - Long filenames like scheduled backups no longer spill out of column
+- **Clarified Lifecycle Setting**: Updated label to "Lifecycle (backups per container to keep)" for clarity
+- **Simplified Top Bar**: Removed tagline "Secure Your Docker Environment" from under logo for cleaner look
+
+### Backend Changes
+- Added `s3_storage_manager.py` module for S3 operations using boto3
+- Added `storage_settings_manager.py` module for storage settings management
+- Added `encryption_utils.py` module for credential encryption
+- Updated `backup_manager.py` to upload backups to S3 when enabled
+- Updated `backup_file_manager.py` to list/download/delete from S3 when enabled
+- Updated `restore_manager.py` to handle S3 backups via temp file downloads
+- Updated `network_manager.py` to support S3 storage for network backups
+- Added storage settings API endpoints: `/api/storage/settings` (GET/POST), `/api/storage/test-s3`
+- Added `storage_settings` table to database schema
+- Temp directory (`/backups/temp/`) for S3 downloads during restore operations
+- Automatic cleanup of temp files after restore and on startup
+- **Delete All** functionality now deletes backups from both S3 and local storage
+- **Download All** functionality now includes S3 backups in archive (downloads from S3 to temp location)
+- Network backups now upload to S3 when S3 storage is enabled
+- Network backup restore downloads from S3 when needed
+- S3 credentials preserved when switching from S3 to local storage
+
+### Security Improvements
+- **Encrypted S3 Credentials**: S3 access keys and secret keys encrypted at rest in database
+  - Uses Fernet symmetric encryption with PBKDF2 key derivation
+  - Static encryption key ensures consistency across app restarts
+  - Credentials automatically encrypted when saving, decrypted when reading
+  - Migration support for existing unencrypted credentials
+
+### Bug Fixes
+- **Fixed S3 modal prepopulation**: S3 configuration modal now properly populates all fields (including secret key) when switching back to S3
+- **Fixed delete all with S3**: Delete All button now correctly deletes backups from S3 storage
+- **Fixed download all with S3**: Download All now includes S3 backups in archive (downloads from S3 to temp location before archiving)
+- **Fixed network backups S3 support**: Network backups now properly upload to and restore from S3 when enabled
+- **Fixed S3 credentials preservation**: S3 credentials are now preserved when switching from S3 to local storage
+- **Fixed temp file cleanup**: Temporary S3 download files properly cleaned up after restore operations
+- **Fixed duplicate containers in backup queue**: Backup All modal now shows each container only once instead of duplicates
+  - Added deduplication logic to prevent containers from appearing twice in the queue
+
+### Security Updates
+- **Updated default credentials**: Changed default login from `monkeysee/monkeydo` to `admin/c0Nta!nerM0nK3y#Q92x` for improved security and to stop google password nag
+
+### Dependencies
+- Added `boto3==1.34.0` for AWS S3 integration
+- Added `cryptography==42.0.0` for credential encryption
+
+### Documentation
+- Added `AWS_S3_SETUP.md` guide with step-by-step instructions for setting up S3 bucket, IAM user, and inline policy
+
+### Version Update
+- Updated version number to 0.3.0 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.2.15
 
 ### Bug Fixes
