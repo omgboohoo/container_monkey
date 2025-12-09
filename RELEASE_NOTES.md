@@ -1,5 +1,52 @@
 # Release Notes
 
+## Version 0.3.1
+
+### UI Improvements
+- **Unified Backup Upload**: Combined upload backup and upload network backup into a single upload function
+  - Single "Upload Backup" button accepts both `.tar.gz` container backups and `.json` network backups
+  - Removed separate "Upload Network Backup" button for cleaner interface
+  - Network restore prompt appears after successful JSON upload
+
+- **Backup Vault Search & Sort**: Enhanced backup vault with powerful search and sorting capabilities
+  - **Search Filter**: Real-time search across filename, type, backup type, storage location, and creation date
+    - Positioned in header row (left of storage toggle)
+    - Case-insensitive with instant filtering
+    - Filter persists during sorting operations
+  - **Sortable Columns**: All backup vault columns are sortable (Filename, Type, Backup Type, Storage, Size, Created)
+    - Visual sort indicators (▲/▼) show active column and direction
+    - Sort state persists when reloading backups
+    - Size sorts numerically, Created sorts by date/time
+  - **Layout Improvements**: 
+    - Search box matches button height (36px) for consistent alignment with storage toggle and action buttons
+    - Optimized column widths: Actions column sized to fit buttons only, all other columns (except Filename) shrink to content width
+    - Filename column expands to fill remaining table space for better readability
+
+- **Sortable Grid Columns**: Added column sorting to all major grids
+  - **Volumes**: Sortable by Name, Driver, Mountpoint, Created, Size
+  - **Images**: Sortable by Name/Tags, ID, Size, Created
+  - **Networks**: Sortable by Name, Driver, Scope, Subnet/Gateway, Containers
+  - **Stacks**: Sortable by Stack Name, Type, Services, Containers, Networks
+  - All grids feature visual sort indicators and persistent sort state
+  - Numeric columns (Size, Containers, Services) sort numerically
+  - Date columns sort chronologically
+
+### Backend Changes
+- Updated `/api/upload-backup` endpoint to handle both `.tar.gz` and `.json` files
+  - Automatically routes to appropriate handler based on file extension
+- Removed `/api/upload-network-backup` endpoint (functionality merged into `/api/upload-backup`)
+
+### Frontend Changes
+- Added search and sort functions for backup vault (`filterBackups()`, `sortBackups()`, `renderBackups()`)
+- Added sort functions for volumes, images, networks, and stacks grids
+- Added data storage arrays and sort state management for all grids
+- Removed `uploadNetworkBackup()` function (functionality merged into `uploadBackup()`)
+
+### Version Update
+- Updated version number to 0.3.1 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.0
 
 ### New Features
@@ -785,8 +832,8 @@
 ### Cleanup
 - Removed old backup files (`app.py.backup`, `app_refactored.py`)
 - Cleaned up unused files from project root
-
 ### Technical Improvements
 - Better code organization and separation of concerns
 - Improved maintainability with modular design
 - Enhanced error handling in backup operations
+

@@ -1441,6 +1441,28 @@ window.debugBlockingElements = function() {
 };
 
 // Load backups
+// Store all backups for filtering and sorting
+let allBackups = [];
+let currentBackupSortColumn = null;
+let currentBackupSortDirection = 'asc'; // 'asc' or 'desc'
+
+// Store data for sorting - Volumes, Images, Networks, Stacks
+let allVolumes = [];
+let currentVolumeSortColumn = null;
+let currentVolumeSortDirection = 'asc';
+
+let allImages = [];
+let currentImageSortColumn = null;
+let currentImageSortDirection = 'asc';
+
+let allNetworks = [];
+let currentNetworkSortColumn = null;
+let currentNetworkSortDirection = 'asc';
+
+let allStacks = [];
+let currentStackSortColumn = null;
+let currentStackSortDirection = 'asc';
+
 async function loadBackups() {
     const errorEl = document.getElementById('backups-error');
     const backupsList = document.getElementById('backups-list');
@@ -1449,6 +1471,10 @@ async function loadBackups() {
     
     errorEl.style.display = 'none';
     backupsList.innerHTML = '';
+    
+    // Clear search input when reloading
+    const searchInput = document.getElementById('backup-search-input');
+    if (searchInput) searchInput.value = '';
     
     // Show spinner and prevent scrollbars
     if (backupsSpinner) backupsSpinner.style.display = 'flex';
@@ -1462,14 +1488,22 @@ async function loadBackups() {
             throw new Error(data.error || 'Failed to load backups');
         }
         
-        if (data.backups.length === 0) {
-            backupsList.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #666;">No backups found</td></tr>';
-        } else {
-            data.backups.forEach(backup => {
-                const row = createBackupRow(backup);
-                backupsList.appendChild(row);
-            });
+        // Store all backups for filtering and sorting
+        allBackups = data.backups || [];
+        
+        // Apply current sort if any, then render
+        let backupsToDisplay = allBackups;
+        if (currentBackupSortColumn) {
+            backupsToDisplay = sortBackupsData([...allBackups], currentBackupSortColumn, currentBackupSortDirection);
+            // Restore sort indicator
+            const sortIndicator = document.getElementById(`sort-backup-${currentBackupSortColumn}`);
+            if (sortIndicator) {
+                sortIndicator.textContent = currentBackupSortDirection === 'asc' ? ' ▲' : ' ▼';
+                sortIndicator.style.color = 'var(--accent)';
+            }
         }
+        
+        renderBackups(backupsToDisplay);
         
     } catch (error) {
         errorEl.textContent = `Error: ${error.message}`;
@@ -1823,6 +1857,14 @@ function createBackupRow(backup) {
         ? '<span style="color: #3b82f6; font-weight: 500;"><i class="ph ph-cloud" style="margin-right: 4px;"></i>S3</span>'
         : '<span style="color: var(--text-secondary);"><i class="ph ph-hard-drives" style="margin-right: 4px;"></i>Local</span>';
     
+    // Add data attributes for filtering
+    tr.setAttribute('data-filename', backup.filename.toLowerCase());
+    tr.setAttribute('data-type', backupType);
+    tr.setAttribute('data-backup-type', backupTypeValue);
+    tr.setAttribute('data-storage', storageLocation);
+    tr.setAttribute('data-size', backup.size.toString());
+    tr.setAttribute('data-created', createdDate.toLowerCase());
+    
     tr.innerHTML = `
         <td>
             <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(backup.filename)}</div>
@@ -1850,7 +1892,474 @@ function createBackupRow(backup) {
     return tr;
 }
 
-// Upload backup
+// Filter backups based on search input
+function filterBackups() {
+    const searchInput = document.getElementById('backup-search-input');
+    const backupsList = document.getElementById('backups-list');
+    
+    if (!searchInput || !backupsList) return;
+    
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const rows = backupsList.querySelectorAll('.backup-row');
+    
+    // Remove any existing "no results" message
+    const noResultsRow = backupsList.querySelector('tr[data-no-results]');
+    if (noResultsRow) {
+        noResultsRow.remove();
+    }
+    
+    if (!searchTerm) {
+        // Show all rows if search is empty
+        rows.forEach(row => {
+            row.style.display = '';
+        });
+        return;
+    }
+    
+    // Filter rows based on search term
+    let visibleCount = 0;
+    rows.forEach(row => {
+        const filename = row.getAttribute('data-filename') || '';
+        const type = row.getAttribute('data-type') || '';
+        const backupType = row.getAttribute('data-backup-type') || '';
+        const storage = row.getAttribute('data-storage') || '';
+        const created = row.getAttribute('data-created') || '';
+        
+        // Check if search term matches any field
+        const matches = filename.includes(searchTerm) ||
+                       type.includes(searchTerm) ||
+                       backupType.includes(searchTerm) ||
+                       storage.includes(searchTerm) ||
+                       created.includes(searchTerm);
+        
+        if (matches) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Show "no results" message if no rows match (but only if there are backups to filter)
+    if (visibleCount === 0 && rows.length > 0) {
+        const tr = document.createElement('tr');
+        tr.setAttribute('data-no-results', 'true');
+        tr.innerHTML = '<td colspan="7" style="text-align: center; padding: 40px; color: #666;">No backups match your search</td>';
+        backupsList.appendChild(tr);
+    }
+}
+
+// Sort backups
+function sortBackups(column) {
+    // Toggle sort direction if clicking the same column
+    if (currentBackupSortColumn === column) {
+        currentBackupSortDirection = currentBackupSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentBackupSortColumn = column;
+        currentBackupSortDirection = 'asc';
+    }
+    
+    // Update sort indicators (only for backup table)
+    document.querySelectorAll('#backups-table .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.style.color = '';
+    });
+    
+    const sortIndicator = document.getElementById(`sort-backup-${column}`);
+    if (sortIndicator) {
+        sortIndicator.textContent = currentBackupSortDirection === 'asc' ? ' ▲' : ' ▼';
+        sortIndicator.style.color = 'var(--accent)';
+    }
+    
+    // Sort and re-render backups
+    const sorted = sortBackupsData([...allBackups], column, currentBackupSortDirection);
+    renderBackups(sorted);
+}
+
+// Helper function to sort backup data
+function sortBackupsData(backups, column, direction) {
+    return backups.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(column) {
+            case 'filename':
+                aVal = (a.filename || '').toLowerCase();
+                bVal = (b.filename || '').toLowerCase();
+                break;
+            case 'type':
+                const aType = a.type || (a.filename.endsWith('.zip') ? 'container' : 'network');
+                const bType = b.type || (b.filename.endsWith('.zip') ? 'container' : 'network');
+                aVal = aType.toLowerCase();
+                bVal = bType.toLowerCase();
+                break;
+            case 'backup-type':
+                aVal = (a.backup_type || 'manual').toLowerCase();
+                bVal = (b.backup_type || 'manual').toLowerCase();
+                break;
+            case 'storage':
+                aVal = (a.storage_location || 'local').toLowerCase();
+                bVal = (b.storage_location || 'local').toLowerCase();
+                break;
+            case 'size':
+                aVal = a.size || 0;
+                bVal = b.size || 0;
+                break;
+            case 'created':
+                aVal = new Date(a.created || 0).getTime();
+                bVal = new Date(b.created || 0).getTime();
+                break;
+            default:
+                return 0;
+        }
+        
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+// Render backups to the table
+function renderBackups(backups) {
+    const backupsList = document.getElementById('backups-list');
+    const backupsWrapper = document.getElementById('backups-table-wrapper');
+    
+    if (!backupsList) return;
+    
+    backupsList.innerHTML = '';
+    
+    if (backups.length === 0) {
+        backupsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No backups found</td></tr>';
+    } else {
+        backups.forEach(backup => {
+            const row = createBackupRow(backup);
+            backupsList.appendChild(row);
+        });
+    }
+    
+    // Apply current filter if any
+    const searchInput = document.getElementById('backup-search-input');
+    if (searchInput && searchInput.value.trim()) {
+        filterBackups();
+    }
+}
+
+// Sort Volumes
+function sortVolumes(column) {
+    if (currentVolumeSortColumn === column) {
+        currentVolumeSortDirection = currentVolumeSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentVolumeSortColumn = column;
+        currentVolumeSortDirection = 'asc';
+    }
+    
+    document.querySelectorAll('#volumes-table .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.style.color = '';
+    });
+    
+    const sortIndicator = document.getElementById(`sort-volume-${column}`);
+    if (sortIndicator) {
+        sortIndicator.textContent = currentVolumeSortDirection === 'asc' ? ' ▲' : ' ▼';
+        sortIndicator.style.color = 'var(--accent)';
+    }
+    
+    const sorted = sortVolumesData([...allVolumes], column, currentVolumeSortDirection);
+    renderVolumes(sorted);
+}
+
+function sortVolumesData(volumes, column, direction) {
+    return volumes.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(column) {
+            case 'name':
+                aVal = (a.name || '').toLowerCase();
+                bVal = (b.name || '').toLowerCase();
+                break;
+            case 'driver':
+                aVal = (a.driver || '').toLowerCase();
+                bVal = (b.driver || '').toLowerCase();
+                break;
+            case 'mountpoint':
+                aVal = (a.mountpoint || '').toLowerCase();
+                bVal = (b.mountpoint || '').toLowerCase();
+                break;
+            case 'created':
+                aVal = new Date(a.created || 0).getTime();
+                bVal = new Date(b.created || 0).getTime();
+                break;
+            case 'size':
+                // Parse size string (e.g., "1.5 GB" -> bytes)
+                const parseSize = (sizeStr) => {
+                    if (!sizeStr || sizeStr === 'N/A') return 0;
+                    const match = sizeStr.match(/^([\d.]+)\s*(KB|MB|GB|TB|B)$/i);
+                    if (!match) return 0;
+                    const value = parseFloat(match[1]);
+                    const unit = match[2].toUpperCase();
+                    const multipliers = {B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024, TB: 1024*1024*1024*1024};
+                    return value * (multipliers[unit] || 1);
+                };
+                aVal = parseSize(a.size);
+                bVal = parseSize(b.size);
+                break;
+            default:
+                return 0;
+        }
+        
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function renderVolumes(volumes) {
+    const volumesList = document.getElementById('volumes-list');
+    if (!volumesList) return;
+    
+    volumesList.innerHTML = '';
+    
+    if (volumes.length === 0) {
+        volumesList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No volumes found</td></tr>';
+    } else {
+        volumes.forEach(volume => {
+            const row = createVolumeRow(volume);
+            volumesList.appendChild(row);
+        });
+    }
+}
+
+// Sort Images
+function sortImages(column) {
+    if (currentImageSortColumn === column) {
+        currentImageSortDirection = currentImageSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentImageSortColumn = column;
+        currentImageSortDirection = 'asc';
+    }
+    
+    document.querySelectorAll('#images-table .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.style.color = '';
+    });
+    
+    const sortIndicator = document.getElementById(`sort-image-${column}`);
+    if (sortIndicator) {
+        sortIndicator.textContent = currentImageSortDirection === 'asc' ? ' ▲' : ' ▼';
+        sortIndicator.style.color = 'var(--accent)';
+    }
+    
+    const sorted = sortImagesData([...allImages], column, currentImageSortDirection);
+    renderImages(sorted);
+}
+
+function sortImagesData(images, column, direction) {
+    return images.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(column) {
+            case 'name':
+                aVal = (a.name || '').toLowerCase();
+                bVal = (b.name || '').toLowerCase();
+                break;
+            case 'id':
+                aVal = (a.id || '').toLowerCase();
+                bVal = (b.id || '').toLowerCase();
+                break;
+            case 'size':
+                // Parse size string (e.g., "1.5 GB" -> bytes)
+                const parseSize = (sizeStr) => {
+                    if (!sizeStr) return 0;
+                    const match = sizeStr.match(/^([\d.]+)\s*(KB|MB|GB|TB|B)$/i);
+                    if (!match) return 0;
+                    const value = parseFloat(match[1]);
+                    const unit = match[2].toUpperCase();
+                    const multipliers = {B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024, TB: 1024*1024*1024*1024};
+                    return value * (multipliers[unit] || 1);
+                };
+                aVal = parseSize(a.size);
+                bVal = parseSize(b.size);
+                break;
+            case 'created':
+                aVal = new Date(a.created || 0).getTime();
+                bVal = new Date(b.created || 0).getTime();
+                break;
+            default:
+                return 0;
+        }
+        
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function renderImages(images) {
+    const imagesList = document.getElementById('images-list');
+    if (!imagesList) return;
+    
+    imagesList.innerHTML = '';
+    
+    if (images.length === 0) {
+        imagesList.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #666;">No images found</td></tr>';
+    } else {
+        images.forEach(image => {
+            const row = createImageRow(image);
+            imagesList.appendChild(row);
+        });
+    }
+}
+
+// Sort Networks
+function sortNetworks(column) {
+    if (currentNetworkSortColumn === column) {
+        currentNetworkSortDirection = currentNetworkSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentNetworkSortColumn = column;
+        currentNetworkSortDirection = 'asc';
+    }
+    
+    document.querySelectorAll('#networks-table .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.style.color = '';
+    });
+    
+    const sortIndicator = document.getElementById(`sort-network-${column}`);
+    if (sortIndicator) {
+        sortIndicator.textContent = currentNetworkSortDirection === 'asc' ? ' ▲' : ' ▼';
+        sortIndicator.style.color = 'var(--accent)';
+    }
+    
+    const sorted = sortNetworksData([...allNetworks], column, currentNetworkSortDirection);
+    renderNetworks(sorted);
+}
+
+function sortNetworksData(networks, column, direction) {
+    return networks.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(column) {
+            case 'name':
+                aVal = (a.name || '').toLowerCase();
+                bVal = (b.name || '').toLowerCase();
+                break;
+            case 'driver':
+                aVal = (a.driver || '').toLowerCase();
+                bVal = (b.driver || '').toLowerCase();
+                break;
+            case 'scope':
+                aVal = (a.scope || '').toLowerCase();
+                bVal = (b.scope || '').toLowerCase();
+                break;
+            case 'subnet':
+                aVal = (a.subnet || '').toLowerCase();
+                bVal = (b.subnet || '').toLowerCase();
+                break;
+            case 'containers':
+                aVal = a.containers !== undefined ? a.containers : 0;
+                bVal = b.containers !== undefined ? b.containers : 0;
+                break;
+            default:
+                return 0;
+        }
+        
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function renderNetworks(networks) {
+    const networksList = document.getElementById('networks-list');
+    if (!networksList) return;
+    
+    networksList.innerHTML = '';
+    
+    if (networks.length === 0) {
+        networksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666;">No networks found</td></tr>';
+    } else {
+        networks.forEach(network => {
+            const row = createNetworkRow(network);
+            networksList.appendChild(row);
+        });
+    }
+}
+
+// Sort Stacks
+function sortStacks(column) {
+    if (currentStackSortColumn === column) {
+        currentStackSortDirection = currentStackSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentStackSortColumn = column;
+        currentStackSortDirection = 'asc';
+    }
+    
+    document.querySelectorAll('#stacks-table .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.style.color = '';
+    });
+    
+    const sortIndicator = document.getElementById(`sort-stack-${column}`);
+    if (sortIndicator) {
+        sortIndicator.textContent = currentStackSortDirection === 'asc' ? ' ▲' : ' ▼';
+        sortIndicator.style.color = 'var(--accent)';
+    }
+    
+    const sorted = sortStacksData([...allStacks], column, currentStackSortDirection);
+    renderStacks(sorted);
+}
+
+function sortStacksData(stacks, column, direction) {
+    return stacks.sort((a, b) => {
+        let aVal, bVal;
+        
+        switch(column) {
+            case 'name':
+                aVal = (a.name || '').toLowerCase();
+                bVal = (b.name || '').toLowerCase();
+                break;
+            case 'type':
+                aVal = (a.type || '').toLowerCase();
+                bVal = (b.type || '').toLowerCase();
+                break;
+            case 'services':
+                aVal = a.services_count !== undefined ? a.services_count : 0;
+                bVal = b.services_count !== undefined ? b.services_count : 0;
+                break;
+            case 'containers':
+                aVal = a.containers_count !== undefined ? a.containers_count : 0;
+                bVal = b.containers_count !== undefined ? b.containers_count : 0;
+                break;
+            case 'networks':
+                aVal = (a.networks && a.networks.length) ? a.networks.length : 0;
+                bVal = (b.networks && b.networks.length) ? b.networks.length : 0;
+                break;
+            default:
+                return 0;
+        }
+        
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function renderStacks(stacks) {
+    const stacksList = document.getElementById('stacks-list');
+    if (!stacksList) return;
+    
+    stacksList.innerHTML = '';
+    
+    if (stacks.length === 0) {
+        stacksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No stacks found</td></tr>';
+    } else {
+        stacks.forEach(stack => {
+            const row = createStackRow(stack);
+            stacksList.appendChild(row);
+        });
+    }
+}
+
+// Upload backup (handles both .tar.gz container backups and .json network backups)
 async function uploadBackup(event) {
     const files = event.target.files;
     if (!files.length) {
@@ -1880,6 +2389,7 @@ async function uploadBackup(event) {
 
     let successCount = 0;
     let errorCount = 0;
+    const jsonFilesToRestore = []; // Track JSON files that need restore prompt
 
     for (let i = 0; i < files.length; i++) {
         const file = files[i];
@@ -1891,16 +2401,44 @@ async function uploadBackup(event) {
         statusBadge.className = 'status-badge uploading';
         itemEl.style.borderColor = 'var(--secondary)';
 
-        if (!file.name.endsWith('.tar.gz')) {
+        // Validate file type
+        if (!file.name.endsWith('.tar.gz') && !file.name.endsWith('.json')) {
             errorCount++;
-            statusBadge.textContent = 'Skipped (not a .tar.gz)';
+            statusBadge.textContent = 'Skipped (must be .tar.gz or .json)';
             statusBadge.className = 'status-badge skipped';
             itemEl.style.borderColor = 'var(--warning)';
             continue;
         }
 
+        let fileContent = null;
+        let networkName = null;
+
+        // For JSON files, validate structure before upload
+        if (file.name.endsWith('.json')) {
+            try {
+                fileContent = await file.text();
+                const networkConfig = JSON.parse(fileContent);
+                if (!networkConfig.Name) {
+                    throw new Error('Invalid network backup: missing network name');
+                }
+                networkName = networkConfig.Name;
+            } catch (error) {
+                errorCount++;
+                statusBadge.textContent = `Error: ${error.message}`;
+                statusBadge.className = 'status-badge error';
+                itemEl.style.borderColor = 'var(--danger)';
+                continue;
+            }
+        }
+
         const formData = new FormData();
-        formData.append('file', file);
+        // Use file content for JSON, original file for tar.gz
+        if (file.name.endsWith('.json') && fileContent) {
+            const blob = new Blob([fileContent], { type: 'application/json' });
+            formData.append('file', blob, file.name);
+        } else {
+            formData.append('file', file);
+        }
 
         try {
             const response = await fetch('/api/upload-backup', {
@@ -1917,6 +2455,14 @@ async function uploadBackup(event) {
             statusBadge.textContent = 'Success';
             statusBadge.className = 'status-badge success';
             itemEl.style.borderColor = 'var(--accent)';
+            
+            // Track JSON files for restore prompt
+            if (file.name.endsWith('.json')) {
+                jsonFilesToRestore.push({
+                    filename: data.filename || file.name,
+                    networkName: networkName
+                });
+            }
         } catch (error) {
             errorCount++;
             statusBadge.textContent = `Error: ${error.message}`;
@@ -1929,6 +2475,40 @@ async function uploadBackup(event) {
     closeBtn.style.display = 'block';
     event.target.value = ''; // Reset file input
     loadBackups();
+    
+    // Prompt to restore network backups if any were uploaded
+    if (jsonFilesToRestore.length > 0) {
+        for (const jsonFile of jsonFilesToRestore) {
+            const networkName = jsonFile.networkName || 'unknown';
+            
+            showConfirmationModal(`Network backup uploaded. Restore network "${networkName}"?`, async () => {
+                const restoreResponse = await fetch('/api/network/restore', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: jsonFile.filename
+                    })
+                });
+                
+                const restoreData = await restoreResponse.json();
+                
+                if (!restoreResponse.ok) {
+                    if (restoreResponse.status === 409) {
+                        console.warn(`Network already exists: ${restoreData.network_name || 'unknown'}`);
+                    } else {
+                        throw new Error(restoreData.error || 'Restore failed');
+                    }
+                } else {
+                    console.log(`Network restored: ${restoreData.network_name}`);
+                }
+                
+                loadNetworks();
+                loadBackups(); // Refresh backup grid after restore too
+            });
+        }
+    }
 }
 
 function closeUploadProgressModal() {
@@ -3279,14 +3859,22 @@ async function loadVolumes() {
             throw new Error(data.error || 'Failed to load volumes');
         }
         
-        if (data.volumes.length === 0) {
-            volumesList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No volumes found</td></tr>';
-        } else {
-            data.volumes.forEach(volume => {
-                const row = createVolumeRow(volume);
-                volumesList.appendChild(row);
-            });
+        // Store all volumes for sorting
+        allVolumes = data.volumes || [];
+        
+        // Apply current sort if any, then render
+        let volumesToDisplay = allVolumes;
+        if (currentVolumeSortColumn) {
+            volumesToDisplay = sortVolumesData([...allVolumes], currentVolumeSortColumn, currentVolumeSortDirection);
+            // Restore sort indicator
+            const sortIndicator = document.getElementById(`sort-volume-${currentVolumeSortColumn}`);
+            if (sortIndicator) {
+                sortIndicator.textContent = currentVolumeSortDirection === 'asc' ? ' ▲' : ' ▼';
+                sortIndicator.style.color = 'var(--accent)';
+            }
         }
+        
+        renderVolumes(volumesToDisplay);
         
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
@@ -3643,9 +4231,12 @@ async function loadImages() {
             throw new Error(data.error || 'Failed to load images');
         }
         
+        // Store all images for sorting
+        allImages = data.images || [];
+        
         // Check for dangling images (images with <none> tag)
         const cleanupBtn = document.getElementById('cleanup-dangling-images-btn');
-        const hasDanglingImages = data.images.some(image => {
+        const hasDanglingImages = allImages.some(image => {
             // Dangling images have <none> tag (tag field) or repository is <none>
             return (image.tag && image.tag === '<none>') || 
                    (image.repository && image.repository === '<none>') ||
@@ -3656,14 +4247,19 @@ async function loadImages() {
             cleanupBtn.disabled = !hasDanglingImages;
         }
         
-        if (data.images.length === 0) {
-            imagesList.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #666;">No images found</td></tr>';
-        } else {
-            data.images.forEach(image => {
-                const row = createImageRow(image);
-                imagesList.appendChild(row);
-            });
+        // Apply current sort if any, then render
+        let imagesToDisplay = allImages;
+        if (currentImageSortColumn) {
+            imagesToDisplay = sortImagesData([...allImages], currentImageSortColumn, currentImageSortDirection);
+            // Restore sort indicator
+            const sortIndicator = document.getElementById(`sort-image-${currentImageSortColumn}`);
+            if (sortIndicator) {
+                sortIndicator.textContent = currentImageSortDirection === 'asc' ? ' ▲' : ' ▼';
+                sortIndicator.style.color = 'var(--accent)';
+            }
         }
+        
+        renderImages(imagesToDisplay);
         
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
@@ -3868,14 +4464,22 @@ async function loadNetworks() {
             throw new Error(data.error || 'Failed to load networks');
         }
         
-        if (data.networks.length === 0) {
-            networksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666;">No networks found</td></tr>';
-        } else {
-            data.networks.forEach(network => {
-                const row = createNetworkRow(network);
-                networksList.appendChild(row);
-            });
+        // Store all networks for sorting
+        allNetworks = data.networks || [];
+        
+        // Apply current sort if any, then render
+        let networksToDisplay = allNetworks;
+        if (currentNetworkSortColumn) {
+            networksToDisplay = sortNetworksData([...allNetworks], currentNetworkSortColumn, currentNetworkSortDirection);
+            // Restore sort indicator
+            const sortIndicator = document.getElementById(`sort-network-${currentNetworkSortColumn}`);
+            if (sortIndicator) {
+                sortIndicator.textContent = currentNetworkSortDirection === 'asc' ? ' ▲' : ' ▼';
+                sortIndicator.style.color = 'var(--accent)';
+            }
         }
+        
+        renderNetworks(networksToDisplay);
         
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
@@ -4048,81 +4652,6 @@ async function restoreNetworkBackup(filename) {
     });
 }
 
-// Upload network backup
-async function uploadNetworkBackup(event) {
-    const file = event.target.files[0];
-    if (!file) {
-        return;
-    }
-    
-    if (!file.name.endsWith('.json')) {
-        console.error('Please select a .json network backup file');
-        return;
-    }
-    
-    // Read file content
-    const fileContent = await file.text();
-    
-    try {
-        // Parse JSON to validate
-        const networkConfig = JSON.parse(fileContent);
-        
-        if (!networkConfig.Name) {
-            throw new Error('Invalid network backup: missing network name');
-        }
-        
-        // Upload file to backup directory
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const uploadResponse = await fetch('/api/upload-network-backup', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const uploadData = await uploadResponse.json();
-        
-        if (!uploadResponse.ok) {
-            throw new Error(uploadData.error || 'Upload failed');
-        }
-        
-        // Refresh backup grid to show the uploaded backup
-        loadBackups();
-        
-        // Now restore the network
-        showConfirmationModal(`Network backup uploaded. Restore network "${networkConfig.Name}"?`, async () => {
-            const restoreResponse = await fetch('/api/network/restore', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    filename: uploadData.filename || file.name
-                })
-            });
-            
-            const restoreData = await restoreResponse.json();
-            
-            if (!restoreResponse.ok) {
-                if (restoreResponse.status === 409) {
-                    console.warn(`Network already exists: ${restoreData.network_name || 'unknown'}`);
-                } else {
-                    throw new Error(restoreData.error || 'Restore failed');
-                }
-            } else {
-                console.log(`Network restored: ${restoreData.network_name}`);
-            }
-            
-            loadNetworks();
-            loadBackups(); // Refresh backup grid after restore too
-        });
-    } catch (error) {
-        console.error(`Error uploading/restoring network backup: ${error.message}`);
-    } finally {
-        event.target.value = ''; // Reset file input
-    }
-}
-
 // Load containers on page load
 // Environment Check
 async function checkEnvironment() {
@@ -4219,14 +4748,22 @@ async function loadStacks() {
             throw new Error(data.error || 'Failed to load stacks');
         }
         
-        if (data.stacks.length === 0) {
-            stacksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No stacks found</td></tr>';
-        } else {
-            data.stacks.forEach(stack => {
-                const row = createStackRow(stack);
-                stacksList.appendChild(row);
-            });
+        // Store all stacks for sorting
+        allStacks = data.stacks || [];
+        
+        // Apply current sort if any, then render
+        let stacksToDisplay = allStacks;
+        if (currentStackSortColumn) {
+            stacksToDisplay = sortStacksData([...allStacks], currentStackSortColumn, currentStackSortDirection);
+            // Restore sort indicator
+            const sortIndicator = document.getElementById(`sort-stack-${currentStackSortColumn}`);
+            if (sortIndicator) {
+                sortIndicator.textContent = currentStackSortDirection === 'asc' ? ' ▲' : ' ▼';
+                sortIndicator.style.color = 'var(--accent)';
+            }
         }
+        
+        renderStacks(stacksToDisplay);
         
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;

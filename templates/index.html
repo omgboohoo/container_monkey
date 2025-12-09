@@ -113,7 +113,7 @@
                     <i class="ph-fill ph-github-logo"></i>
                     <span>GitHub</span>
                 </a>
-                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.3.0</span>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.3.1</span>
             </div>
         </aside>
 
@@ -314,11 +314,21 @@
                         <thead>
                             <tr>
                                 <th width="40"><input type="checkbox" id="select-all-volumes" onclick="toggleAllVolumeSelections(this)"></th>
-                                <th>Name</th>
-                                <th>Driver</th>
-                                <th>Mountpoint</th>
-                                <th>Created</th>
-                                <th>Size</th>
+                                <th class="sortable" data-sort="name" onclick="sortVolumes('name')" style="cursor: pointer; user-select: none;">
+                                    Name <span class="sort-indicator" id="sort-volume-name"></span>
+                                </th>
+                                <th class="sortable" data-sort="driver" onclick="sortVolumes('driver')" style="cursor: pointer; user-select: none;">
+                                    Driver <span class="sort-indicator" id="sort-volume-driver"></span>
+                                </th>
+                                <th class="sortable" data-sort="mountpoint" onclick="sortVolumes('mountpoint')" style="cursor: pointer; user-select: none;">
+                                    Mountpoint <span class="sort-indicator" id="sort-volume-mountpoint"></span>
+                                </th>
+                                <th class="sortable" data-sort="created" onclick="sortVolumes('created')" style="cursor: pointer; user-select: none;">
+                                    Created <span class="sort-indicator" id="sort-volume-created"></span>
+                                </th>
+                                <th class="sortable" data-sort="size" onclick="sortVolumes('size')" style="cursor: pointer; user-select: none;">
+                                    Size <span class="sort-indicator" id="sort-volume-size"></span>
+                                </th>
                                 <th width="150">Actions</th>
                             </tr>
                         </thead>
@@ -350,10 +360,18 @@
                         <thead>
                             <tr>
                                 <th width="40"><input type="checkbox" id="select-all-images" onclick="toggleAllImageSelections(this)"></th>
-                                <th>Name / Tags</th>
-                                <th>ID</th>
-                                <th>Size</th>
-                                <th>Created</th>
+                                <th class="sortable" data-sort="name" onclick="sortImages('name')" style="cursor: pointer; user-select: none;">
+                                    Name / Tags <span class="sort-indicator" id="sort-image-name"></span>
+                                </th>
+                                <th class="sortable" data-sort="id" onclick="sortImages('id')" style="cursor: pointer; user-select: none;">
+                                    ID <span class="sort-indicator" id="sort-image-id"></span>
+                                </th>
+                                <th class="sortable" data-sort="size" onclick="sortImages('size')" style="cursor: pointer; user-select: none;">
+                                    Size <span class="sort-indicator" id="sort-image-size"></span>
+                                </th>
+                                <th class="sortable" data-sort="created" onclick="sortImages('created')" style="cursor: pointer; user-select: none;">
+                                    Created <span class="sort-indicator" id="sort-image-created"></span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="images-list">
@@ -381,11 +399,21 @@
                     <table class="table" id="networks-table">
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Driver</th>
-                                <th>Scope</th>
-                                <th>Subnet / Gateway</th>
-                                <th>Containers</th>
+                                <th class="sortable" data-sort="name" onclick="sortNetworks('name')" style="cursor: pointer; user-select: none;">
+                                    Name <span class="sort-indicator" id="sort-network-name"></span>
+                                </th>
+                                <th class="sortable" data-sort="driver" onclick="sortNetworks('driver')" style="cursor: pointer; user-select: none;">
+                                    Driver <span class="sort-indicator" id="sort-network-driver"></span>
+                                </th>
+                                <th class="sortable" data-sort="scope" onclick="sortNetworks('scope')" style="cursor: pointer; user-select: none;">
+                                    Scope <span class="sort-indicator" id="sort-network-scope"></span>
+                                </th>
+                                <th class="sortable" data-sort="subnet" onclick="sortNetworks('subnet')" style="cursor: pointer; user-select: none;">
+                                    Subnet / Gateway <span class="sort-indicator" id="sort-network-subnet"></span>
+                                </th>
+                                <th class="sortable" data-sort="containers" onclick="sortNetworks('containers')" style="cursor: pointer; user-select: none;">
+                                    Containers <span class="sort-indicator" id="sort-network-containers"></span>
+                                </th>
                                 <th style="white-space: nowrap;">Actions</th>
                             </tr>
                         </thead>
@@ -414,11 +442,21 @@
                     <table class="table" id="stacks-table">
                         <thead>
                             <tr>
-                                <th>Stack Name</th>
-                                <th>Type</th>
-                                <th>Services</th>
-                                <th>Containers</th>
-                                <th>Networks</th>
+                                <th class="sortable" data-sort="name" onclick="sortStacks('name')" style="cursor: pointer; user-select: none;">
+                                    Stack Name <span class="sort-indicator" id="sort-stack-name"></span>
+                                </th>
+                                <th class="sortable" data-sort="type" onclick="sortStacks('type')" style="cursor: pointer; user-select: none;">
+                                    Type <span class="sort-indicator" id="sort-stack-type"></span>
+                                </th>
+                                <th class="sortable" data-sort="services" onclick="sortStacks('services')" style="cursor: pointer; user-select: none;">
+                                    Services <span class="sort-indicator" id="sort-stack-services"></span>
+                                </th>
+                                <th class="sortable" data-sort="containers" onclick="sortStacks('containers')" style="cursor: pointer; user-select: none;">
+                                    Containers <span class="sort-indicator" id="sort-stack-containers"></span>
+                                </th>
+                                <th class="sortable" data-sort="networks" onclick="sortStacks('networks')" style="cursor: pointer; user-select: none;">
+                                    Networks <span class="sort-indicator" id="sort-stack-networks"></span>
+                                </th>
                                 <th width="150">Actions</th>
                             </tr>
                         </thead>
@@ -433,8 +471,15 @@
             <section id="backups-section" class="content-section" style="display: none;">
                 <div class="section-header">
                     <h2><i class="ph ph-shield-check" style="margin-right: 12px;"></i>Backup Vault</h2>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <!-- Search Filter -->
+                        <div style="position: relative; min-width: 250px; flex: 1; max-width: 400px;">
+                            <i class="ph ph-magnifying-glass" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 1.1em;"></i>
+                            <input type="text" id="backup-search-input" placeholder="Search backups..." 
+                                   style="width: 100%; height: 36px; padding: 8px 12px 8px 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95em; box-sizing: border-box;"
+                                   oninput="filterBackups()">
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 36px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border);">
                             <span style="font-size: 0.9em; color: var(--text-secondary);">Storage:</span>
                             <label class="toggle-switch" for="storage-toggle">
                                 <span style="font-size: 0.9em; color: var(--text-primary);">Local</span>
@@ -447,11 +492,7 @@
                             <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('backup-upload').click();">
                                 <i class="ph ph-upload-simple"></i> Upload Backup
                             </button>
-                            <input type="file" id="backup-upload" accept=".tar.gz" style="display: none;" onchange="uploadBackup(event)" multiple>
-                            <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('network-upload').click();">
-                                <i class="ph ph-upload-simple"></i> Upload Network Backup
-                            </button>
-                            <input type="file" id="network-upload" accept=".json" style="display: none;" onchange="uploadNetworkBackup(event)">
+                            <input type="file" id="backup-upload" accept=".tar.gz,.json" style="display: none;" onchange="uploadBackup(event)" multiple>
                             <button class="btn btn-primary btn-sm" onclick="loadBackups()"><i class="ph ph-arrows-clockwise"></i> Refresh</button>
                             <button class="btn btn-success btn-sm" onclick="downloadAllBackups()"><i class="ph ph-download-simple"></i> Download All</button>
                             <button class="btn btn-danger btn-sm" onclick="deleteAllBackups()"><i class="ph ph-trash"></i> Delete All</button>
@@ -468,12 +509,24 @@
                     <table class="table" id="backups-table">
                         <thead>
                             <tr>
-                                <th>Filename</th>
-                                <th>Type</th>
-                                <th>Backup Type</th>
-                                <th>Storage</th>
-                                <th>Size</th>
-                                <th>Created</th>
+                                <th class="sortable" data-sort="filename" onclick="sortBackups('filename')" style="cursor: pointer; user-select: none;">
+                                    Filename <span class="sort-indicator" id="sort-backup-filename"></span>
+                                </th>
+                                <th class="sortable" data-sort="type" onclick="sortBackups('type')" style="cursor: pointer; user-select: none;">
+                                    Type <span class="sort-indicator" id="sort-backup-type"></span>
+                                </th>
+                                <th class="sortable" data-sort="backup-type" onclick="sortBackups('backup-type')" style="cursor: pointer; user-select: none;">
+                                    Backup Type <span class="sort-indicator" id="sort-backup-backup-type"></span>
+                                </th>
+                                <th class="sortable" data-sort="storage" onclick="sortBackups('storage')" style="cursor: pointer; user-select: none;">
+                                    Storage <span class="sort-indicator" id="sort-backup-storage"></span>
+                                </th>
+                                <th class="sortable" data-sort="size" onclick="sortBackups('size')" style="cursor: pointer; user-select: none;">
+                                    Size <span class="sort-indicator" id="sort-backup-size"></span>
+                                </th>
+                                <th class="sortable" data-sort="created" onclick="sortBackups('created')" style="cursor: pointer; user-select: none;">
+                                    Created <span class="sort-indicator" id="sort-backup-created"></span>
+                                </th>
                                 <th style="white-space: nowrap;">Actions</th>
                             </tr>
                         </thead>

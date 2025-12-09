@@ -435,27 +435,6 @@ def list_network_backups():
         return jsonify(result), 500
     return jsonify(result)
 
-@app.route('/api/upload-network-backup', methods=['POST'])
-def upload_network_backup():
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No file selected'}), 400
-    
-    if not file.filename.endswith('.json'):
-        return jsonify({'error': 'Only .json files are allowed'}), 400
-    
-    try:
-        file_content = file.read()
-        filename = secure_filename(file.filename)
-        result = network_manager.upload_network_backup(file_content, filename)
-        if 'error' in result:
-            return jsonify(result), 400
-        return jsonify(result)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 # Image routes
 @app.route('/api/images')
@@ -586,11 +565,23 @@ def upload_backup():
     try:
         file_content = file.read()
         filename = secure_filename(file.filename)
-        result = backup_file_manager.upload_backup(file_content, filename)
-        if 'error' in result:
-            status_code = 400 if 'Invalid' in result['error'] else 500
-            return jsonify(result), status_code
-        return jsonify(result)
+        
+        # Route to appropriate handler based on file extension
+        if filename.endswith('.json'):
+            # Handle network backup JSON files
+            result = network_manager.upload_network_backup(file_content, filename)
+            if 'error' in result:
+                return jsonify(result), 400
+            return jsonify(result)
+        elif filename.endswith('.tar.gz'):
+            # Handle container backup tar.gz files
+            result = backup_file_manager.upload_backup(file_content, filename)
+            if 'error' in result:
+                status_code = 400 if 'Invalid' in result['error'] else 500
+                return jsonify(result), status_code
+            return jsonify(result)
+        else:
+            return jsonify({'error': 'Invalid file type. Only .tar.gz and .json files are allowed'}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

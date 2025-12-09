@@ -606,7 +606,6 @@ body {
 #backups-table th:nth-child(1),
 #backups-table td:nth-child(1) {
     width: auto;
-    max-width: 300px;
     word-wrap: break-word;
     overflow-wrap: break-word;
     word-break: break-word;
@@ -614,42 +613,38 @@ body {
 
 #backups-table th:nth-child(2),
 #backups-table td:nth-child(2) {
-    width: auto;
-    min-width: 80px;
+    width: 1%;
     white-space: nowrap;
 }
 
 #backups-table th:nth-child(3),
 #backups-table td:nth-child(3) {
-    width: auto;
-    min-width: 100px;
+    width: 1%;
     white-space: nowrap;
 }
 
 #backups-table th:nth-child(4),
 #backups-table td:nth-child(4) {
-    width: auto;
-    min-width: 80px;
+    width: 1%;
     white-space: nowrap;
 }
 
 #backups-table th:nth-child(5),
 #backups-table td:nth-child(5) {
-    width: auto;
+    width: 1%;
     white-space: nowrap;
 }
 
 #backups-table th:nth-child(6),
 #backups-table td:nth-child(6) {
-    width: auto;
+    width: 1%;
     white-space: nowrap;
 }
 
 #backups-table th:nth-child(7),
 #backups-table td:nth-child(7) {
-    width: auto;
+    width: 1%;
     white-space: nowrap;
-    min-width: 200px;
 }
 
 #backups-table td:nth-child(7) .btn-group {

@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.0**
+**Version 0.3.1**
 
 ## Overview
 
@@ -68,6 +68,8 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - Bulk backup operations with queue management
 - **Backup Type Tracking**: Backups tagged as Manual or Scheduled in backup vault
 - **Storage Location Tracking**: Backup vault shows storage location (Local or S3) for each backup
+- **Backup Vault Search Filter**: Real-time search filter to quickly find backups by filename, type, backup type, storage location, or creation date
+- **Sortable Backup Columns**: All backup vault columns are sortable (Filename, Type, Backup Type, Storage, Size, Created) with visual sort indicators
 - **S3 Storage Support**: Optional cloud storage for backups
   - Toggle between local and S3 storage from backup vault interface
   - S3 configuration modal with bucket name, region, access key, and secret key fields
@@ -162,7 +164,7 @@ GET    /api/backup/<filename>/preview            # Preview backup contents
 POST   /api/restore-backup                      # Restore backup (downloads from S3 if needed)
 DELETE /api/backup/<filename>                   # Delete backup (from S3 or local)
 GET    /api/download/<filename>                 # Download backup file (from S3 or local)
-POST   /api/upload-backup                       # Upload backup file (to S3 or local)
+POST   /api/upload-backup                       # Upload backup file (to S3 or local) - accepts both .tar.gz container backups and .json network backups
 POST   /api/backups/download-all-prepare        # Prepare bulk download (includes S3 backups)
 GET    /api/backups/download-all-progress/<id>  # Get bulk download progress
 POST   /api/backups/download-all-create/<id>    # Create bulk archive (downloads S3 backups to temp)
@@ -217,7 +219,6 @@ POST   /api/network/<id>/backup                 # Backup network (uploads to S3 
 POST   /api/network/restore                     # Restore network backup (downloads from S3 if needed)
 DELETE /api/network/<id>/delete                 # Delete network
 GET    /api/network-backups                     # List network backups (from S3 and local)
-POST   /api/upload-network-backup               # Upload network backup (to S3 or local)
 ```
 
 ### System Endpoints
