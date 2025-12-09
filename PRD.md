@@ -14,16 +14,21 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - **Authentication**: Session-based authentication with SQLite user database (`auth_manager.py`)
 - **Docker Integration**: Direct Docker socket API (`docker_api.py`) with fallback to docker-py library
 - **Modular Managers**:
+  - `auth_manager.py` - Authentication and user management
   - `container_manager.py` - Container lifecycle operations
   - `backup_manager.py` - Backup operations with queue support for sequential processing
-  - `backup_file_manager.py` - Backup file management and operations
+  - `backup_file_manager.py` - Backup file management and operations (S3 and local)
   - `restore_manager.py` - Restore operations and conflict handling
   - `volume_manager.py` - Volume exploration and management
   - `image_manager.py` - Image management and cleanup
-  - `network_manager.py` - Network backup and restore
+  - `network_manager.py` - Network backup and restore (S3 and local backups)
   - `stack_manager.py` - Docker stack management
   - `system_manager.py` - System monitoring and statistics
   - `scheduler_manager.py` - Scheduled backup management and lifecycle cleanup
+  - `audit_log_manager.py` - Audit logging for backup operations
+  - `storage_settings_manager.py` - Storage settings management (local vs S3)
+  - `s3_storage_manager.py` - S3 storage operations
+  - `encryption_utils.py` - Encryption utilities for securing credentials
 - **Storage**: Docker volumes for backup persistence
   - Organized directory structure: `backups/` subdirectory for backup files, `config/` subdirectory for configuration
   - Automatic migration of existing files to organized structure on startup
@@ -122,6 +127,14 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - Auto-refreshes when visiting the page
   - Manual refresh button for on-demand updates
   - Stats polling for running containers (5-second intervals)
+
+### Backup Audit Log
+- View audit logs for all backup-related operations
+- Filter by operation type (Manual Backups, Scheduled Backups, Restores, Lifecycle Cleanup, Backup Deletion)
+- Filter by status (Started, Completed, Error)
+- View statistics: total logs, last 24 hours, and last 7 days activity
+- Clear all audit logs with confirmation prompt (permanently deletes all log entries)
+- Comprehensive tracking: All backup operations, restores, cleanup, and deletions are automatically logged with timestamps and details
 
 ## API Endpoints
 
@@ -225,6 +238,13 @@ GET    /api/auth-status                         # Check authentication status
 POST   /api/change-password                     # Change username and/or password
 ```
 
+### Audit Log Endpoints
+```
+GET    /api/audit-logs                          # Get audit logs with optional filtering (operation_type, status, container_id, date range)
+GET    /api/audit-logs/statistics               # Get audit log statistics
+DELETE /api/audit-logs/clear                    # Clear all audit logs
+```
+
 ### UI Endpoints
 ```
 GET    /                                        # Main application page
@@ -255,7 +275,7 @@ GET    /console/<container_id>                  # Container console page
 
 ## Key Technical Decisions
 
-1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`) for better maintainability and separation of concerns
+1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`, `scheduler_manager.py`, `audit_log_manager.py`, `storage_settings_manager.py`, `s3_storage_manager.py`, `encryption_utils.py`) for better maintainability and separation of concerns
 2. **Direct Docker Socket API**: Uses direct HTTP requests to Docker socket (`docker_api.py`) for better reliability than docker-py library
 3. **Modular Backup System**: Backup functionality separated into `backup_manager.py` and `backup_file_manager.py` modules for maintainability
 4. **Sequential Backup Queue**: Queue processor ensures backups complete fully (including tar.gz writing) before starting next

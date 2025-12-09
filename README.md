@@ -12,7 +12,7 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - **Network Management**: Backup and restore Docker networks, view containers using each network
 - **Backup & Restore**: Full container backup with volumes, port mappings, and restore functionality
 - **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules, force backup option
-- **S3 Storage Support**: Store backups in AWS S3 with encrypted credentials, toggle between local and S3 storage
+- **S3 Storage Support**: Store backups in AWS S3, toggle between local and S3 storage, enables shared vaults across Container Monkey instances
 - **Backup Audit Log**: Comprehensive audit logging for all backup operations, restores, and lifecycle management
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
 - **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
@@ -91,7 +91,7 @@ Access the web UI at: http://your-server:666
 ### Volume Mounts
 
 - `/var/run/docker.sock`: Docker socket (required)
-- `container-monkey:/backups`: Backup storage volume (recommended)
+- `container-monkey:/backups`: Backup storage and database volume
 
 ## Usage
 
@@ -193,7 +193,7 @@ The application has been refactored into a modular architecture with separate ma
   - `storage_settings_manager.py` - Storage settings management (local vs S3)
   - `s3_storage_manager.py` - S3 storage operations
   - `encryption_utils.py` - Encryption utilities for securing credentials
-- **Storage**: Docker volumes for backup persistence with optional AWS S3 cloud storage
+- **Storage**: Docker volumes for backup persistence with optional AWS S3 cloud storage (enables shared vaults across Container Monkey instances)
 - **Database**: SQLite for user management, audit logs, and storage settings
 - **Rate Limiting**: Flask-Limiter for API protection
 - **Authentication**: Session-based with password hashing
