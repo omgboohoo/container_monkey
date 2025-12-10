@@ -49,6 +49,8 @@ limiter = Limiter(
 
 # Setup backup directory
 app.config['BACKUP_DIR'] = setup_backup_directory()
+# Set as environment variable so encryption_utils can access it
+os.environ['BACKUP_DIR'] = app.config['BACKUP_DIR']
 
 # Initialize Docker client
 init_docker_client()

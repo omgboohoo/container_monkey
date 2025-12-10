@@ -1,5 +1,41 @@
 # Release Notes
 
+## Version 0.3.2
+
+### Security Improvements
+- **Removed Hardcoded Encryption Key**:
+  - Previously used hardcoded encryption key for S3 credentials stored in database
+  - Now generates unique random encryption key per installation
+  - Key stored securely at `/backups/config/encryption.key` in Docker volume
+  - Key file has restricted permissions (600 - owner read/write only)
+  - Automatic key generation on first run
+
+- **Default Credentials Warning**: Added security warning modal for default login credentials
+  - Modal appears automatically when logging in with default credentials (`admin` / `c0Nta!nerM0nK3y#Q92x`)
+  - Clear explanation of security risks
+  - Direct link to change password functionality
+  - Encourages users to change credentials immediately after first login
+  - Non-blocking but persistent reminder
+
+### Technical Changes
+- **Encryption Key Management**: Complete refactor of encryption utilities
+  - Removed `STATIC_ENCRYPTION_KEY_STRING` constant
+  - New `EncryptionKeyError` exception for better error handling
+  - Key generation uses `secrets.token_urlsafe(32)` for cryptographically secure randomness
+  - Key persistence in Docker volume ensures it survives container restarts
+  - Backward compatibility: Existing installations will need to re-enter S3 credentials (encrypted with old key)
+
+### Migration Notes
+- **Existing Installations**: If upgrading from 0.3.1 or earlier:
+  - New encryption key will be generated automatically on first run
+  - Existing S3 credentials encrypted with old key will need to be re-entered
+  - Key file location: `/backups/config/encryption.key`
+
+### Version Update
+- Updated version number to 0.3.2 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.1
 
 ### UI Improvements

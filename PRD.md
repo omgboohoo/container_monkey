@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.1**
+**Version 0.3.2**
 
 ## Overview
 
@@ -305,6 +305,11 @@ GET    /console/<container_id>                  # Container console page
 - Requires Docker socket access (run with appropriate permissions)
 - **Built-in authentication**: Session-based login system with SQLite user database (`auth_manager.py`)
 - Default credentials: username `admin`, password `c0Nta!nerM0nK3y#Q92x` (should be changed in production)
+  - **Security warning modal** appears automatically when default credentials are used
+- **Encryption Key Management**: Unique random encryption key generated per installation
+  - Key stored at `/backups/config/encryption.key` in Docker volume
+  - Key file has restricted permissions (600 - owner read/write only)
+  - No hardcoded encryption keys - fails securely if key cannot be accessed
 - All API endpoints require authentication (except `/api/login`, `/api/logout`, `/api/auth-status`)
 - File uploads validated and sanitized
 - Container commands executed with user permissions

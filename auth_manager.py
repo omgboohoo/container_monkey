@@ -61,7 +61,18 @@ class AuthManager:
                 session.permanent = True
                 session['logged_in'] = True
                 session['username'] = username
-                return {'success': True, 'username': username}
+                
+                # Check if default credentials are being used
+                default_username = 'admin'
+                default_password = 'c0Nta!nerM0nK3y#Q92x'
+                is_default_credentials = (username.lower() == default_username.lower() and 
+                                         password == default_password)
+                
+                return {
+                    'success': True, 
+                    'username': username,
+                    'is_default_credentials': is_default_credentials
+                }
             else:
                 return {'error': 'Invalid username or password', 'status_code': 401}
         except Exception as e:

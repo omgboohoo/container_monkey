@@ -2,26 +2,95 @@
 Encryption Utilities Module
 Handles encryption/decryption of sensitive data using Fernet symmetric encryption
 """
+import os
 import hashlib
 import base64
+import secrets
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# Static encryption key for S3 credentials
-# This is a hardcoded key derived from a fixed string to ensure consistency across app restarts
-# DO NOT CHANGE THIS KEY - changing it will make existing encrypted credentials unreadable
-STATIC_ENCRYPTION_KEY_STRING = "Qc%23KFZjai2!CUdrKueb$^1"
+
+class EncryptionKeyError(Exception):
+    """Raised when encryption key cannot be found or generated"""
+    pass
+
 
 def get_encryption_key() -> bytes:
     """
-    Get the static Fernet encryption key
+    Get the Fernet encryption key from key file
+    Generates and saves a new key file if it doesn't exist
+    
+    The key is stored at /backups/config/encryption.key (or BACKUP_DIR/config/encryption.key)
+    and persists in the Docker volume.
     
     Returns:
-        Fernet key bytes (consistent across app restarts)
+        Fernet key bytes
+        
+    Raises:
+        EncryptionKeyError: If key cannot be read or generated
     """
-    # Derive a consistent key from the static string using PBKDF2
-    salt = hashlib.sha256(STATIC_ENCRYPTION_KEY_STRING.encode()).digest()[:16]
+    # Get backup directory from environment or use default
+    backup_dir = os.environ.get('BACKUP_DIR', '/backups')
+    key_file_path = os.path.join(backup_dir, 'config', 'encryption.key')
+    
+    # Try reading from key file
+    if os.path.exists(key_file_path):
+        try:
+            with open(key_file_path, 'r') as f:
+                key_string = f.read().strip()
+            if key_string:
+                # Derive key from stored string
+                return _derive_key_from_string(key_string)
+            else:
+                raise EncryptionKeyError(
+                    f"Encryption key file at {key_file_path} is empty. "
+                    f"Delete the file to regenerate a new key."
+                )
+        except EncryptionKeyError:
+            raise
+        except Exception as e:
+            raise EncryptionKeyError(
+                f"Failed to read encryption key file at {key_file_path}: {e}. "
+                f"Ensure the file exists and is readable."
+            )
+    
+    # Generate new key file if it doesn't exist
+    try:
+        # Generate a secure random key
+        key_string = secrets.token_urlsafe(32)
+        
+        # Ensure config directory exists
+        os.makedirs(os.path.dirname(key_file_path), exist_ok=True)
+        
+        # Write key file with restricted permissions
+        with open(key_file_path, 'w') as f:
+            f.write(key_string)
+        os.chmod(key_file_path, 0o600)  # Only owner can read/write
+        
+        print(f"✅ Generated new encryption key and saved to {key_file_path}")
+        print(f"⚠️  IMPORTANT: Backup this key file! If lost, encrypted credentials cannot be decrypted.")
+        
+        return _derive_key_from_string(key_string)
+    except Exception as e:
+        raise EncryptionKeyError(
+            f"Failed to generate encryption key file at {key_file_path}: {e}. "
+            f"Ensure the directory is writable."
+        )
+
+
+def _derive_key_from_string(key_string: str) -> bytes:
+    """
+    Derive a Fernet key from a string using PBKDF2
+    
+    Args:
+        key_string: String to derive key from
+        
+    Returns:
+        Fernet key bytes
+    """
+    # Derive a consistent key from the string using PBKDF2
+    salt = hashlib.sha256(key_string.encode()).digest()[:16]
     
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -29,13 +98,13 @@ def get_encryption_key() -> bytes:
         salt=salt,
         iterations=100000,
     )
-    key = base64.urlsafe_b64encode(kdf.derive(STATIC_ENCRYPTION_KEY_STRING.encode()))
+    key = base64.urlsafe_b64encode(kdf.derive(key_string.encode()))
     return key
 
 
 def encrypt_value(value: str) -> str:
     """
-    Encrypt a string value using Fernet encryption with static key
+    Encrypt a string value using Fernet encryption
     
     Args:
         value: String value to encrypt
@@ -58,7 +127,7 @@ def encrypt_value(value: str) -> str:
 
 def decrypt_value(encrypted_value: str) -> str:
     """
-    Decrypt a string value using Fernet decryption with static key
+    Decrypt a string value using Fernet decryption
     
     Args:
         encrypted_value: Encrypted string (base64 encoded)

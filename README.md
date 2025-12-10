@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.1**
+**Version 0.3.2**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -206,6 +206,8 @@ The application has been refactored into a modular architecture with separate ma
 
 - Runs with Docker socket access (requires appropriate permissions)
 - Built-in authentication (configurable)
+- **Encryption Key**: Unique random encryption key generated per installation, stored securely in Docker volume
+- **Default Credentials Warning**: Modal warning appears when using default login credentials
 - Suggest use nginx reverse proxy with TLS termination and IP-based access control if public
 
 ## Development

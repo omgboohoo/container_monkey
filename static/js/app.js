@@ -86,6 +86,11 @@ async function handleLogin(event) {
             document.getElementById('user-menu-username').textContent = currentUsername;
             document.getElementById('login-form').reset();
             
+            // Check if default credentials were used
+            if (data.is_default_credentials) {
+                showDefaultCredentialsModal();
+            }
+            
             // Reload page data
             // Stats polling will be started automatically by loadContainers() if containers section is active
             // For other sections, start stats polling immediately
@@ -149,6 +154,14 @@ document.addEventListener('click', function(event) {
 });
 
 // Show change password modal
+function showDefaultCredentialsModal() {
+    document.getElementById('default-credentials-modal').style.display = 'block';
+}
+
+function closeDefaultCredentialsModal() {
+    document.getElementById('default-credentials-modal').style.display = 'none';
+}
+
 function showChangePasswordModal() {
     document.getElementById('change-password-modal').style.display = 'block';
     document.getElementById('user-menu-dropdown').classList.remove('show');
@@ -1329,7 +1342,8 @@ function closeAllModals() {
         'confirmation-modal',
         'change-password-modal',
         'change-username-modal',
-        'delete-container-modal'
+        'delete-container-modal',
+        'default-credentials-modal'
     ];
     
     modals.forEach(modalId => {
@@ -2776,6 +2790,7 @@ window.onclick = function(event) {
     const restoreModal = document.getElementById('restore-modal');
     const envCheckModal = document.getElementById('env-check-modal');
     const backupAllModal = document.getElementById('backup-all-modal');
+    const defaultCredentialsModal = document.getElementById('default-credentials-modal');
     
     if (event.target === detailsModal) {
         detailsModal.style.display = 'none';
@@ -2791,6 +2806,9 @@ window.onclick = function(event) {
     }
     if (event.target === backupAllModal && !backupAllInProgress) {
         backupAllModal.style.display = 'none';
+    }
+    if (event.target === defaultCredentialsModal) {
+        closeDefaultCredentialsModal();
     }
     if (event.target === document.getElementById('attach-console-modal')) {
         closeAttachConsoleModal();
