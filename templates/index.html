@@ -1062,7 +1062,7 @@
             <h2 style="margin-top: 0; text-align: center; color: var(--warning);">Security Warning</h2>
             <div style="background: var(--bg-secondary); padding: 16px; border-radius: 8px; border-left: 4px solid var(--warning); margin-bottom: 24px;">
                 <p style="margin: 0; color: var(--text-primary); line-height: 1.6;">
-                    You are using the default login credentials. For security reasons, please change your username and password immediately.
+                    You are using the default login credentials. For security reasons, please change your password immediately.
                 </p>
             </div>
             <div style="margin-bottom: 24px;">
@@ -1075,12 +1075,12 @@
                     <li>Your Docker environment could be compromised</li>
                 </ul>
             </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-primary btn-sm btn-full" onclick="closeDefaultCredentialsModal(); showChangePasswordModal();">
+            <div class="modal-actions" style="justify-content: center;">
+                <button type="button" class="btn btn-primary btn-sm" onclick="closeDefaultCredentialsModal(); showChangePasswordModal();">
                     <i class="ph ph-key"></i>
                     Change Password Now
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm btn-full" style="margin-top: 10px;" onclick="closeDefaultCredentialsModal()">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeDefaultCredentialsModal()">
                     I'll Do It Later
                 </button>
             </div>
