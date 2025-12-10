@@ -38,7 +38,7 @@ from system_manager import (
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = secrets.token_hex(32)
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
 
 # Initialize rate limiter
 limiter = Limiter(

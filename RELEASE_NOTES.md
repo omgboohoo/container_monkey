@@ -17,6 +17,11 @@
   - Encourages users to change credentials immediately after first login
   - Non-blocking but persistent reminder
 
+- **Reduced Session Lifetime**: Improved security by reducing session cookie lifetime
+  - Changed from 7 days to 1 day
+  - Users must re-authenticate after 24 hours of inactivity
+  - Reduces risk of unauthorized access from stolen session cookies
+
 ### Technical Changes
 - **Encryption Key Management**: Complete refactor of encryption utilities
   - Removed `STATIC_ENCRYPTION_KEY_STRING` constant

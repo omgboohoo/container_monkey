@@ -206,6 +206,7 @@ The application has been refactored into a modular architecture with separate ma
 
 - Runs with Docker socket access (requires appropriate permissions)
 - Built-in authentication (configurable)
+  - Session lifetime: 1 day (24 hours)
 - **Encryption Key**: Unique random encryption key generated per installation, stored securely in Docker volume
 - **Default Credentials Warning**: Modal warning appears when using default login credentials
 - Suggest use nginx reverse proxy with TLS termination and IP-based access control if public

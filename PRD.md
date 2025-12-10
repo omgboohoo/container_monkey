@@ -304,6 +304,7 @@ GET    /console/<container_id>                  # Container console page
 
 - Requires Docker socket access (run with appropriate permissions)
 - **Built-in authentication**: Session-based login system with SQLite user database (`auth_manager.py`)
+  - Session lifetime: 1 day (24 hours)
 - Default credentials: username `admin`, password `c0Nta!nerM0nK3y#Q92x` (should be changed in production)
   - **Security warning modal** appears automatically when default credentials are used
 - **Encryption Key Management**: Unique random encryption key generated per installation
