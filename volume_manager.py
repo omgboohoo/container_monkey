@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 import docker_utils
 from docker_utils import APP_VOLUME_NAME
 from system_manager import format_size
+from error_utils import safe_log_error
 
 
 class VolumeManager:
@@ -159,9 +160,8 @@ class VolumeManager:
 
             return {'volumes': volumes_with_details}
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {'error': str(e)}
+            safe_log_error(e, context="list_volumes")
+            return {'error': 'Failed to list volumes'}
     
     def explore_volume(self, volume_name: str, path: str = '/') -> Dict[str, Any]:
         """Explore files in a Docker volume"""

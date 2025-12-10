@@ -12,6 +12,7 @@ import tarfile
 from datetime import datetime
 from queue import Queue
 from typing import Dict, Optional, Callable
+from error_utils import safe_log_error
 
 
 class BackupManager:
@@ -114,8 +115,7 @@ class BackupManager:
                 except Exception as e:
                     # Unexpected exception
                     print(f"⚠️  Queue get exception: {type(e).__name__}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    safe_log_error(e, context="backup_queue_get")
                     continue
                 
                 # Update status to indicate we're waiting for lock
@@ -178,8 +178,7 @@ class BackupManager:
                 
             except Exception as e:
                 print(f"❌ Error processing backup queue: {e}")
-                import traceback
-                traceback.print_exc()
+                safe_log_error(e, context="process_backup_queue")
                 # Ensure lock is released on error
                 if self.backup_lock.locked():
                     self.backup_lock.release()
@@ -445,8 +444,7 @@ class BackupManager:
                         raise Exception(f"Could not determine image name for container")
                 except Exception as e:
                     print(f"⚠️  Warning: Could not export image '{image_name}': {e}")
-                    import traceback
-                    traceback.print_exc()
+                    safe_log_error(e, context=f"export_image_{image_name}")
                     # Create a placeholder file with error info
                     with open(image_file, 'wb') as f:
                         error_msg = f"# Image export failed for '{image_name}': {e}\n".encode()
@@ -655,8 +653,7 @@ class BackupManager:
                     except Exception as e:
                         print(f"⚠️  S3 upload error: {e}")
                         # Continue even if S3 upload fails - local file still exists
-                        import traceback
-                        traceback.print_exc()
+                        safe_log_error(e, context="s3_upload_backup")
             
             # Only mark complete after tar.gz is fully written (and uploaded to S3 if enabled)
             self.backup_progress[progress_id]['status'] = 'complete'
@@ -677,10 +674,9 @@ class BackupManager:
                 )
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
+            safe_log_error(e, context="start_backup")
             self.backup_progress[progress_id]['status'] = 'error'
-            self.backup_progress[progress_id]['error'] = str(e)
+            self.backup_progress[progress_id]['error'] = 'Backup failed'
             print(f"❌ Backup failed: {e}")
             
             # Log backup error

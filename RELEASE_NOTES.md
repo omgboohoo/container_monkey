@@ -1,5 +1,155 @@
 # Release Notes
 
+## Version 0.3.3
+
+### Security Improvements
+- **Strong Password Policy**: Implemented comprehensive password complexity requirements
+  - Minimum password length increased from 3 to 12 characters
+  - Requires at least one uppercase letter (A-Z)
+  - Requires at least one lowercase letter (a-z)
+  - Requires at least one digit (0-9)
+  - Requires at least one special character (!@#$%^&*...)
+  - Real-time password validation with visual feedback in change password modal
+  - Password policy requirements displayed clearly in modal
+  - Visual indicators show which requirements are met as user types
+  - Backend validation ensures policy enforcement even if frontend is bypassed
+  - Specific error messages indicate which requirements are missing
+
+- **CSRF Protection**: Added comprehensive CSRF (Cross-Site Request Forgery) protection
+  - Implemented Flask-WTF CSRF protection for all state-changing requests (POST, PUT, DELETE)
+  - Automatic CSRF token injection into all API requests via fetch interceptor
+  - Cookie-based CSRF token management for seamless user experience
+  - CSRF tokens automatically included in all POST/PUT/DELETE requests
+  - Login endpoint exempted from CSRF (creates new session)
+  - Automatic error handling and page refresh on CSRF validation failures
+  - No code changes required for existing API calls - protection is automatic
+
+- **Session Cookie Security**: Enhanced session cookie protection against XSS and CSRF attacks
+  - **HttpOnly Protection**: Session cookies use HttpOnly flag to prevent JavaScript access (XSS protection)
+    - Configured via `SESSION_COOKIE_HTTPONLY = True`
+    - Prevents client-side JavaScript from accessing session cookies
+  - **SameSite Protection**: Session cookies use `SameSite='Lax'` to provide CSRF protection by limiting cross-site cookie sends
+    - Configured via `SESSION_COOKIE_SAMESITE = 'Lax'`
+  - **Automatic HTTPS Detection**: Session cookies automatically use Secure flag when HTTPS is detected
+    - Simple `before_request` hook checks `X-Forwarded-Proto` header from reverse proxy
+    - Secure flag automatically set to `True` when header is `https`, `False` for HTTP
+    - Works seamlessly with reverse proxy setups (nginx, Apache, etc.) with TLS termination
+    - Since TLS is always behind a proxy, only checks the `X-Forwarded-Proto` header
+    - No configuration needed - automatically adapts to connection protocol
+  - Works with both HTTP and HTTPS deployments (with or without reverse proxy)
+  - Protects against session hijacking via XSS attacks
+  - Reduces CSRF attack surface by preventing cross-site POST requests from sending session cookies
+
+- **Command Injection Prevention**: Fixed critical command injection vulnerabilities
+  - **Container Exec Terminal**: Fixed command injection in container exec console
+    - Commands now properly escaped using `shlex.quote()` to prevent shell injection
+    - Added container ID validation to ensure proper format
+    - Prevents attackers from chaining malicious commands (e.g., `ls; rm -rf /`)
+    - Commands with shell operators (`&&`, `|`, `;`) are safely escaped
+  - **Container Redeploy**: Fixed unsafe shell execution fallback
+    - Removed dangerous `shell=True` fallback when command parsing fails
+    - Function now fails securely instead of executing unsafe shell commands
+    - Added command structure validation before execution
+    - Explicitly sets `shell=False` for all subprocess calls
+  - **Working Directory Support**: Enhanced security for directory operations
+    - Container exec now uses Docker's native `-w` flag for working directory
+    - Eliminates need for shell-based directory changes (`cd` commands)
+    - More secure than shell-based path manipulation
+    - Frontend updated to use working directory API instead of shell operators
+
+- **Information Disclosure Prevention**: Fixed error message information disclosure vulnerabilities
+  - Replaced all `traceback.print_exc()` calls with safe error logging
+  - Created `error_utils.py` module with `safe_log_error()` function
+  - Full stack traces only shown in debug mode (controlled by `DEBUG_MODE` environment variable)
+  - Production mode returns generic error messages to prevent information disclosure
+  - Prevents attackers from learning about file paths, code structure, and internal system details
+  - Error messages sanitized across all manager modules (25+ instances fixed)
+  - Maintains full debugging capability in development while securing production deployments
+
+- **S3 Credentials Security**: Fixed critical security vulnerability exposing S3 secret keys in API responses
+  - **Secret Key Exposure Prevention**: S3 secret keys are no longer returned in API responses
+    - GET `/api/storage/settings` endpoint now returns masked placeholder (`***`) instead of actual secret key
+    - POST `/api/storage/settings` response also excludes secret key for security
+    - Secret keys are never exposed in API responses, even when masked in UI
+  - **Preserve Existing Credentials**: Users can update S3 settings without re-entering secret key
+    - Empty or masked secret key values preserve existing encrypted credentials
+    - Secret key is only updated when explicitly provided by user
+    - Validation ensures secret key is required only when configuring S3 for the first time
+  - **Frontend Security**: Updated UI to handle masked secret keys securely
+    - Form shows placeholder text when secret key exists but is masked
+    - Users can leave secret key field blank to preserve existing credentials
+    - Test connection still requires explicit secret key entry for validation
+  - Prevents credential exposure through API inspection, network monitoring, or client-side code analysis
+
+### Technical Changes
+- **Password Policy Implementation**:
+  - Updated `auth_manager.py` to enforce strong password requirements
+  - Added regex-based password complexity validation
+  - Frontend validation provides real-time feedback via `validatePasswordStrength()`
+  - Visual indicators update dynamically as user types password
+  - Password policy requirements clearly displayed in change password modal
+  - Backend returns specific error messages for missing requirements
+
+- **CSRF Implementation**: 
+  - Added Flask-WTF dependency for CSRF protection
+  - CSRF tokens injected into page templates via `window.csrfToken`
+  - Fetch interceptor automatically adds CSRF tokens to state-changing requests
+  - Token fallback to cookie if window token unavailable
+  - All API endpoints now protected against CSRF attacks
+
+- **Container Exec Security**:
+  - `exec_container_command()` now accepts optional `working_dir` parameter
+  - Uses Docker's `-w` flag for secure working directory handling
+  - Frontend `executeCommand()` function refactored to use working directory API
+  - Improved path resolution for `cd` commands (absolute, relative, parent directory)
+  - No longer relies on shell operators for directory navigation
+
+- **Container Redeploy Security**:
+  - Removed unsafe `shell=True` fallback in `redeploy_container()`
+  - Added secure error handling when command parsing fails
+  - Command structure validation before execution
+
+- **Session Cookie Security Implementation**:
+  - Standard Flask session cookie configuration in `app.py`
+  - HttpOnly flag set via `SESSION_COOKIE_HTTPONLY = True`
+  - SameSite protection set via `SESSION_COOKIE_SAMESITE = 'Lax'`
+  - **Automatic HTTPS Detection**: Implemented via `before_request` hook
+    - `configure_session_cookie()` function checks `X-Forwarded-Proto` header per-request
+    - Dynamically sets `SESSION_COOKIE_SECURE` config based on header value
+    - Simple and reliable - no middleware or custom session interface needed
+    - Secure flag set to `True` when `X-Forwarded-Proto: https` detected, `False` for HTTP
+    - No manual configuration required - works automatically
+  - Configuration works seamlessly with HTTP, HTTPS, and reverse proxy setups
+
+- **Error Handling Security**:
+  - Created `error_utils.py` module for centralized safe error logging
+  - `safe_log_error()` function respects debug mode settings
+  - Checks `DEBUG_MODE` environment variable and Flask debug configuration
+  - Updated all manager modules to use safe error logging
+  - Generic error messages returned to users in production mode
+  - Full tracebacks available in debug mode for development
+
+- **S3 Credentials Security Implementation**:
+  - Updated `/api/storage/settings` GET endpoint to return masked secret key placeholder
+  - Modified POST endpoint to handle masked secret keys and preserve existing credentials
+  - Frontend updated to show placeholder text and allow preserving existing secret keys
+  - Secret keys are only transmitted when explicitly changed by user
+  - All API responses exclude actual secret key values for security
+
+### UI Improvements
+- **Password Change Modal UX**: Improved user experience for password change operations
+  - Password validation errors now shown as toast notifications instead of in-modal error messages
+  - Prevents scrollbar issues when error messages are displayed
+  - Success messages also shown as toast notifications for consistency
+  - Modal closes immediately on successful password change (no 2-second delay)
+  - Better visual feedback with notifications positioned at top center of screen
+  - Cleaner modal interface without error message clutter
+
+### Version Update
+- Updated version number to 0.3.3 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.2
 
 ### Security Improvements

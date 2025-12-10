@@ -2,6 +2,49 @@
 let isAuthenticated = false;
 let currentUsername = '';
 
+// CSRF Token helper functions
+function getCsrfToken() {
+    // Try to get from window (injected by template)
+    if (window.csrfToken) {
+        return window.csrfToken;
+    }
+    
+    // Fallback: get from cookie
+    const name = 'X-CSRFToken';
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+        const [key, value] = cookie.trim().split('=');
+        if (key === name) {
+            return decodeURIComponent(value);
+        }
+    }
+    return null;
+}
+
+// Helper function for API requests that need CSRF protection
+async function apiRequest(url, options = {}) {
+    const token = getCsrfToken();
+    const method = options.method || 'GET';
+    
+    // Only add CSRF token for state-changing methods
+    const needsCsrf = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
+    
+    const defaultOptions = {
+        credentials: 'include',  // Important for cookies
+        ...options
+    };
+    
+    // Add CSRF token header if needed
+    if (needsCsrf && token) {
+        defaultOptions.headers = {
+            ...defaultOptions.headers,
+            'X-CSRFToken': token
+        };
+    }
+    
+    return fetch(url, defaultOptions);
+}
+
 // Global error handler to ensure modals don't get stuck
 window.addEventListener('error', function(event) {
     console.error('Global error:', event.error);
@@ -41,16 +84,52 @@ async function checkAuthStatus() {
     }
 }
 
-// Intercept fetch requests to handle 401 errors
+// Intercept fetch requests to handle 401 errors and add CSRF tokens
 const originalFetch = window.fetch;
-window.fetch = async function(...args) {
-    const response = await originalFetch(...args);
+window.fetch = async function(url, options = {}) {
+    // Handle both string URL and Request object
+    const urlString = typeof url === 'string' ? url : (url.url || '');
+    
+    // Auto-add CSRF token for state-changing methods
+    const method = options.method || (typeof url === 'object' && url.method ? url.method : 'GET') || 'GET';
+    const needsCsrf = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
+    const isApiCall = urlString.startsWith('/api/');
+    const isExempt = urlString.includes('/api/login') || urlString.includes('/api/auth-status');
+    
+    if (needsCsrf && isApiCall && !isExempt) {
+        const token = getCsrfToken();
+        if (token) {
+            options.headers = {
+                ...options.headers,
+                'X-CSRFToken': token
+            };
+        }
+        // Ensure credentials are included for cookies
+        options.credentials = options.credentials || 'include';
+    }
+    
+    const response = await originalFetch(url, options);
     
     // If we get a 401 and we're not already on the login page, show login modal
-    if (response.status === 401 && !args[0].includes('/api/login') && !args[0].includes('/api/auth-status')) {
+    if (response.status === 401 && !urlString.includes('/api/login') && !urlString.includes('/api/auth-status')) {
         if (!isAuthenticated) {
             document.getElementById('login-modal').style.display = 'block';
             document.getElementById('user-menu-container').style.display = 'none';
+        }
+    }
+    
+    // Handle CSRF errors
+    if (response.status === 400) {
+        const clonedResponse = response.clone();
+        try {
+            const data = await clonedResponse.json();
+            if (data.csrf_error) {
+                console.error('CSRF token error - refreshing page');
+                // Refresh CSRF token by reloading page
+                location.reload();
+            }
+        } catch (e) {
+            // Not JSON, ignore
         }
     }
     
@@ -168,6 +247,7 @@ function showChangePasswordModal() {
     document.getElementById('change-password-form').reset();
     document.getElementById('change-password-error').style.display = 'none';
     document.getElementById('change-password-success').style.display = 'none';
+    resetPasswordPolicyIndicators();
 }
 
 // Close change password modal
@@ -176,6 +256,97 @@ function closeChangePasswordModal() {
     document.getElementById('change-password-form').reset();
     document.getElementById('change-password-error').style.display = 'none';
     document.getElementById('change-password-success').style.display = 'none';
+    // Reset password policy indicators
+    resetPasswordPolicyIndicators();
+}
+
+// Validate password strength and update visual indicators
+function validatePasswordStrength(password) {
+    const result = {
+        valid: true,
+        error: ''
+    };
+    
+    // Check length
+    const hasLength = password.length >= 12;
+    updatePolicyIndicator('policy-length', hasLength);
+    
+    // Check uppercase
+    const hasUpper = /[A-Z]/.test(password);
+    updatePolicyIndicator('policy-upper', hasUpper);
+    
+    // Check lowercase
+    const hasLower = /[a-z]/.test(password);
+    updatePolicyIndicator('policy-lower', hasLower);
+    
+    // Check digit
+    const hasDigit = /\d/.test(password);
+    updatePolicyIndicator('policy-digit', hasDigit);
+    
+    // Check special character
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>\[\]\\/_+=\-~`]/.test(password);
+    updatePolicyIndicator('policy-special', hasSpecial);
+    
+    // Validate all requirements
+    if (!hasLength) {
+        result.valid = false;
+        result.error = 'Password must be at least 12 characters long';
+        return result;
+    }
+    
+    const missingRequirements = [];
+    if (!hasUpper) missingRequirements.push('uppercase letter');
+    if (!hasLower) missingRequirements.push('lowercase letter');
+    if (!hasDigit) missingRequirements.push('digit');
+    if (!hasSpecial) missingRequirements.push('special character');
+    
+    if (missingRequirements.length > 0) {
+        result.valid = false;
+        result.error = `Password must contain at least one ${missingRequirements.join(', ')}`;
+        return result;
+    }
+    
+    return result;
+}
+
+// Update password policy indicator
+function updatePolicyIndicator(elementId, isValid) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+    
+    const icon = element.querySelector('i');
+    const text = element.querySelector('span');
+    
+    if (isValid) {
+        icon.className = 'ph ph-check-circle';
+        icon.style.color = 'var(--success)';
+        text.style.color = 'var(--text-primary)';
+        text.style.textDecoration = 'line-through';
+    } else {
+        icon.className = 'ph ph-circle';
+        icon.style.color = 'var(--text-light)';
+        text.style.color = 'var(--text-light)';
+        text.style.textDecoration = 'none';
+    }
+}
+
+// Reset password policy indicators
+function resetPasswordPolicyIndicators() {
+    ['policy-length', 'policy-upper', 'policy-lower', 'policy-digit', 'policy-special'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            const icon = element.querySelector('i');
+            const text = element.querySelector('span');
+            if (icon) {
+                icon.className = 'ph ph-circle';
+                icon.style.color = 'var(--text-light)';
+            }
+            if (text) {
+                text.style.color = 'var(--text-light)';
+                text.style.textDecoration = 'none';
+            }
+        }
+    });
 }
 
 // Handle change password
@@ -199,9 +370,11 @@ async function handleChangePassword(event) {
         return;
     }
     
-    if (newPassword.length < 3) {
-        errorDiv.textContent = 'New password must be at least 3 characters long';
-        errorDiv.style.display = 'block';
+    // Validate password strength
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.valid) {
+        // Show password validation errors as toast notifications instead of in modal
+        showNotification(passwordValidation.error, 'error');
         return;
     }
     
@@ -220,14 +393,12 @@ async function handleChangePassword(event) {
         const data = await response.json();
         
         if (response.ok && data.success) {
-            successMessage.textContent = data.message || 'Password changed successfully.';
-            successDiv.style.display = 'block';
+            // Show success as toast notification
+            showNotification(data.message || 'Password changed successfully.', 'success');
             document.getElementById('change-password-form').reset();
             
-            // Close modal after 2 seconds
-            setTimeout(() => {
-                closeChangePasswordModal();
-            }, 2000);
+            // Close modal immediately on success
+            closeChangePasswordModal();
         } else {
             errorDiv.textContent = data.error || 'Failed to change password';
             errorDiv.style.display = 'block';
@@ -3329,43 +3500,142 @@ function handleResize() {
 }
 
 async function executeCommand(containerId, command) {
-    let cmdToExec = command;
-    const isCd = command.trim().startsWith('cd ');
+    let cmdToExec = command.trim();
+    const isCd = cmdToExec.startsWith('cd ');
     let currentDir = containerCwd[containerId] || '';
 
     // Handle cd command to maintain pseudo-state of working directory
     if (isCd) {
-        const targetDir = command.trim().substring(3).trim();
+        const targetDir = cmdToExec.substring(3).trim();
         if (targetDir) {
-            if (currentDir) {
-                cmdToExec = `cd "${currentDir}" && cd "${targetDir}" && pwd`;
+            // Resolve path (handle absolute, relative, and parent directory)
+            let newDir;
+            if (targetDir.startsWith('/')) {
+                // Absolute path
+                newDir = targetDir;
+            } else if (targetDir === '..') {
+                // Parent directory
+                if (currentDir) {
+                    const parts = currentDir.split('/').filter(p => p);
+                    parts.pop();
+                    newDir = '/' + parts.join('/');
+                } else {
+                    newDir = '/';
+                }
+            } else if (targetDir === '.' || targetDir === '') {
+                // Current directory or empty (stay where we are)
+                newDir = currentDir || '/';
+            } else if (currentDir) {
+                // Relative path - resolve it
+                let combined = currentDir.endsWith('/') 
+                    ? currentDir + targetDir 
+                    : currentDir + '/' + targetDir;
+                // Normalize path
+                const parts = combined.split('/').filter(p => p && p !== '.');
+                const resolved = [];
+                for (const part of parts) {
+                    if (part === '..') {
+                        if (resolved.length > 0) {
+                            resolved.pop();
+                        }
+                    } else {
+                        resolved.push(part);
+                    }
+                }
+                newDir = '/' + resolved.join('/');
             } else {
-                cmdToExec = `cd "${targetDir}" && pwd`;
+                newDir = '/' + targetDir;
             }
-        }
-    } else {
-        // Prepend current working directory
-        if (currentDir) {
-            cmdToExec = `cd "${currentDir}" && ${command}`;
+            
+            // Execute pwd command with the new working directory to verify and get actual path
+            try {
+                const response = await fetch(`/api/container/${containerId}/exec`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        command: 'pwd',
+                        working_dir: newDir
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.exit_code === 0) {
+                    // Update our cwd tracker with the actual resolved directory
+                    const pwdOutput = data.output.trim();
+                    const lines = pwdOutput.split('\n');
+                    const actualDir = lines[lines.length - 1]; // Get last line (pwd output)
+                    if (actualDir && actualDir.startsWith('/')) {
+                        containerCwd[containerId] = actualDir;
+                    }
+                    term.write('\r\n');
+                } else {
+                    // Directory doesn't exist
+                    term.write(`\x1b[1;31mcd: ${targetDir}: No such file or directory\x1b[0m\r\n`);
+                }
+            } catch (e) {
+                term.write(`\x1b[1;31mConnection error: ${e.message}\x1b[0m\r\n`);
+            }
+            
+            // Update prompt
+            const displayDir = containerCwd[containerId] ? containerCwd[containerId].split('/').pop() || '/' : '';
+            const prompt = displayDir ? `${displayDir} $ ` : '$ ';
+            term.write(prompt);
+            return;
+        } else {
+            // cd without arguments goes to home directory
+            try {
+                const response = await fetch(`/api/container/${containerId}/exec`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ 
+                        command: 'pwd',
+                        working_dir: '~'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.exit_code === 0) {
+                    const pwdOutput = data.output.trim();
+                    const lines = pwdOutput.split('\n');
+                    const actualDir = lines[lines.length - 1];
+                    if (actualDir && actualDir.startsWith('/')) {
+                        containerCwd[containerId] = actualDir;
+                    }
+                }
+            } catch (e) {
+                // Ignore errors, just reset to root
+                containerCwd[containerId] = '/';
+            }
+            
+            const displayDir = containerCwd[containerId] ? containerCwd[containerId].split('/').pop() || '/' : '';
+            const prompt = displayDir ? `${displayDir} $ ` : '$ ';
+            term.write('\r\n' + prompt);
+            return;
         }
     }
-
+    
+    // For non-cd commands, execute with current working directory using Docker's -w flag
     try {
         const response = await fetch(`/api/container/${containerId}/exec`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ command: cmdToExec })
+            body: JSON.stringify({ 
+                command: cmdToExec,
+                working_dir: currentDir || undefined
+            })
         });
         
         const data = await response.json();
         
         if (data.exit_code === 0) {
-            if (isCd) {
-                // If cd was successful, update our cwd tracker
-                containerCwd[containerId] = data.output.trim();
-            } else if (data.output) {
+            if (data.output) {
                 // Fix newlines for terminal (LF -> CRLF)
                 const output = data.output.replace(/\n/g, '\r\n');
                 term.write(output);
@@ -6341,10 +6611,19 @@ async function showS3ConfigModal() {
             document.getElementById('s3-bucket').value = data.s3_bucket || '';
             document.getElementById('s3-region').value = data.s3_region || '';
             document.getElementById('s3-access-key').value = data.s3_access_key || '';
-            // Populate secret key (will be obscured as password field)
-            document.getElementById('s3-secret-key').value = data.s3_secret_key || '';
+            // Secret key is masked for security - leave field empty or show placeholder
+            // User must enter secret key if they want to change it
+            const secretKeyField = document.getElementById('s3-secret-key');
+            if (data.s3_secret_key === '***') {
+                // Secret key exists but is masked - show placeholder
+                secretKeyField.value = '';
+                secretKeyField.placeholder = 'Enter new secret key (leave blank to keep existing)';
+            } else {
+                secretKeyField.value = '';
+                secretKeyField.placeholder = '';
+            }
             
-            // Update currentStorageSettings
+            // Update currentStorageSettings (without secret key for security)
             currentStorageSettings = data;
         }
     } catch (error) {
@@ -6354,7 +6633,12 @@ async function showS3ConfigModal() {
             document.getElementById('s3-bucket').value = currentStorageSettings.s3_bucket || '';
             document.getElementById('s3-region').value = currentStorageSettings.s3_region || '';
             document.getElementById('s3-access-key').value = currentStorageSettings.s3_access_key || '';
-            document.getElementById('s3-secret-key').value = currentStorageSettings.s3_secret_key || '';
+            // Don't populate secret key from cache for security
+            const secretKeyField = document.getElementById('s3-secret-key');
+            secretKeyField.value = '';
+            if (currentStorageSettings.s3_secret_key === '***') {
+                secretKeyField.placeholder = 'Enter new secret key (leave blank to keep existing)';
+            }
         }
     }
     
@@ -6381,8 +6665,9 @@ async function testS3Connection() {
     const accessKey = document.getElementById('s3-access-key').value.trim();
     const secretKey = document.getElementById('s3-secret-key').value.trim();
     
+    // For testing, secret key is required
     if (!bucket || !region || !accessKey || !secretKey) {
-        showS3Error('Please fill in all fields');
+        showS3Error('Please fill in all fields (including secret key for testing)');
         return;
     }
     
@@ -6442,10 +6727,14 @@ async function saveS3Config(event) {
     const accessKey = document.getElementById('s3-access-key').value.trim();
     const secretKey = document.getElementById('s3-secret-key').value.trim();
     
-    if (!bucket || !region || !accessKey || !secretKey) {
-        showS3Error('Please fill in all fields');
+    // Validate required fields (secret key can be empty if preserving existing)
+    if (!bucket || !region || !accessKey) {
+        showS3Error('Please fill in bucket, region, and access key');
         return;
     }
+    
+    // If secret key is empty, send masked value to preserve existing
+    const secretKeyToSend = secretKey || '***';
     
     const errorEl = document.getElementById('s3-config-error');
     const successEl = document.getElementById('s3-config-success');
@@ -6453,7 +6742,7 @@ async function saveS3Config(event) {
     errorEl.style.display = 'none';
     successEl.style.display = 'none';
     
-    await saveStorageSettings('s3', bucket, region, accessKey, secretKey);
+    await saveStorageSettings('s3', bucket, region, accessKey, secretKeyToSend);
 }
 
 async function saveStorageSettings(storageType, bucket = '', region = '', accessKey = '', secretKey = '') {

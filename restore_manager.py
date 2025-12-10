@@ -12,6 +12,7 @@ import shutil
 import glob
 import tarfile
 from typing import Dict, Optional, Callable
+from error_utils import safe_log_error
 
 
 class RestoreManager:
@@ -150,9 +151,8 @@ class RestoreManager:
         except tarfile.TarError:
             return {'error': 'Invalid tar.gz file'}
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {'error': f'Failed to preview backup: {str(e)}'}
+            safe_log_error(e, context="preview_backup")
+            return {'error': 'Failed to preview backup'}
     
     def restore_backup(self, backup_file_path: str, new_name: str = '', overwrite_volumes: Optional[bool] = None, 
                       port_overrides: Optional[Dict[str, str]] = None, user: Optional[str] = None) -> Dict:
@@ -485,9 +485,8 @@ class RestoreManager:
                 )
             return {'error': error_msg}
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            error_msg = f'Restore failed: {str(e)}'
+            safe_log_error(e, context="restore_backup")
+            error_msg = 'Restore failed'
             if self.audit_log_manager:
                 self.audit_log_manager.log_event(
                     operation_type='restore',

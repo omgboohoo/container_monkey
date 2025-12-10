@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.2**
+**Version 0.3.3**
 
 ## Overview
 
@@ -305,6 +305,15 @@ GET    /console/<container_id>                  # Container console page
 - Requires Docker socket access (run with appropriate permissions)
 - **Built-in authentication**: Session-based login system with SQLite user database (`auth_manager.py`)
   - Session lifetime: 1 day (24 hours)
+- **Strong Password Policy**: Enforced password complexity requirements
+  - Minimum 12 characters length
+  - Must contain at least one uppercase letter (A-Z)
+  - Must contain at least one lowercase letter (a-z)
+  - Must contain at least one digit (0-9)
+  - Must contain at least one special character (!@#$%^&*...)
+  - Real-time password validation with visual feedback in change password modal
+  - Password policy requirements clearly displayed to users
+  - Backend validation ensures policy enforcement
 - Default credentials: username `admin`, password `c0Nta!nerM0nK3y#Q92x` (should be changed in production)
   - **Security warning modal** appears automatically when default credentials are used
 - **Encryption Key Management**: Unique random encryption key generated per installation
@@ -312,6 +321,12 @@ GET    /console/<container_id>                  # Container console page
   - Key file has restricted permissions (600 - owner read/write only)
   - No hardcoded encryption keys - fails securely if key cannot be accessed
 - All API endpoints require authentication (except `/api/login`, `/api/logout`, `/api/auth-status`)
+- **Command Injection Prevention**: 
+  - Container exec commands sanitized using `shlex.quote()` to prevent shell injection
+  - Commands with shell operators (`&&`, `|`, `;`) are safely escaped
+  - Container ID validation ensures proper format before execution
+  - Container redeploy uses secure command parsing without shell fallback
+- **Secure Working Directory**: Uses Docker's native `-w` flag instead of shell-based directory changes
 - File uploads validated and sanitized
 - Container commands executed with user permissions
 - Volume exploration limited to readable paths

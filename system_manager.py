@@ -11,6 +11,7 @@ import psutil
 from typing import Dict, Any, Optional
 import docker_utils
 from docker_utils import APP_CONTAINER_NAME, APP_VOLUME_NAME
+from error_utils import safe_log_error
 
 
 def format_size(size_bytes: Optional[int]) -> str:
@@ -330,9 +331,8 @@ def get_system_stats() -> Dict[str, Any]:
         }
     except Exception as e:
         print(f"Error in get_system_stats: {e}")
-        import traceback
-        traceback.print_exc()
-        return {'error': str(e)}
+        safe_log_error(e, context="get_system_stats")
+        return {'error': 'Failed to retrieve system statistics'}
 
 
 def get_statistics() -> Dict[str, Any]:
@@ -552,9 +552,8 @@ def get_statistics() -> Dict[str, Any]:
         }
     except Exception as e:
         print(f"Error in get_statistics: {e}")
-        import traceback
-        traceback.print_exc()
-        return {'error': str(e)}
+        safe_log_error(e, context="get_statistics")
+        return {'error': 'Failed to retrieve statistics'}
 
 
 def check_environment() -> Dict[str, Any]:

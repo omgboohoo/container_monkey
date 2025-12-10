@@ -4,6 +4,7 @@ Handles user authentication and user management
 """
 import sqlite3
 import os
+import re
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from flask import session, request, jsonify, redirect, url_for
@@ -133,9 +134,33 @@ class AuthManager:
             
             # Update password if provided
             if new_password:
-                if len(new_password) < 3:
+                # Enforce strong password policy
+                if len(new_password) < 12:
                     conn.close()
-                    return {'error': 'New password must be at least 3 characters long', 'status_code': 400}
+                    return {'error': 'Password must be at least 12 characters long', 'status_code': 400}
+                
+                # Check password complexity requirements
+                has_upper = bool(re.search(r'[A-Z]', new_password))
+                has_lower = bool(re.search(r'[a-z]', new_password))
+                has_digit = bool(re.search(r'\d', new_password))
+                has_special = bool(re.search(r'[!@#$%^&*(),.?":{}|<>\[\]\\/_+=\-~`]', new_password))
+                
+                missing_requirements = []
+                if not has_upper:
+                    missing_requirements.append('uppercase letter')
+                if not has_lower:
+                    missing_requirements.append('lowercase letter')
+                if not has_digit:
+                    missing_requirements.append('digit')
+                if not has_special:
+                    missing_requirements.append('special character')
+                
+                if missing_requirements:
+                    conn.close()
+                    return {
+                        'error': f'Password must contain at least one {", ".join(missing_requirements)}',
+                        'status_code': 400
+                    }
                 
                 new_password_hash = generate_password_hash(new_password)
                 updates.append('password_hash = ?')

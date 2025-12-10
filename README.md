@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.2**
+**Version 0.3.3**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -207,8 +207,32 @@ The application has been refactored into a modular architecture with separate ma
 - Runs with Docker socket access (requires appropriate permissions)
 - Built-in authentication (configurable)
   - Session lifetime: 1 day (24 hours)
+  - **Session Cookie Security**: Enhanced session cookie protection
+    - `HttpOnly` flag prevents JavaScript access to cookies (XSS protection)
+    - `SameSite='Lax'` provides CSRF protection
+    - **Automatic HTTPS Detection**: Secure flag automatically enabled when HTTPS is detected
+      - Checks `X-Forwarded-Proto` header from reverse proxy (nginx, Apache, etc.)
+      - Since TLS is always behind a proxy, only checks the proxy header
+      - Secure flag set automatically based on header value - no manual configuration required
+    - Works with both HTTP and HTTPS deployments
+  - **Strong Password Policy**: Enforced password complexity requirements
+    - Minimum 12 characters
+    - Must contain uppercase, lowercase, digit, and special character
+    - Real-time password validation with visual feedback
+- **CSRF Protection**: Flask-WTF CSRF protection for all state-changing requests
 - **Encryption Key**: Unique random encryption key generated per installation, stored securely in Docker volume
 - **Default Credentials Warning**: Modal warning appears when using default login credentials
+- **Command Injection Prevention**: Container exec commands are properly sanitized to prevent command injection attacks
+- **Secure Command Execution**: Uses Docker's native working directory support instead of shell-based operations
+- **Error Handling Security**: Safe error logging prevents information disclosure in production
+  - Full stack traces only shown in debug mode
+  - Generic error messages returned to users to prevent information leakage
+  - Prevents exposure of file paths, code structure, and internal system details
+- **S3 Credentials Security**: S3 secret keys are never exposed in API responses
+  - Secret keys returned as masked placeholders (`***`) in API responses
+  - Users can update S3 settings without re-entering secret key (preserves existing)
+  - Secret keys only transmitted when explicitly changed by user
+  - Prevents credential exposure through API inspection or network monitoring
 - Suggest use nginx reverse proxy with TLS termination and IP-based access control if public
 
 ## Development

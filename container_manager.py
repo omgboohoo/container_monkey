@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import docker_utils
 from docker_utils import APP_CONTAINER_NAME, reconstruct_docker_run_command
+from error_utils import safe_log_error
 
 
 class ContainerManager:
@@ -157,8 +158,7 @@ class ContainerManager:
                 return {'containers': container_list}
             except Exception as e:
                 print(f"Direct API client error: {e}")
-                import traceback
-                traceback.print_exc()
+                safe_log_error(e, context="list_containers")
                 cli_containers = self._get_containers_via_cli()
                 if cli_containers is not None:
                     return {'containers': cli_containers}
@@ -572,21 +572,41 @@ class ContainerManager:
                 }
                 return details
             except Exception as e:
-                import traceback
-                traceback.print_exc()
-                return {'error': f'Failed to get container details: {str(e)}'}
+                safe_log_error(e, context="container_details")
+                return {'error': 'Failed to get container details'}
         
         return {'error': 'Docker client not available'}
     
-    def exec_container_command(self, container_id: str, command: str) -> Dict[str, Any]:
-        """Execute a command in a container"""
+    def exec_container_command(self, container_id: str, command: str, working_dir: Optional[str] = None) -> Dict[str, Any]:
+        """Execute a command in a container
+        
+        Args:
+            container_id: Container ID or name
+            command: Command to execute
+            working_dir: Optional working directory (uses Docker's -w flag)
+        """
         if not command:
             return {'output': ''}
+        
+        # Validate container_id format (Docker IDs are hex strings, 12 chars minimum)
+        if not container_id or not all(c in '0123456789abcdefABCDEF' for c in container_id[:12]):
+            return {'error': 'Invalid container ID format'}
         
         docker_api_client = docker_utils.docker_api_client
         if docker_api_client:
             try:
-                exec_cmd = ['docker', 'exec', container_id, 'sh', '-c', command]
+                # Security fix: Use shlex.quote to safely escape the command for shell execution
+                # This prevents command injection while still allowing shell features
+                # The command is passed as a single quoted argument to sh -c
+                safe_command = shlex.quote(command)
+                exec_cmd = ['docker', 'exec']
+                
+                # Add working directory if provided (using -w flag for better security)
+                if working_dir:
+                    exec_cmd.extend(['-w', working_dir])
+                
+                exec_cmd.extend([container_id, 'sh', '-c', safe_command])
+                
                 result = subprocess.run(
                     exec_cmd,
                     capture_output=True,
@@ -763,19 +783,31 @@ class ContainerManager:
             
             clean_cmd_str = docker_run_cmd.replace('\\\n', ' ').replace('\n', ' ')
             
+            # Security fix: Never use shell=True. If parsing fails, return error instead.
             try:
                 cmd_parts = shlex.split(clean_cmd_str)
-                use_shell = False
             except Exception as e:
-                print(f"Warning: shlex split failed ({e}), using shell=True execution")
-                cmd_parts = clean_cmd_str
-                use_shell = True
+                # Fail securely instead of falling back to shell execution
+                error_msg = f"Failed to parse docker command safely: {str(e)}"
+                print(f"ERROR: {error_msg}")
+                return {
+                    'error': error_msg,
+                    'command': docker_run_cmd
+                }
             
-            print(f"Executing redeploy command (shell={use_shell}): {cmd_parts}")
+            # Validate that we have at least docker and run commands
+            if len(cmd_parts) < 2 or cmd_parts[0] != 'docker':
+                return {
+                    'error': 'Invalid docker command structure',
+                    'command': docker_run_cmd
+                }
             
+            print(f"Executing redeploy command: {cmd_parts}")
+            
+            # Security fix: Never use shell=True - always use array-based execution
             deploy_result = subprocess.run(
                 cmd_parts,
-                shell=use_shell,
+                shell=False,  # Explicitly set to False for security
                 capture_output=True,
                 text=True,
                 timeout=60

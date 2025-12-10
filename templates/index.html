@@ -5,7 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Container Monkey - Secure Your Docker Environment</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.2">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.3">
+    <!-- CSRF Token -->
+    <script>
+        // Make CSRF token available to JavaScript
+        window.csrfToken = '{{ csrf_token() }}';
+    </script>
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <!-- XTerm.js -->
@@ -113,7 +118,7 @@
                     <i class="ph-fill ph-github-logo"></i>
                     <span>GitHub</span>
                 </a>
-                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.3.2</span>
+                <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> - v0.3.3</span>
             </div>
         </aside>
 
@@ -1108,7 +1113,31 @@
                     <label for="new-password" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">New Password <span style="color: var(--danger);">*</span></label>
                     <input type="password" id="new-password" required
                            style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
-                           placeholder="Enter new password">
+                           placeholder="Enter new password"
+                           oninput="validatePasswordStrength()">
+                    <div id="password-policy" style="margin-top: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); font-size: 0.9em;">
+                        <div style="color: var(--text-secondary); font-weight: 500; margin-bottom: 8px;">Password Requirements:</div>
+                        <div id="policy-length" style="color: var(--text-light); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                            <i class="ph ph-circle" style="font-size: 0.8em;"></i>
+                            <span>At least 12 characters</span>
+                        </div>
+                        <div id="policy-upper" style="color: var(--text-light); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                            <i class="ph ph-circle" style="font-size: 0.8em;"></i>
+                            <span>One uppercase letter (A-Z)</span>
+                        </div>
+                        <div id="policy-lower" style="color: var(--text-light); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                            <i class="ph ph-circle" style="font-size: 0.8em;"></i>
+                            <span>One lowercase letter (a-z)</span>
+                        </div>
+                        <div id="policy-digit" style="color: var(--text-light); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;">
+                            <i class="ph ph-circle" style="font-size: 0.8em;"></i>
+                            <span>One digit (0-9)</span>
+                        </div>
+                        <div id="policy-special" style="color: var(--text-light); display: flex; align-items: center; gap: 8px;">
+                            <i class="ph ph-circle" style="font-size: 0.8em;"></i>
+                            <span>One special character (!@#$%^&*...)</span>
+                        </div>
+                    </div>
                 </div>
                 <div style="margin-bottom: 24px;">
                     <label for="confirm-password" style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Confirm New Password <span style="color: var(--danger);">*</span></label>

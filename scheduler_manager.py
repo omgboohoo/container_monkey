@@ -9,6 +9,7 @@ import threading
 import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
+from error_utils import safe_log_error
 
 
 class SchedulerManager:
@@ -310,8 +311,7 @@ class SchedulerManager:
                 time.sleep(60)
             except Exception as e:
                 print(f"❌ Error in scheduler loop: {e}")
-                import traceback
-                traceback.print_exc()
+                safe_log_error(e, context="scheduler_loop")
                 time.sleep(60)
     
     def _run_scheduled_backups(self):
@@ -486,6 +486,5 @@ class SchedulerManager:
                 print(f"ℹ️  No old scheduled backups to cleanup")
         except Exception as e:
             print(f"❌ Error during cleanup: {e}")
-            import traceback
-            traceback.print_exc()
+            safe_log_error(e, context="cleanup_old_backups")
 

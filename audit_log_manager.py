@@ -7,6 +7,7 @@ import os
 import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+from error_utils import safe_log_error
 
 
 class AuditLogManager:
@@ -60,8 +61,7 @@ class AuditLogManager:
             return True
         except Exception as e:
             print(f"⚠️  Error logging audit event: {e}")
-            import traceback
-            traceback.print_exc()
+            safe_log_error(e, context="log_event")
             return False
     
     def get_logs(self, limit: int = 1000, offset: int = 0, 
@@ -166,9 +166,8 @@ class AuditLogManager:
             }
         except Exception as e:
             print(f"⚠️  Error retrieving audit logs: {e}")
-            import traceback
-            traceback.print_exc()
-            return {'error': str(e), 'logs': [], 'total': 0}
+            safe_log_error(e, context="get_logs")
+            return {'error': 'Failed to retrieve audit logs', 'logs': [], 'total': 0}
     
     def get_statistics(self) -> Dict[str, Any]:
         """
@@ -259,7 +258,6 @@ class AuditLogManager:
             }
         except Exception as e:
             print(f"⚠️  Error clearing audit logs: {e}")
-            import traceback
-            traceback.print_exc()
-            return {'error': str(e)}
+            safe_log_error(e, context="clear_all_logs")
+            return {'error': 'Failed to clear audit logs'}
 

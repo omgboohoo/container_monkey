@@ -13,6 +13,7 @@ import subprocess
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from werkzeug.utils import secure_filename
+from error_utils import safe_log_error
 
 
 class BackupFileManager:
@@ -158,8 +159,7 @@ class BackupFileManager:
                     print(f"ℹ️  File {filename} not found in S3, checking local storage")
             except Exception as e:
                 print(f"⚠️  Error downloading from S3: {e}")
-                import traceback
-                traceback.print_exc()
+                safe_log_error(e, context="get_backup_path_s3")
         
         # Fall back to local
         file_path = os.path.join(self.backup_dir, filename)
@@ -260,14 +260,12 @@ class BackupFileManager:
                                         print(f"⚠️  Failed to delete {filename} from S3: {delete_result.get('error', 'Unknown error')}")
                                 except Exception as e:
                                     print(f"⚠️  Error deleting {filename} from S3: {e}")
-                                    import traceback
-                                    traceback.print_exc()
+                                    safe_log_error(e, context=f"delete_backup_s3_{filename}")
                     else:
                         print(f"⚠️  Error listing S3 files: {list_result.get('error', 'Unknown error')}")
                 except Exception as e:
                     print(f"⚠️  Error deleting from S3: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    safe_log_error(e, context="delete_all_backups_s3")
             
             # Also delete local backups
             if os.path.exists(self.backup_dir):
@@ -535,8 +533,7 @@ class BackupFileManager:
                                 files_to_backup.append(filename)
                 except Exception as e:
                     print(f"⚠️  Error listing S3 backups: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    safe_log_error(e, context="prepare_download_all_s3")
             
             # Also list local backups (for migration or fallback)
             if os.path.exists(self.backup_dir):
@@ -693,9 +690,8 @@ class BackupFileManager:
         except Exception as e:
             if session_id in self.download_all_progress:
                 self.download_all_progress[session_id]['status'] = 'error'
-                self.download_all_progress[session_id]['error'] = str(e)
-            import traceback
-            traceback.print_exc()
+                self.download_all_progress[session_id]['error'] = 'Failed to create archive'
+            safe_log_error(e, context="create_download_all_archive")
             print(f"❌ Error creating archive: {e}")
     
     def create_download_all_archive(self, session_id: str) -> Dict[str, Any]:

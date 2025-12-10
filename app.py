@@ -2,10 +2,11 @@
 Container Monkey - Flask Application
 Refactored to use modular managers
 """
-from flask import Flask, render_template, jsonify, send_file, request, after_this_request, session, redirect, url_for
+from flask import Flask, render_template, jsonify, send_file, request, after_this_request, session, redirect, url_for, has_request_context
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.utils import secure_filename
+from flask_wtf.csrf import CSRFProtect, CSRFError
 import os
 import secrets
 import socket
@@ -34,11 +35,27 @@ from system_manager import (
     get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
 )
+from error_utils import safe_log_error
 
 # Initialize Flask app
 app = Flask(__name__)
 app.config['SECRET_KEY'] = secrets.token_hex(32)
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=1)
+
+# Session cookie security settings (works with HTTP or HTTPS, with or without proxy)
+app.config['SESSION_COOKIE_SECURE'] = False  # Allow HTTP (will be set dynamically if HTTPS detected)
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access (XSS protection)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+
+# Initialize CSRF protection
+csrf = CSRFProtect(app)
+
+# Configure CSRF settings
+app.config['WTF_CSRF_ENABLED'] = True
+app.config['WTF_CSRF_TIME_LIMIT'] = None  # No time limit on tokens
+app.config['WTF_CSRF_COOKIE_NAME'] = 'X-CSRFToken'
+app.config['WTF_CSRF_HEADERS'] = ['X-CSRFToken', 'X-CSRF-Token']
+app.config['WTF_CSRF_SSL_STRICT'] = False  # Set True in production with HTTPS
 
 # Initialize rate limiter
 limiter = Limiter(
@@ -122,6 +139,20 @@ if backup_manager:
 def login_required(f):
     return auth_manager.login_required(f)
 
+# Configure session cookie Secure flag dynamically based on reverse proxy header
+@app.before_request
+def configure_session_cookie():
+    """Dynamically set session cookie Secure flag based on X-Forwarded-Proto header from reverse proxy"""
+    try:
+        if has_request_context():
+            # Check X-Forwarded-Proto header set by reverse proxy (nginx, etc.)
+            # If TLS is used, it will always be behind a proxy, so we only check this header
+            forwarded_proto = request.headers.get('X-Forwarded-Proto', '').lower()
+            app.config['SESSION_COOKIE_SECURE'] = (forwarded_proto == 'https')
+    except Exception:
+        # If anything fails, default to False (allow HTTP)
+        app.config['SESSION_COOKIE_SECURE'] = False
+
 # Protect all routes except auth routes
 @app.before_request
 def require_login():
@@ -144,6 +175,7 @@ def require_login():
 # Authentication routes
 @app.route('/api/login', methods=['POST'])
 @limiter.limit("5 per minute")
+@csrf.exempt  # Exempt login since it creates new session
 def login():
     data = request.get_json() or {}
     username = data.get('username', '').strip()
@@ -218,9 +250,8 @@ def system_stats():
             return jsonify(result), 500
         return jsonify(result)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        safe_log_error(e, context="system_stats")
+        return jsonify({'error': 'Failed to retrieve system statistics'}), 500
 
 @app.route('/api/statistics')
 @login_required
@@ -319,7 +350,8 @@ def container_details(container_id):
 def exec_container_command(container_id):
     data = request.get_json() or {}
     command = data.get('command', '')
-    result = container_manager.exec_container_command(container_id, command)
+    working_dir = data.get('working_dir')  # Optional working directory
+    result = container_manager.exec_container_command(container_id, command, working_dir=working_dir)
     if 'error' in result:
         return jsonify(result), 500
     return jsonify(result)
@@ -842,16 +874,18 @@ def clear_audit_logs():
 @app.route('/api/storage/settings', methods=['GET'])
 @login_required
 def get_storage_settings():
-    """Get storage settings"""
+    """Get storage settings (secret key is never returned for security)"""
     try:
         settings = storage_settings_manager.get_settings()
-        # Return secret key for modal prepopulation (it's already decrypted and will be obscured in password field)
+        # Security: Never return secret key in API response
+        # Return masked placeholder if S3 is configured, empty string otherwise
+        secret_key_placeholder = '***' if settings.get('storage_type') == 's3' and settings.get('s3_secret_key') else ''
         return jsonify({
             'storage_type': settings['storage_type'],
             's3_bucket': settings['s3_bucket'],
             's3_region': settings['s3_region'],
             's3_access_key': settings['s3_access_key'],
-            's3_secret_key': settings['s3_secret_key']  # Return secret key for prepopulation (obscured in password field)
+            's3_secret_key': secret_key_placeholder  # Never return actual secret key
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -873,8 +907,20 @@ def update_storage_settings():
             s3_access_key = data.get('s3_access_key', '').strip()
             s3_secret_key = data.get('s3_secret_key', '').strip()
             
-            if not s3_bucket or not s3_region or not s3_access_key or not s3_secret_key:
-                return jsonify({'error': 'All S3 fields are required when storage_type is "s3"'}), 400
+            # Check if secret key is masked (user didn't change it)
+            is_masked_secret = s3_secret_key == '***' or s3_secret_key == ''
+            
+            # Validate required fields (secret key can be masked if already configured)
+            if not s3_bucket or not s3_region or not s3_access_key:
+                return jsonify({'error': 'Bucket, region, and access key are required when storage_type is "s3"'}), 400
+            
+            # If secret key is masked/empty, check if S3 is already configured
+            if is_masked_secret:
+                current_settings = storage_settings_manager.get_settings()
+                if current_settings.get('storage_type') != 's3' or not current_settings.get('s3_secret_key'):
+                    return jsonify({'error': 'Secret key is required when configuring S3 for the first time'}), 400
+                # Preserve existing secret key by passing None
+                s3_secret_key = None
             
             result = storage_settings_manager.update_settings(
                 storage_type=storage_type,
@@ -897,9 +943,19 @@ def update_storage_settings():
         if 'error' in result:
             return jsonify(result), 500
         
+        # Get updated settings but exclude secret key for security
+        updated_settings = storage_settings_manager.get_settings()
+        secret_key_placeholder = '***' if updated_settings.get('storage_type') == 's3' and updated_settings.get('s3_secret_key') else ''
+        
         return jsonify({
             'success': True,
-            'settings': storage_settings_manager.get_settings()
+            'settings': {
+                'storage_type': updated_settings['storage_type'],
+                's3_bucket': updated_settings['s3_bucket'],
+                's3_region': updated_settings['s3_region'],
+                's3_access_key': updated_settings['s3_access_key'],
+                's3_secret_key': secret_key_placeholder  # Never return actual secret key
+            }
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -930,6 +986,12 @@ def test_s3_connection():
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+# CSRF error handler
+@app.errorhandler(CSRFError)
+def handle_csrf_error(e):
+    """Handle CSRF validation errors"""
+    return jsonify({'error': 'CSRF token missing or invalid', 'csrf_error': True}), 400
 
 # Error handler removed - was causing issues with error propagation
 # Errors are now handled at the route level

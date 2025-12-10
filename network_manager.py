@@ -7,6 +7,7 @@ import json
 import subprocess
 from datetime import datetime
 from typing import Dict, Any, Optional
+from error_utils import safe_log_error
 
 
 class NetworkManager:
@@ -321,9 +322,8 @@ class NetworkManager:
                 'network_name': network_name
             }
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {'error': f'Restore failed: {str(e)}'}
+            safe_log_error(e, context="restore_network")
+            return {'error': 'Restore failed'}
     
     def list_network_backups(self) -> Dict[str, Any]:
         """List all network backup files"""

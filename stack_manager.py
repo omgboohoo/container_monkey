@@ -5,6 +5,7 @@ Handles Docker stack operations
 import subprocess
 from typing import Dict, List, Any
 from docker_utils import APP_CONTAINER_NAME, APP_VOLUME_NAME
+from error_utils import safe_log_error
 
 
 class StackManager:
@@ -173,9 +174,8 @@ class StackManager:
             
             return {'stacks': stacks}
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return {'error': str(e)}
+            safe_log_error(e, context="list_stacks")
+            return {'error': 'Failed to list stacks'}
     
     def delete_stack(self, stack_name: str) -> Dict[str, Any]:
         """Delete a Docker stack"""

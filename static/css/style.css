@@ -1460,13 +1460,16 @@ select.form-control:focus option:checked {
 /* Notification Container */
 #notification-container {
     position: fixed;
-    top: 100px;
-    right: 20px;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 2000;
     display: flex;
     flex-direction: column;
     gap: 10px;
     pointer-events: none;
+    max-width: 400px;
+    width: auto;
 }
 
 .notification {
