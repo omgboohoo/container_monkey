@@ -65,6 +65,83 @@ body {
     overflow-y: auto;
     box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
     padding-top: 16px;
+    transition: width 0.3s ease, transform 0.3s ease;
+}
+
+.sidebar.collapsed {
+    width: 80px;
+}
+
+.sidebar.collapsed .nav-text {
+    opacity: 0;
+    width: 0;
+    overflow: hidden;
+}
+
+.sidebar.collapsed .sidebar-footer {
+    padding: 12px 8px;
+}
+
+.sidebar.collapsed .coffee-link,
+.sidebar.collapsed .github-link {
+    padding: 10px;
+    justify-content: center;
+}
+
+.sidebar.collapsed .coffee-link span,
+.sidebar.collapsed .github-link span,
+.sidebar.collapsed .version-text {
+    display: none;
+}
+
+.sidebar.collapsed .nav-item {
+    padding: 8px;
+    justify-content: center;
+}
+
+.sidebar.collapsed .nav-icon {
+    margin-right: 0;
+}
+
+/* Sidebar Toggle Button */
+.sidebar-toggle {
+    position: fixed;
+    left: var(--sidebar-width);
+    top: calc(50vh + var(--top-bar-height) / 2);
+    transform: translateY(-50%) translateX(-50%);
+    width: 16px;
+    height: 32px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    z-index: 101;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-toggle:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-hover);
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.3);
+}
+
+.sidebar-toggle i {
+    font-size: 0.9em;
+    transition: transform 0.3s ease;
+}
+
+.sidebar.collapsed ~ .sidebar-toggle {
+    left: 80px;
+}
+
+.sidebar.collapsed ~ .sidebar-toggle i {
+    transform: rotate(180deg);
 }
 
 /* Sidebar Navigation */
@@ -151,6 +228,7 @@ body {
     border-left: 3px solid transparent;
     margin: 0;
     position: relative;
+    white-space: nowrap;
 }
 
 .nav-item:hover {
@@ -188,6 +266,11 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed ~ .main-content {
+    margin-left: 80px;
 }
 
 /* Top Bar */
@@ -433,6 +516,18 @@ body {
     font-size: 2em;
     font-weight: 700;
     letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Ensure icons in section headers are vertically centered */
+.section-header h2 i {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    /* Override inline margin-right since we're using flexbox gap */
+    margin-right: 0 !important;
 }
 
 .btn {
@@ -599,6 +694,18 @@ body {
     min-height: 200px;
     max-height: calc(100vh - var(--top-bar-height) - 120px);
     margin-bottom: 0;
+}
+
+/* When spinner is visible, make empty grid twice the height */
+.table-responsive.loading-grid {
+    min-height: 400px;
+}
+
+/* Fallback: use :has() selector for browsers that support it */
+@supports selector(:has(*)) {
+    .table-responsive:has(.spinner-container.grid-offset[style*="flex"]) {
+        min-height: 400px;
+    }
 }
 
 /* Keep cards and content above tables fixed - they won't scroll */
@@ -775,6 +882,8 @@ body {
     text-align: left;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
+    font-size: 0.95em;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Oxygen, Ubuntu, Cantarell, sans-serif;
 }
 
 .table th {
@@ -788,6 +897,90 @@ body {
     top: 0;
     z-index: 10;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure all table cells match networks table font style */
+.table td {
+    font-size: 0.95em;
+    color: var(--text-primary);
+    font-weight: 400;
+}
+
+/* Ensure nested text elements in table cells inherit uniform font size */
+.table td div,
+.table td span,
+.table td p {
+    font-size: inherit;
+    font-family: inherit;
+}
+
+/* Exception: small helper text (like container IDs) can be smaller */
+.table td [style*="font-size: 0.8em"],
+.table td [style*="font-size:0.8em"] {
+    font-size: 0.8em !important;
+}
+
+/* Ensure all tables use consistent font styling */
+#containers-table,
+#volumes-table,
+#images-table,
+#stacks-table,
+#backups-table,
+#networks-table,
+#statistics-table,
+#audit-log-table,
+#scheduler-containers-table {
+    font-size: 0.95em;
+}
+
+#containers-table th,
+#volumes-table th,
+#images-table th,
+#stacks-table th,
+#backups-table th,
+#networks-table th,
+#statistics-table th,
+#audit-log-table th,
+#scheduler-containers-table th {
+    font-size: 0.8em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-light);
+}
+
+#containers-table td,
+#volumes-table td,
+#images-table td,
+#stacks-table td,
+#backups-table td,
+#networks-table td,
+#statistics-table td,
+#audit-log-table td,
+#scheduler-containers-table td {
+    font-size: 0.95em;
+    color: var(--text-primary);
+    font-weight: 400;
+}
+
+/* Name columns in all tables should be bold */
+#containers-table td:nth-child(2), /* Container name column */
+#volumes-table td:nth-child(2), /* Volume name column */
+#images-table td:nth-child(2), /* Image name column */
+#stacks-table td:nth-child(1), /* Stack name column */
+#backups-table td:nth-child(1), /* Backup filename column */
+#networks-table td:nth-child(1), /* Network name column */
+#statistics-table td:nth-child(1), /* Container name column */
+#audit-log-table td:nth-child(3), /* Container name column */
+#scheduler-containers-table td:nth-child(2) { /* Container name column */
+    font-weight: 600;
+}
+
+/* Container ID in audit log should not be bold */
+#audit-log-table td:nth-child(3) > div:last-child,
+#audit-log-table td:nth-child(3) div[style*="font-size: 0.85em"],
+#audit-log-table td:nth-child(3) div[style*="font-size:0.85em"] {
+    font-weight: 400 !important;
 }
 
 .table th.sortable {
@@ -917,6 +1110,16 @@ select.form-control:focus option:checked {
     color: var(--text-primary);
     margin-bottom: 8px;
     letter-spacing: -0.01em;
+}
+
+/* Container name in tables should match table font size and be bold */
+#containers-table .container-name,
+#scheduler-containers-table .container-name {
+    font-size: 0.95em !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    margin-bottom: 4px;
+    letter-spacing: normal;
 }
 
 .container-id {
@@ -1081,6 +1284,9 @@ select.form-control:focus option:checked {
     overflow-y: visible;
     overflow-x: hidden;
     max-height: none;
+    /* Ensure button hover doesn't get cut off - allow overflow for button transform */
+    overflow: visible;
+    padding-bottom: 8px; /* Add bottom padding to prevent button hover from being cut off */
 }
 
 /* Prevent scrollbars on all login modal elements */
@@ -1088,11 +1294,51 @@ select.form-control:focus option:checked {
     overflow: hidden;
 }
 
-#login-modal .modal-content form,
+#login-modal .modal-content form {
+    overflow-x: hidden !important;
+    overflow-y: visible !important; /* Allow button hover transform */
+}
+
 #login-modal .modal-content form > div,
 #login-modal .modal-content label,
 #login-modal .modal-content input {
     overflow: hidden !important;
+}
+
+/* Ensure login button container allows hover transform */
+#login-modal .modal-actions {
+    overflow: visible !important;
+    padding-top: 4px; /* Add padding to prevent button hover from being cut off */
+    margin-top: 24px;
+}
+
+/* Override password manager focus styles on login inputs */
+#login-modal input[type="text"]:focus,
+#login-modal input[type="password"]:focus {
+    outline: none !important;
+    border-color: var(--secondary) !important;
+    background: var(--bg-secondary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    /* Remove any password manager injected styles */
+    -webkit-appearance: none !important;
+    appearance: none !important;
+}
+
+/* Remove autofill background color from password managers */
+#login-modal input:-webkit-autofill,
+#login-modal input:-webkit-autofill:hover,
+#login-modal input:-webkit-autofill:focus,
+#login-modal input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px var(--bg-secondary) inset !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    border-color: var(--secondary) !important;
+}
+
+/* Remove any active/focus pseudo-element styles from password managers */
+#login-modal input::selection {
+    background-color: rgba(59, 130, 246, 0.3) !important;
+    color: var(--text-primary) !important;
 }
 
 /* Prevent overflow in modal forms */
@@ -1382,8 +1628,17 @@ select.form-control:focus option:checked {
 
 /* Grid spinner offset - applies top offset to spinner-container when used in grids */
 .spinner-container.grid-offset {
-    top: 50px; /* Offset from top to avoid appearing too close to grid header */
+    top: 0; /* Start from top to cover full height */
+    bottom: 0; /* Extend to bottom */
     z-index: 10; /* Lower z-index than modal spinners */
+    /* Center spinner vertically - account for header height */
+    padding-top: 50px; /* Offset from top to avoid appearing too close to grid header */
+    box-sizing: border-box;
+    /* Ensure proper centering - flexbox will center content in remaining space */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .spinner {

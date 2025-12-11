@@ -95,6 +95,17 @@ class DatabaseManager:
                 VALUES (?)
             ''', ('local',))
         
+        # Create ui_settings table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ui_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setting_key TEXT UNIQUE NOT NULL,
+                setting_value TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
         # Create indexes for audit_logs
         indexes = [
             ('idx_audit_timestamp', 'audit_logs', 'timestamp'),

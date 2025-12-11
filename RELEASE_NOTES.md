@@ -1,5 +1,51 @@
 # Release Notes
 
+## Version 0.3.5
+
+### UI Improvements
+- **Collapsible Sidebar Menu**: Added collapsible sidebar with toggle button
+  - **Toggle Control**: Collapse/expand button positioned at the border between sidebar and content
+  - **Icon-Only Mode**: When collapsed, sidebar shows only icons for a compact view
+  - **State Persistence**: Sidebar state saved to localStorage and restored on page load
+  - **Smooth Animations**: Transitions for expanding/collapsing sidebar
+  - **Content Adjustment**: Main content area automatically adjusts margin when sidebar collapses
+
+- **Typography Consistency**: Unified font sizes and styles across all data grids
+  - **Uniform Table Headers**: All table headers use consistent font size (0.8em), weight (600), uppercase, and letter spacing
+  - **Uniform Table Cells**: All table cells use consistent font size (0.95em) and weight (400)
+  - **Bold Name Columns**: Name columns in all tables are bold (font-weight: 600) for better readability
+  - **Consistent Styling**: Applied uniform typography to containers, volumes, images, stacks, backups, networks, statistics, audit log, and scheduler tables
+
+- **Loading Grid Improvements**: Enhanced loading state for empty grids
+  - **Increased Height**: Empty grids now display at twice the normal height (400px) when loading for better visibility
+  - **Centered Spinner**: Loading spinner is now perfectly centered vertically within the expanded grid area
+  - **Consistent Experience**: Applied to all grid sections (containers, volumes, images, networks, stacks, backups, statistics, audit log, and scheduler containers)
+  - **Better Visual Feedback**: Larger loading area provides clearer indication that data is being fetched
+
+- **Login Modal Fixes**: Improved login modal interaction and styling
+  - **Button Hover Fix**: Login button hover effect no longer gets cut off at the top - added proper overflow handling and padding
+  - **Input Focus Styling**: Fixed weird active highlight on username/password fields when in focus
+  - **Password Manager Compatibility**: Overrode password manager injected styles to ensure consistent focus appearance
+  - **Autofill Styling**: Proper handling of browser autofill states to maintain consistent visual design
+  - **Better Overflow Handling**: Modal content and form elements now properly handle button hover transforms without clipping
+
+- **Section Header Icon Alignment**: Fixed vertical alignment of icons in page section headers
+  - **Centered Icons**: All section header icons are now perfectly vertically centered with their title text
+  - **Consistent Spacing**: Replaced inline margin styles with flexbox gap for consistent spacing
+  - **Better Visual Balance**: Icons and text now align properly across all page sections (Dashboard, Containers, Volumes, Images, Networks, Stacks, Backup Vault, Backup Scheduler, Audit Log, Statistics)
+  - **Flexbox Layout**: Section headers now use flexbox for improved alignment and consistency
+
+- **Sidebar Menu Reordering**: Improved navigation menu organization
+  - **Logical Grouping**: Reordered sidebar menu items for better workflow
+  - **New Order**: Dashboard → Stacks → Containers → Images → Volumes → Networks → Backup Vault → Backup Scheduler → Audit Log → Statistics
+  - **Better Navigation Flow**: Core Docker resources (Stacks, Containers, Images, Volumes, Networks) are now grouped together after Dashboard
+  - **Improved UX**: Menu order now follows a more intuitive progression from high-level overview to specific resources
+
+### Version Update
+- Updated version number to 0.3.5 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.4
 
 ### UI Improvements

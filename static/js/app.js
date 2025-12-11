@@ -222,6 +222,30 @@ function toggleUserMenu() {
     dropdown.classList.toggle('show');
 }
 
+// Toggle sidebar collapse
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const isCollapsed = sidebar.classList.toggle('collapsed');
+    
+    // Save state to localStorage
+    localStorage.setItem('sidebarCollapsed', isCollapsed);
+}
+
+// Initialize sidebar state from localStorage
+function initSidebarState() {
+    const sidebar = document.getElementById('sidebar');
+    const savedState = localStorage.getItem('sidebarCollapsed');
+    
+    if (savedState === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+}
+
+// Initialize sidebar on page load
+document.addEventListener('DOMContentLoaded', function() {
+    initSidebarState();
+});
+
 // Close user menu when clicking outside
 document.addEventListener('click', function (event) {
     const userMenuContainer = document.getElementById('user-menu-container');
@@ -640,7 +664,10 @@ async function loadContainers() {
         containersSpinner.style.display = 'flex';
         containersSpinner.dataset.shownAt = Date.now(); // Track when shown
     }
-    if (containersWrapper) containersWrapper.style.overflow = 'hidden';
+    if (containersWrapper) {
+        containersWrapper.style.overflow = 'hidden';
+        containersWrapper.classList.add('loading-grid');
+    }
 
     try {
         const response = await fetch('/api/containers');
@@ -730,7 +757,10 @@ async function loadContainers() {
     } finally {
         // Hide spinner and restore overflow
         if (containersSpinner) containersSpinner.style.display = 'none';
-        if (containersWrapper) containersWrapper.style.overflow = '';
+        if (containersWrapper) {
+            containersWrapper.style.overflow = '';
+            containersWrapper.classList.remove('loading-grid');
+        }
         isLoadingContainers = false;
     }
 }
@@ -1655,7 +1685,10 @@ async function loadBackups() {
 
     // Show spinner and prevent scrollbars
     if (backupsSpinner) backupsSpinner.style.display = 'flex';
-    if (backupsWrapper) backupsWrapper.style.overflow = 'hidden';
+    if (backupsWrapper) {
+        backupsWrapper.style.overflow = 'hidden';
+        backupsWrapper.classList.add('loading-grid');
+    }
 
     try {
         const response = await fetch('/api/backups');
@@ -1688,7 +1721,10 @@ async function loadBackups() {
     } finally {
         // Hide spinner and restore overflow
         if (backupsSpinner) backupsSpinner.style.display = 'none';
-        if (backupsWrapper) backupsWrapper.style.overflow = '';
+        if (backupsWrapper) {
+            backupsWrapper.style.overflow = '';
+            backupsWrapper.classList.remove('loading-grid');
+        }
     }
 }
 
@@ -1704,7 +1740,10 @@ async function loadStatistics() {
 
     // Show spinner and prevent scrollbars
     if (statisticsSpinner) statisticsSpinner.style.display = 'flex';
-    if (statisticsWrapper) statisticsWrapper.style.overflow = 'hidden';
+    if (statisticsWrapper) {
+        statisticsWrapper.style.overflow = 'hidden';
+        statisticsWrapper.classList.add('loading-grid');
+    }
 
     try {
         const response = await fetch('/api/statistics');
@@ -1729,7 +1768,10 @@ async function loadStatistics() {
     } finally {
         // Hide spinner and restore overflow
         if (statisticsSpinner) statisticsSpinner.style.display = 'none';
-        if (statisticsWrapper) statisticsWrapper.style.overflow = '';
+        if (statisticsWrapper) {
+            statisticsWrapper.style.overflow = '';
+            statisticsWrapper.classList.remove('loading-grid');
+        }
     }
 }
 
@@ -1810,7 +1852,10 @@ async function loadAuditLogs(reset = true) {
 
     // Show spinner
     if (auditLogSpinner) auditLogSpinner.style.display = 'flex';
-    if (auditLogWrapper) auditLogWrapper.style.overflow = 'hidden';
+    if (auditLogWrapper) {
+        auditLogWrapper.style.overflow = 'hidden';
+        auditLogWrapper.classList.add('loading-grid');
+    }
 
     // Clear existing logs
     auditLogList.innerHTML = '';
@@ -1856,7 +1901,10 @@ async function loadAuditLogs(reset = true) {
     } finally {
         // Hide spinner
         if (auditLogSpinner) auditLogSpinner.style.display = 'none';
-        if (auditLogWrapper) auditLogWrapper.style.overflow = '';
+        if (auditLogWrapper) {
+            auditLogWrapper.style.overflow = '';
+            auditLogWrapper.classList.remove('loading-grid');
+        }
     }
 }
 
@@ -4155,7 +4203,10 @@ async function loadVolumes() {
 
     // Show spinner and prevent scrollbars
     if (volumesSpinner) volumesSpinner.style.display = 'flex';
-    if (volumesWrapper) volumesWrapper.style.overflow = 'hidden';
+    if (volumesWrapper) {
+        volumesWrapper.style.overflow = 'hidden';
+        volumesWrapper.classList.add('loading-grid');
+    }
 
     try {
         const response = await fetch('/api/volumes');
@@ -4188,7 +4239,10 @@ async function loadVolumes() {
     } finally {
         // Hide spinner and restore overflow
         if (volumesSpinner) volumesSpinner.style.display = 'none';
-        if (volumesWrapper) volumesWrapper.style.overflow = '';
+        if (volumesWrapper) {
+            volumesWrapper.style.overflow = '';
+            volumesWrapper.classList.remove('loading-grid');
+        }
     }
 }
 
@@ -4529,7 +4583,10 @@ async function loadImages() {
 
     // Show spinner and prevent scrollbars
     if (imagesSpinner) imagesSpinner.style.display = 'flex';
-    if (imagesWrapper) imagesWrapper.style.overflow = 'hidden';
+    if (imagesWrapper) {
+        imagesWrapper.style.overflow = 'hidden';
+        imagesWrapper.classList.add('loading-grid');
+    }
 
     try {
         const response = await fetch('/api/images');
@@ -4575,7 +4632,10 @@ async function loadImages() {
     } finally {
         // Hide spinner and restore overflow
         if (imagesSpinner) imagesSpinner.style.display = 'none';
-        if (imagesWrapper) imagesWrapper.style.overflow = '';
+        if (imagesWrapper) {
+            imagesWrapper.style.overflow = '';
+            imagesWrapper.classList.remove('loading-grid');
+        }
     }
 }
 
@@ -4782,7 +4842,10 @@ async function loadNetworks() {
 
     // Show spinner and prevent scrollbars
     if (networksSpinner) networksSpinner.style.display = 'flex';
-    if (networksWrapper) networksWrapper.style.overflow = 'hidden';
+    if (networksWrapper) {
+        networksWrapper.style.overflow = 'hidden';
+        networksWrapper.classList.add('loading-grid');
+    }
 
     try {
         const response = await fetch('/api/networks');
@@ -4815,7 +4878,10 @@ async function loadNetworks() {
     } finally {
         // Hide spinner and restore overflow
         if (networksSpinner) networksSpinner.style.display = 'none';
-        if (networksWrapper) networksWrapper.style.overflow = '';
+        if (networksWrapper) {
+            networksWrapper.style.overflow = '';
+            networksWrapper.classList.remove('loading-grid');
+        }
     }
 }
 
@@ -5065,12 +5131,14 @@ async function loadStacks() {
     const errorEl = document.getElementById('stacks-error');
     const stacksList = document.getElementById('stacks-list');
     const stacksSpinner = document.getElementById('stacks-spinner');
+    const stacksWrapper = document.getElementById('stacks-table-wrapper');
 
     errorEl.style.display = 'none';
     stacksList.innerHTML = '';
 
     // Show spinner
     if (stacksSpinner) stacksSpinner.style.display = 'flex';
+    if (stacksWrapper) stacksWrapper.classList.add('loading-grid');
 
     try {
         const response = await fetch('/api/stacks');
@@ -5103,6 +5171,7 @@ async function loadStacks() {
     } finally {
         // Hide spinner
         if (stacksSpinner) stacksSpinner.style.display = 'none';
+        if (stacksWrapper) stacksWrapper.classList.remove('loading-grid');
     }
 }
 
@@ -6246,6 +6315,7 @@ async function loadSchedulerContainers() {
         spinner.style.display = 'flex';
         spinner.dataset.shownAt = Date.now(); // Track when shown
     }
+    if (wrapper) wrapper.classList.add('loading-grid');
     if (list) list.innerHTML = '';
 
     try {
@@ -6348,7 +6418,10 @@ async function loadSchedulerContainers() {
             spinner.style.display = 'none';
             delete spinner.dataset.shownAt;
         }
-        if (wrapper) wrapper.style.overflow = '';
+        if (wrapper) {
+            wrapper.style.overflow = '';
+            wrapper.classList.remove('loading-grid');
+        }
     } catch (error) {
         console.error('Error loading containers:', error);
         if (spinner) {

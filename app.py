@@ -31,6 +31,7 @@ from scheduler_manager import SchedulerManager
 from audit_log_manager import AuditLogManager
 from database_manager import DatabaseManager
 from storage_settings_manager import StorageSettingsManager
+from ui_settings_manager import UISettingsManager
 from system_manager import (
     get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
@@ -85,6 +86,7 @@ DatabaseManager(db_path)
 auth_manager = AuthManager(db_path)
 audit_log_manager = AuditLogManager(db_path)
 storage_settings_manager = StorageSettingsManager(db_path)
+ui_settings_manager = UISettingsManager(db_path)
 container_manager = ContainerManager()
 volume_manager = VolumeManager()
 network_manager = NetworkManager(app.config['BACKUP_DIR'], storage_settings_manager=storage_settings_manager)
@@ -988,6 +990,46 @@ def test_s3_connection():
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+# UI Settings API endpoints
+@app.route('/api/ui/settings', methods=['GET'])
+@login_required
+def get_ui_settings():
+    """Get all UI settings"""
+    try:
+        settings = ui_settings_manager.get_all_settings()
+        return jsonify(settings)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ui/settings/<setting_key>', methods=['GET'])
+@login_required
+def get_ui_setting(setting_key):
+    """Get a specific UI setting"""
+    try:
+        value = ui_settings_manager.get_setting(setting_key)
+        return jsonify({'key': setting_key, 'value': value})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ui/settings/<setting_key>', methods=['POST'])
+@login_required
+def set_ui_setting(setting_key):
+    """Set a UI setting"""
+    try:
+        data = request.get_json() or {}
+        value = data.get('value')
+        
+        if value is None:
+            return jsonify({'error': 'Value is required'}), 400
+        
+        result = ui_settings_manager.set_setting(setting_key, value)
+        if 'error' in result:
+            return jsonify(result), 500
+        
+        return jsonify({'success': True, 'key': setting_key, 'value': value})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # CSRF error handler
 @app.errorhandler(CSRFError)

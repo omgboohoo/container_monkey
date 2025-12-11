@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.4**
+**Version 0.3.5**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 

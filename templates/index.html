@@ -75,32 +75,32 @@
         </div>
 
         <!-- Fixed Sidebar -->
-        <aside class="sidebar">
+        <aside class="sidebar" id="sidebar">
             <nav class="sidebar-nav">
                 <a href="#" class="nav-item active" onclick="showSection('dashboard', this); return false;">
                     <span class="nav-icon"><i class="ph ph-chart-bar"></i></span>
                     <span class="nav-text">Dashboard</span>
                 </a>
-                <a href="#" class="nav-item" onclick="showSection('containers', this); return false;">
-                    <span class="nav-icon"><i class="ph ph-cube"></i></span>
-                    <span class="nav-text">Containers</span>
-                </a>
                 <a href="#" class="nav-item" onclick="showSection('stacks', this); return false;">
                     <span class="nav-icon"><i class="ph ph-stack"></i></span>
                     <span class="nav-text">Stacks</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showSection('containers', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-cube"></i></span>
+                    <span class="nav-text">Containers</span>
                 </a>
                 <a href="#" class="nav-item" onclick="showSection('images', this); return false;">
                     <span class="nav-icon"><i class="ph ph-list-dashes"></i></span>
                     <span class="nav-text">Images</span>
                 </a>
+                <a href="#" class="nav-item" onclick="showSection('volumes', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-database"></i></span>
+                    <span class="nav-text">Volumes</span>
+                </a>
                 <a href="#" class="nav-item" onclick="showSection('networks', this); return false;">
                     <span class="nav-icon"><i class="ph ph-tree-structure"
                             style="transform: rotate(90deg); display: inline-block;"></i></span>
                     <span class="nav-text">Networks</span>
-                </a>
-                <a href="#" class="nav-item" onclick="showSection('volumes', this); return false;">
-                    <span class="nav-icon"><i class="ph ph-database"></i></span>
-                    <span class="nav-text">Volumes</span>
                 </a>
                 <a href="#" class="nav-item" onclick="showSection('backups', this); return false;">
                     <span class="nav-icon"><i class="ph ph-shield-check"></i></span>
@@ -132,9 +132,14 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.4</span>
+                    v0.3.5</span>
             </div>
         </aside>
+
+        <!-- Sidebar Toggle Button -->
+        <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle sidebar">
+            <i class="ph ph-caret-left" id="sidebar-toggle-icon"></i>
+        </button>
 
         <!-- Main Content Area -->
         <main class="main-content">
