@@ -1,5 +1,62 @@
 # Release Notes
 
+## Version 0.3.4
+
+### UI Improvements
+- **Action Feedback**: Replaced console logs with toast notifications for all container, image, network, volume, and backup operations for better user feedback.
+- **S3 Configuration Modal UX**: Enhanced user experience for S3 storage configuration
+  - **Immediate Feedback**: Modal now closes immediately when saving settings
+  - **Toast Notifications**: Replaced in-modal status messages with toast notifications for consistent feedback
+  - **Fixed Layout**: Prevented modal from resizing/jumping during save operations due to dynamic error messages
+  - **Better Visibility**: Success/Error/Info messages appear as toast notifications at the top of the screen
+
+- **Login Modal UX**: Improved authentication error handling
+  - **Toast Notifications**: Login errors (e.g., "Invalid username or password") now appear as toast notifications instead of in-modal error messages
+  - **Cleaner Interface**: Login modal remains clean without error text disrupting the form layout
+  - **Consistent Feedback**: Authentication errors use the same toast notification system as other application feedback
+  - **Branding**: Added Container Monkey logo and name to login modal header, matching the top bar design
+  - **Vertical Centering**: Login modal now appears vertically centered on screen for better visual balance
+  - **Password Manager Compatibility**: Fixed scrollbar issues when password managers fill credentials
+    - **No Horizontal Scrollbars**: Modal content and form elements prevent horizontal overflow
+    - **No Vertical Scrollbars**: Form fields and containers prevent vertical scrollbars during autofill
+    - **Smooth Experience**: Login form remains stable and scrollbar-free when password managers interact
+
+- **Modal Improvements**: Enhanced modal positioning and consistency across the application
+  - **Vertical Centering**: All modals now appear vertically centered on screen for improved visual presentation
+  - **Consistent Layout**: Standardized modal positioning across all dialogs (login, password change, confirmation, restore, backup progress, etc.)
+  - **Better UX**: Centered modals provide better focus and reduce visual fatigue
+  - **Overflow Prevention**: All modals prevent horizontal scrolling and unnecessary vertical scrolling
+
+- **Top Bar Improvements**: Enhanced consistency and visual design
+  - **Unified Typography**: CPU, RAM, and time displays now use consistent font (monospace), weight (500), and color
+  - **Clock Icon**: Added Phosphor clock icon to time display, matching CPU and RAM icon style
+  - **Consistent Structure**: Time display integrated into top-bar-stats container with matching stat-item structure
+  - **Visual Harmony**: All top bar statistics now have uniform appearance and spacing
+
+- **Notification System**:
+  - **Improved Positioning**: Notifications now appear vertically centered over the top bar (10px from top)
+  - **Enhanced Visibility**: Increased z-index to ensuring notifications appear above all other interface elements (including modals and user menus)
+  - **Consistent Styling**: Standardized notification appearance across the application
+
+- **Data Grid/Table Improvements**: Enhanced table scrolling and layout for better single-page experience
+  - **Vertical Scrollbars**: All data grids/tables now have independent vertical scrollbars
+  - **Fixed UI Elements**: Headers, buttons, and controls remain fixed while tables scroll independently
+  - **Sticky Table Headers**: Table column headers remain visible when scrolling through table content
+  - **Optimized Layout**: Tables fill available vertical space efficiently with reduced bottom margins
+  - **Backup Scheduler Table**: Fixed table layout to match other sections, removed unnecessary card wrapper
+  - **Container ID Column**: Added Container ID column to backup scheduler container selection table
+
+- **Audit Log Pagination**: Replaced "Load More" button with traditional pagination
+  - **Page Navigation**: Previous/Next buttons for easy navigation between pages
+  - **Page Information**: Displays current page, total pages, and item range (e.g., "Page 1 of 5 (1-10 of 50)")
+  - **Right-Aligned Controls**: Pagination controls aligned to the right for better visual balance
+  - **Automatic Reset**: Filters and search automatically reset to page 1 when changed
+
+### Version Update
+- Updated version number to 0.3.4 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.3
 
 ### Security Improvements

@@ -8,7 +8,7 @@ function getCsrfToken() {
     if (window.csrfToken) {
         return window.csrfToken;
     }
-    
+
     // Fallback: get from cookie
     const name = 'X-CSRFToken';
     const cookies = document.cookie.split(';');
@@ -25,15 +25,15 @@ function getCsrfToken() {
 async function apiRequest(url, options = {}) {
     const token = getCsrfToken();
     const method = options.method || 'GET';
-    
+
     // Only add CSRF token for state-changing methods
     const needsCsrf = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
-    
+
     const defaultOptions = {
         credentials: 'include',  // Important for cookies
         ...options
     };
-    
+
     // Add CSRF token header if needed
     if (needsCsrf && token) {
         defaultOptions.headers = {
@@ -41,17 +41,17 @@ async function apiRequest(url, options = {}) {
             'X-CSRFToken': token
         };
     }
-    
+
     return fetch(url, defaultOptions);
 }
 
 // Global error handler to ensure modals don't get stuck
-window.addEventListener('error', function(event) {
+window.addEventListener('error', function (event) {
     console.error('Global error:', event.error);
     // Don't close modals on every error, but log it
 });
 
-window.addEventListener('unhandledrejection', function(event) {
+window.addEventListener('unhandledrejection', function (event) {
     console.error('Unhandled promise rejection:', event.reason);
     // Close modals if they might be stuck
     const visibleModals = document.querySelectorAll('.modal[style*="block"]');
@@ -65,7 +65,7 @@ async function checkAuthStatus() {
     try {
         const response = await fetch('/api/auth-status');
         const data = await response.json();
-        
+
         if (data.logged_in) {
             isAuthenticated = true;
             currentUsername = data.username || 'monkey';
@@ -86,16 +86,16 @@ async function checkAuthStatus() {
 
 // Intercept fetch requests to handle 401 errors and add CSRF tokens
 const originalFetch = window.fetch;
-window.fetch = async function(url, options = {}) {
+window.fetch = async function (url, options = {}) {
     // Handle both string URL and Request object
     const urlString = typeof url === 'string' ? url : (url.url || '');
-    
+
     // Auto-add CSRF token for state-changing methods
     const method = options.method || (typeof url === 'object' && url.method ? url.method : 'GET') || 'GET';
     const needsCsrf = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase());
     const isApiCall = urlString.startsWith('/api/');
     const isExempt = urlString.includes('/api/login') || urlString.includes('/api/auth-status');
-    
+
     if (needsCsrf && isApiCall && !isExempt) {
         const token = getCsrfToken();
         if (token) {
@@ -107,9 +107,9 @@ window.fetch = async function(url, options = {}) {
         // Ensure credentials are included for cookies
         options.credentials = options.credentials || 'include';
     }
-    
+
     const response = await originalFetch(url, options);
-    
+
     // If we get a 401 and we're not already on the login page, show login modal
     if (response.status === 401 && !urlString.includes('/api/login') && !urlString.includes('/api/auth-status')) {
         if (!isAuthenticated) {
@@ -117,7 +117,7 @@ window.fetch = async function(url, options = {}) {
             document.getElementById('user-menu-container').style.display = 'none';
         }
     }
-    
+
     // Handle CSRF errors
     if (response.status === 400) {
         const clonedResponse = response.clone();
@@ -132,7 +132,7 @@ window.fetch = async function(url, options = {}) {
             // Not JSON, ignore
         }
     }
-    
+
     return response;
 };
 
@@ -142,10 +142,10 @@ async function handleLogin(event) {
     const username = document.getElementById('login-username').value;
     const password = document.getElementById('login-password').value;
     const errorDiv = document.getElementById('login-error');
-    
+
     errorDiv.style.display = 'none';
     errorDiv.textContent = '';
-    
+
     try {
         const response = await fetch('/api/login', {
             method: 'POST',
@@ -154,9 +154,9 @@ async function handleLogin(event) {
             },
             body: JSON.stringify({ username, password })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok && data.success) {
             isAuthenticated = true;
             currentUsername = data.username;
@@ -164,19 +164,19 @@ async function handleLogin(event) {
             document.getElementById('user-menu-container').style.display = 'block';
             document.getElementById('user-menu-username').textContent = currentUsername;
             document.getElementById('login-form').reset();
-            
+
             // Check if default credentials were used
             if (data.is_default_credentials) {
                 showDefaultCredentialsModal();
             }
-            
+
             // Reload page data
             // Stats polling will be started automatically by loadContainers() if containers section is active
             // For other sections, start stats polling immediately
             if (document.querySelector('.content-section.active')) {
                 const activeSection = document.querySelector('.content-section.active').id.replace('-section', '');
                 showSection(activeSection);
-                
+
                 // Start stats polling for non-containers sections (containers section will start it after loading)
                 if (activeSection !== 'containers') {
                     startStatsPolling();
@@ -186,12 +186,10 @@ async function handleLogin(event) {
                 startStatsPolling();
             }
         } else {
-            errorDiv.textContent = data.error || 'Login failed';
-            errorDiv.style.display = 'block';
+            showNotification(data.error || 'Login failed', 'error');
         }
     } catch (error) {
-        errorDiv.textContent = 'Network error. Please try again.';
-        errorDiv.style.display = 'block';
+        showNotification('Network error. Please try again.', 'error');
         console.error('Login error:', error);
     }
 }
@@ -202,14 +200,14 @@ async function logout() {
         const response = await fetch('/api/logout', {
             method: 'POST'
         });
-        
+
         if (response.ok) {
             isAuthenticated = false;
             currentUsername = '';
             document.getElementById('login-modal').style.display = 'block';
             document.getElementById('user-menu-container').style.display = 'none';
             document.getElementById('user-menu-dropdown').classList.remove('show');
-            
+
             // Clear any data
             location.reload();
         }
@@ -225,7 +223,7 @@ function toggleUserMenu() {
 }
 
 // Close user menu when clicking outside
-document.addEventListener('click', function(event) {
+document.addEventListener('click', function (event) {
     const userMenuContainer = document.getElementById('user-menu-container');
     if (userMenuContainer && !userMenuContainer.contains(event.target)) {
         document.getElementById('user-menu-dropdown').classList.remove('show');
@@ -266,46 +264,46 @@ function validatePasswordStrength(password) {
         valid: true,
         error: ''
     };
-    
+
     // Check length
     const hasLength = password.length >= 12;
     updatePolicyIndicator('policy-length', hasLength);
-    
+
     // Check uppercase
     const hasUpper = /[A-Z]/.test(password);
     updatePolicyIndicator('policy-upper', hasUpper);
-    
+
     // Check lowercase
     const hasLower = /[a-z]/.test(password);
     updatePolicyIndicator('policy-lower', hasLower);
-    
+
     // Check digit
     const hasDigit = /\d/.test(password);
     updatePolicyIndicator('policy-digit', hasDigit);
-    
+
     // Check special character
     const hasSpecial = /[!@#$%^&*(),.?":{}|<>\[\]\\/_+=\-~`]/.test(password);
     updatePolicyIndicator('policy-special', hasSpecial);
-    
+
     // Validate all requirements
     if (!hasLength) {
         result.valid = false;
         result.error = 'Password must be at least 12 characters long';
         return result;
     }
-    
+
     const missingRequirements = [];
     if (!hasUpper) missingRequirements.push('uppercase letter');
     if (!hasLower) missingRequirements.push('lowercase letter');
     if (!hasDigit) missingRequirements.push('digit');
     if (!hasSpecial) missingRequirements.push('special character');
-    
+
     if (missingRequirements.length > 0) {
         result.valid = false;
         result.error = `Password must contain at least one ${missingRequirements.join(', ')}`;
         return result;
     }
-    
+
     return result;
 }
 
@@ -313,10 +311,10 @@ function validatePasswordStrength(password) {
 function updatePolicyIndicator(elementId, isValid) {
     const element = document.getElementById(elementId);
     if (!element) return;
-    
+
     const icon = element.querySelector('i');
     const text = element.querySelector('span');
-    
+
     if (isValid) {
         icon.className = 'ph ph-check-circle';
         icon.style.color = 'var(--success)';
@@ -358,18 +356,18 @@ async function handleChangePassword(event) {
     const errorDiv = document.getElementById('change-password-error');
     const successDiv = document.getElementById('change-password-success');
     const successMessage = document.getElementById('change-password-success-message');
-    
+
     errorDiv.style.display = 'none';
     successDiv.style.display = 'none';
     errorDiv.textContent = '';
-    
+
     // Validate passwords match
     if (newPassword !== confirmPassword) {
         errorDiv.textContent = 'New passwords do not match';
         errorDiv.style.display = 'block';
         return;
     }
-    
+
     // Validate password strength
     const passwordValidation = validatePasswordStrength(newPassword);
     if (!passwordValidation.valid) {
@@ -377,7 +375,7 @@ async function handleChangePassword(event) {
         showNotification(passwordValidation.error, 'error');
         return;
     }
-    
+
     try {
         const response = await fetch('/api/change-password', {
             method: 'POST',
@@ -389,14 +387,14 @@ async function handleChangePassword(event) {
                 new_password: newPassword
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok && data.success) {
             // Show success as toast notification
             showNotification(data.message || 'Password changed successfully.', 'success');
             document.getElementById('change-password-form').reset();
-            
+
             // Close modal immediately on success
             closeChangePasswordModal();
         } else {
@@ -435,18 +433,18 @@ async function handleChangeUsername(event) {
     const errorDiv = document.getElementById('change-username-error');
     const successDiv = document.getElementById('change-username-success');
     const successMessage = document.getElementById('change-username-success-message');
-    
+
     errorDiv.style.display = 'none';
     successDiv.style.display = 'none';
     errorDiv.textContent = '';
-    
+
     // Validate username
     if (newUsername.length < 3) {
         errorDiv.textContent = 'New username must be at least 3 characters long';
         errorDiv.style.display = 'block';
         return;
     }
-    
+
     try {
         const response = await fetch('/api/change-password', {
             method: 'POST',
@@ -458,20 +456,20 @@ async function handleChangeUsername(event) {
                 new_username: newUsername
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (response.ok && data.success) {
             successMessage.textContent = data.message || 'Username changed successfully.';
             successDiv.style.display = 'block';
             document.getElementById('change-username-form').reset();
-            
+
             // Update username in UI
             if (data.username && data.username !== currentUsername) {
                 currentUsername = data.username;
                 document.getElementById('user-menu-username').textContent = data.username;
             }
-            
+
             // Close modal after 2 seconds
             setTimeout(() => {
                 closeChangeUsernameModal();
@@ -497,19 +495,19 @@ function showSection(sectionName, navElement) {
         section.classList.remove('active');
         section.style.display = 'none';
     });
-    
+
     // Remove active class from all nav items
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
-    
+
     // Show selected section
     const section = document.getElementById(`${sectionName}-section`);
     if (section) {
         section.style.display = 'block';
         section.classList.add('active');
     }
-    
+
     // Add active class to clicked nav item
     if (navElement) {
         navElement.classList.add('active');
@@ -525,12 +523,7 @@ function showSection(sectionName, navElement) {
             }
         });
     }
-    
-    // Stop time display if leaving scheduler section
-    if (sectionName !== 'backup-scheduler') {
-        stopTimeDisplay();
-    }
-    
+
     // Load data for the section
     if (sectionName === 'dashboard') {
         loadDashboardStats();
@@ -557,7 +550,6 @@ function showSection(sectionName, navElement) {
         hideAllSpinners();
         // Load config first - it will call loadSchedulerContainers() after config loads
         loadSchedulerConfig();
-        startTimeDisplay();
         loadStatistics();
     }
 }
@@ -579,7 +571,7 @@ async function loadDashboardStats() {
         // Update all stat elements in the dashboard
         document.querySelector('.dashboard-card .card-number').textContent = stats.cpu_ram_info;
         document.querySelector('.dashboard-card .card-subtext').textContent = stats.docker_sock_url;
-        
+
         const cards = document.querySelectorAll('.dashboard-card');
         if (cards.length > 7) {
             cards[1].querySelector('.card-number').textContent = stats.containers_qty;
@@ -627,32 +619,32 @@ async function loadContainers() {
     if (isLoadingContainers) {
         return;
     }
-    
+
     // Clear any active filters when reloading
     isFilteredByStack = false;
     currentStackFilter = null;
     const clearFilterBtn = document.getElementById('clear-filter-btn');
     if (clearFilterBtn) clearFilterBtn.style.display = 'none';
-    
+
     isLoadingContainers = true;
     const errorEl = document.getElementById('error');
     const containersList = document.getElementById('containers-list');
     const containersSpinner = document.getElementById('containers-spinner');
     const containersWrapper = document.getElementById('containers-table-wrapper');
-    
+
     errorEl.style.display = 'none';
     containersList.innerHTML = ''; // Clear immediately
-    
+
     // Show spinner and prevent scrollbars
     if (containersSpinner) {
         containersSpinner.style.display = 'flex';
         containersSpinner.dataset.shownAt = Date.now(); // Track when shown
     }
     if (containersWrapper) containersWrapper.style.overflow = 'hidden';
-    
+
     try {
         const response = await fetch('/api/containers');
-        
+
         // Check response status before parsing JSON
         if (!response.ok) {
             // Try to parse JSON error response, but handle HTML errors gracefully
@@ -660,7 +652,7 @@ async function loadContainers() {
             try {
                 const errorData = await response.json();
                 errorMessage = errorData.error || errorMessage;
-                
+
                 // Handle Docker client not available error specially
                 if (response.status === 503 && errorData.error === 'Docker client not available') {
                     errorEl.innerHTML = `
@@ -681,7 +673,7 @@ async function loadContainers() {
                     isLoadingContainers = false;
                     return;
                 }
-                
+
                 // Handle authentication errors
                 if (response.status === 401) {
                     errorMessage = 'Authentication required. Please refresh the page and log in again.';
@@ -696,9 +688,9 @@ async function loadContainers() {
             }
             throw new Error(errorMessage);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.containers.length === 0) {
             containersList.innerHTML = '<p style="text-align: center; padding: 40px; color: #666;">No containers found</p>';
             updateButtonStates();
@@ -706,7 +698,7 @@ async function loadContainers() {
             // Deduplicate containers by name (keep the first occurrence, which should be the newest)
             const seenNames = new Set();
             const uniqueContainers = [];
-            
+
             for (const container of data.containers) {
                 const containerName = container.name || '';
                 if (!seenNames.has(containerName)) {
@@ -716,22 +708,22 @@ async function loadContainers() {
                     console.warn(`Duplicate container detected: ${containerName} (ID: ${container.id}). Skipping duplicate.`);
                 }
             }
-            
+
             // Store containers data for sorting
             containersData = uniqueContainers;
-            
+
             // Render containers (will use current sort if any)
             renderContainers(containersData);
         }
-        
+
         // Reset selection state (buttons and select-all checkbox)
         // Update button states after loading containers
         resetSelection();
         updateButtonStates();
-        
+
         // Restart stats polling after containers are loaded
         startStatsPolling();
-        
+
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
         errorEl.style.display = 'block';
@@ -757,22 +749,22 @@ function createContainerCard(container) {
         // For self container, ensure buttons are still clickable
         tr.style.pointerEvents = 'auto';
     }
-    
+
     // Normalize status for display
     const statusLower = container.status.toLowerCase();
     const statusClass = statusLower === 'running' ? 'status-running' :
-                       statusLower === 'stopped' ? 'status-stopped' :
-                       'status-exited';
+        statusLower === 'stopped' ? 'status-stopped' :
+            'status-exited';
     const isRunning = statusLower === 'running';
-    
+
     // Use status_text if available for more detail
     const statusDisplay = container.status_text || container.status.toUpperCase();
-    
+
     // Format IP and ports
     const ipAddress = container.ip_address || 'N/A';
     const portMappings = container.port_mappings || [];
     let portsDisplay = 'No ports';
-    
+
     if (portMappings.length > 0) {
         const portLinks = portMappings.map(p => {
             if (p.host) {
@@ -782,7 +774,7 @@ function createContainerCard(container) {
         });
         portsDisplay = portLinks.join('<br>');
     }
-    
+
     // Format image info
     const imageInfo = container.image_info || {};
     const imageName = imageInfo.name || container.image || 'unknown';
@@ -804,11 +796,11 @@ function createContainerCard(container) {
             createdDate = new Date(container.created).toLocaleString();
         }
     }
-    
+
     // Format stack info
     const stackInfo = container.stack_info || null;
     const stackDisplay = stackInfo ? escapeHtml(stackInfo.display || stackInfo.name || '') : '<span style="color: var(--text-light);">-</span>';
-    
+
     tr.innerHTML = `
         <td class="checkbox-cell">
             <input type="checkbox" class="container-checkbox" data-container-id="${container.id}" onclick="event.stopPropagation(); handleCheckboxClick(this);" ${container.is_self ? 'disabled' : ''}>
@@ -850,7 +842,7 @@ function createContainerCard(container) {
             </div>
         </td>
     `;
-    
+
     return tr;
 }
 
@@ -860,7 +852,7 @@ function renderContainers(containers) {
     containersList.innerHTML = '';
     // Clear container metadata map
     containerMetadata.clear();
-    
+
     containers.forEach(container => {
         // Store container metadata
         containerMetadata.set(container.id, {
@@ -870,7 +862,7 @@ function renderContainers(containers) {
         const card = createContainerCard(container);
         containersList.appendChild(card);
     });
-    
+
 }
 
 // Sort containers
@@ -882,23 +874,23 @@ function sortContainers(column) {
         currentSortColumn = column;
         currentSortDirection = 'asc';
     }
-    
+
     // Update sort indicators
     document.querySelectorAll('.sort-indicator').forEach(indicator => {
         indicator.textContent = '';
     });
-    
+
     const sortIndicator = document.getElementById(`sort-${column}`);
     if (sortIndicator) {
         sortIndicator.textContent = currentSortDirection === 'asc' ? ' ▲' : ' ▼';
         sortIndicator.style.color = 'var(--accent)';
     }
-    
+
     // Sort containers
     const sorted = [...containersData].sort((a, b) => {
         let aVal, bVal;
-        
-        switch(column) {
+
+        switch (column) {
             case 'name':
                 aVal = (a.name || '').toLowerCase();
                 bVal = (b.name || '').toLowerCase();
@@ -927,12 +919,12 @@ function sortContainers(column) {
             default:
                 return 0;
         }
-        
+
         if (aVal < bVal) return currentSortDirection === 'asc' ? -1 : 1;
         if (aVal > bVal) return currentSortDirection === 'asc' ? 1 : -1;
         return 0;
     });
-    
+
     // Re-render containers
     renderContainers(sorted);
 }
@@ -960,7 +952,7 @@ function toggleSelectAll(source) {
     const visibleCheckboxes = visibleRows
         .map(row => row.querySelector('.container-checkbox:not([disabled])'))
         .filter(cb => cb !== null);
-    
+
     visibleCheckboxes.forEach(cb => cb.checked = source.checked);
     updateButtonStates();
 }
@@ -970,7 +962,7 @@ function updateButtonStates(containers) {
     const containerCheckboxes = document.querySelectorAll('.container-checkbox');
     const nonSelfCheckboxes = document.querySelectorAll('.container-checkbox:not([disabled])');
     const selectedCheckboxes = document.querySelectorAll('.container-checkbox:checked');
-    
+
     const bulkActionButtons = document.querySelectorAll('.bulk-btn');
     const backupAllBtn = document.getElementById('backup-all-btn');
 
@@ -998,11 +990,11 @@ function updateButtonStates(containers) {
 function resetSelection() {
     // Uncheck all container checkboxes
     document.querySelectorAll('.container-checkbox').forEach(cb => cb.checked = false);
-    
+
     // Uncheck select all
     const selectAll = document.getElementById('select-all-containers');
     if (selectAll) selectAll.checked = false;
-    
+
     // Update button state
     handleCheckboxClick();
 }
@@ -1019,18 +1011,18 @@ async function showContainerDetails(containerId) {
     currentContainerId = containerId;
     const modal = document.getElementById('details-modal');
     const detailsDiv = document.getElementById('container-details');
-    
+
     detailsDiv.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
     modal.style.display = 'block';
-    
+
     try {
         const response = await fetch(`/api/container/${containerId}/details`);
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load container details');
         }
-        
+
         detailsDiv.innerHTML = formatContainerDetails(data);
     } catch (error) {
         detailsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
@@ -1050,7 +1042,7 @@ function formatContainerDetails(data) {
             </ul>
         </div>
     `;
-    
+
     if (data.config.env && data.config.env.length > 0) {
         html += `
             <div class="details-section">
@@ -1061,7 +1053,7 @@ function formatContainerDetails(data) {
             </div>
         `;
     }
-    
+
     if (data.host_config.binds && data.host_config.binds.length > 0) {
         html += `
             <div class="details-section">
@@ -1072,23 +1064,23 @@ function formatContainerDetails(data) {
             </div>
         `;
     }
-    
+
     if (data.host_config.port_bindings && Object.keys(data.host_config.port_bindings).length > 0) {
         html += `
             <div class="details-section">
                 <h3>Port Mappings</h3>
                 <ul>
                     ${Object.entries(data.host_config.port_bindings).map(([port, bindings]) => {
-                        if (bindings && bindings.length > 0) {
-                            return `<li>${bindings[0].HostPort}:${port}</li>`;
-                        }
-                        return '';
-                    }).join('')}
+            if (bindings && bindings.length > 0) {
+                return `<li>${bindings[0].HostPort}:${port}</li>`;
+            }
+            return '';
+        }).join('')}
                 </ul>
             </div>
         `;
     }
-    
+
     if (data.host_config.network_mode) {
         html += `
             <div class="details-section">
@@ -1099,7 +1091,7 @@ function formatContainerDetails(data) {
             </div>
         `;
     }
-    
+
     return html;
 }
 
@@ -1109,38 +1101,38 @@ async function backupContainer() {
         console.error('No container selected');
         return;
     }
-    
+
     const backupModal = document.getElementById('backup-modal');
     const detailsModal = document.getElementById('details-modal');
     const statusEl = document.getElementById('backup-status');
     const stepEl = document.getElementById('backup-step');
     const progressBar = document.getElementById('backup-progress-bar');
     const percentageEl = document.getElementById('backup-percentage');
-    
+
     if (!backupModal || !statusEl || !stepEl || !progressBar || !percentageEl) {
         console.error('Backup modal elements not found:', { backupModal, statusEl, stepEl, progressBar, percentageEl });
         console.error('Error: Backup modal elements not found. Please refresh the page.');
         return;
     }
-    
+
     detailsModal.style.display = 'none';
     backupModal.style.display = 'block';
     statusEl.innerHTML = 'Starting backup...';
     stepEl.innerHTML = 'Preparing...';
     progressBar.style.width = '0%';
     percentageEl.innerHTML = '0%';
-    
+
     try {
         const response = await fetch(`/api/backup/${currentContainerId}`, {
             method: 'POST',
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to create backup');
         }
-        
+
         // Start polling for progress if we have a progress_id
         if (data.progress_id) {
             const progressInterval = setInterval(async () => {
@@ -1150,7 +1142,7 @@ async function backupContainer() {
                         clearInterval(progressInterval);
                         return;
                     }
-                    
+
                     let progress;
                     try {
                         progress = await progressResponse.json();
@@ -1159,19 +1151,19 @@ async function backupContainer() {
                         clearInterval(progressInterval);
                         return;
                     }
-                    
+
                     // Update UI
                     statusEl.innerHTML = progress.step || 'Processing...';
                     stepEl.innerHTML = progress.step || '';
                     progressBar.style.width = `${progress.progress}%`;
                     percentageEl.innerHTML = `${progress.progress}%`;
-                    
+
                     if (progress.status === 'complete') {
                         clearInterval(progressInterval);
                         setTimeout(() => {
                             backupModal.style.display = 'none';
                             detailsModal.style.display = 'block';
-                            
+
                             const detailsDiv = document.getElementById('container-details');
                             detailsDiv.innerHTML = `
                                 <div class="success-message">
@@ -1180,7 +1172,7 @@ async function backupContainer() {
                                     <p><a href="/api/download/${progress.backup_filename || data.backup_file}">Download Backup</a></p>
                                 </div>
                             `;
-                            
+
                             // Reload backups list
                             loadBackups();
                         }, 500);
@@ -1193,7 +1185,7 @@ async function backupContainer() {
                     console.error('Progress polling error:', error);
                 }
             }, 300); // Poll every 300ms
-            
+
             // Timeout after 10 minutes
             setTimeout(() => {
                 clearInterval(progressInterval);
@@ -1202,7 +1194,7 @@ async function backupContainer() {
             // Fallback if no progress_id
             backupModal.style.display = 'none';
             detailsModal.style.display = 'block';
-            
+
             const detailsDiv = document.getElementById('container-details');
             detailsDiv.innerHTML = `
                 <div class="success-message">
@@ -1211,7 +1203,7 @@ async function backupContainer() {
                     <p><a href="/api/download/${data.backup_file}">Download Backup</a></p>
                 </div>
             `;
-            
+
             loadBackups();
         }
     } catch (error) {
@@ -1230,7 +1222,7 @@ async function backupContainerDirect(containerId, containerName) {
         console.error('No container selected');
         return;
     }
-    
+
     // Check backup status first
     try {
         const statusResponse = await fetch('/api/backup/status');
@@ -1242,32 +1234,32 @@ async function backupContainerDirect(containerId, containerName) {
     } catch (error) {
         console.error('Error checking backup status:', error);
     }
-    
+
     if (isBackupInProgress) {
         showNotification('A backup is already in progress. Please wait for it to finish.', 'warning');
         return;
     }
-    
+
     if (backupAllInProgress) {
         showNotification('A bulk backup operation is in progress. Please wait for it to finish.', 'warning');
         return;
     }
-    
+
     isBackupInProgress = true;
-    
+
     // Get the button that was clicked
     const button = event.target;
     const originalText = button.innerHTML;
-    
+
     // Change button to show it's backing up
     button.innerHTML = '⏳ Backing up...';
     button.disabled = true;
-    
+
     // Disable all buttons in this container's card to prevent conflicts
     const cardActions = button.closest('.container-actions');
     const containerCard = button.closest('.container-card');
     let containerInfo = null;
-    
+
     if (containerCard) {
         containerInfo = containerCard.querySelector('.container-info');
         if (containerInfo) {
@@ -1277,7 +1269,7 @@ async function backupContainerDirect(containerId, containerName) {
             containerInfo.style.cursor = 'not-allowed';
         }
     }
-    
+
     if (cardActions) {
         const allButtons = cardActions.querySelectorAll('button');
         allButtons.forEach(btn => {
@@ -1287,7 +1279,7 @@ async function backupContainerDirect(containerId, containerName) {
             }
         });
     }
-    
+
     // Also disable all other backup buttons
     const allBackupButtons = document.querySelectorAll('.btn-warning');
     allBackupButtons.forEach(btn => {
@@ -1296,37 +1288,37 @@ async function backupContainerDirect(containerId, containerName) {
             btn.classList.add('disabled');
         }
     });
-    
+
     // Show backup modal for progress
     const backupModal = document.getElementById('backup-modal');
     const statusEl = document.getElementById('backup-status');
     const stepEl = document.getElementById('backup-step');
     const progressBar = document.getElementById('backup-progress-bar');
     const percentageEl = document.getElementById('backup-percentage');
-    
+
     if (!backupModal || !statusEl || !stepEl || !progressBar || !percentageEl) {
         console.error('Backup modal elements not found:', { backupModal, statusEl, stepEl, progressBar, percentageEl });
         console.error('Error: Backup modal elements not found. Please refresh the page.');
         return;
     }
-    
+
     backupModal.style.display = 'block';
     statusEl.innerHTML = 'Starting backup...';
     stepEl.innerHTML = 'Preparing...';
     progressBar.style.width = '0%';
     percentageEl.innerHTML = '0%';
-    
+
     try {
         const response = await fetch(`/api/backup/${containerId}`, {
             method: 'POST',
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to create backup');
         }
-        
+
         // Start polling for progress if we have a progress_id
         if (data.progress_id) {
             const progressInterval = setInterval(async () => {
@@ -1336,7 +1328,7 @@ async function backupContainerDirect(containerId, containerName) {
                         clearInterval(progressInterval);
                         return;
                     }
-                    
+
                     let progress;
                     try {
                         progress = await progressResponse.json();
@@ -1345,26 +1337,26 @@ async function backupContainerDirect(containerId, containerName) {
                         clearInterval(progressInterval);
                         return;
                     }
-                    
+
                     // Update UI
                     statusEl.innerHTML = progress.step || 'Processing...';
                     stepEl.innerHTML = progress.step || '';
                     progressBar.style.width = `${progress.progress}%`;
                     percentageEl.innerHTML = `${progress.progress}%`;
-                    
+
                     if (progress.status === 'complete') {
                         clearInterval(progressInterval);
                         setTimeout(() => {
                             backupModal.style.display = 'none';
-                            
+
                             // Show success message on button
                             button.innerHTML = '✅ Done!';
                             button.classList.remove('btn-warning');
                             button.classList.add('btn-success');
-                            
+
                             // Reload backups list
                             loadBackups();
-                            
+
                             // Reset button after 2 seconds
                             setTimeout(() => {
                                 button.innerHTML = originalText;
@@ -1381,7 +1373,7 @@ async function backupContainerDirect(containerId, containerName) {
                     console.error('Progress polling error:', error);
                 }
             }, 300); // Poll every 300ms
-            
+
             // Timeout after 10 minutes
             setTimeout(() => {
                 clearInterval(progressInterval);
@@ -1414,7 +1406,7 @@ async function backupContainerDirect(containerId, containerName) {
                 containerInfo.style.opacity = '1';
                 containerInfo.style.cursor = 'pointer';
             }
-            
+
             // Re-enable card buttons
             if (cardActions) {
                 const allButtons = cardActions.querySelectorAll('button');
@@ -1423,7 +1415,7 @@ async function backupContainerDirect(containerId, containerName) {
                     btn.classList.remove('disabled');
                 });
             }
-            
+
             // Re-enable other backup buttons
             const allBackupButtons = document.querySelectorAll('.btn-warning');
             allBackupButtons.forEach(btn => {
@@ -1461,7 +1453,7 @@ async function backupAllContainers() {
         console.warn('No containers found to backup.');
         return;
     }
-    
+
     // Check all containers
     checkboxes.forEach(cb => {
         if (!cb.disabled) {
@@ -1469,7 +1461,7 @@ async function backupAllContainers() {
         }
     });
     handleCheckboxClick();
-    
+
     // Now use the same backup logic as backupSelectedContainers
     await backupSelectedContainers();
 }
@@ -1516,7 +1508,7 @@ function closeAllModals() {
         'delete-container-modal',
         'default-credentials-modal'
     ];
-    
+
     modals.forEach(modalId => {
         const modal = document.getElementById(modalId);
         if (modal) {
@@ -1537,7 +1529,7 @@ function hideAllSpinners() {
         'stacks-spinner',
         'scheduler-containers-spinner'
     ];
-    
+
     spinnerIds.forEach(spinnerId => {
         const spinner = document.getElementById(spinnerId);
         if (spinner) {
@@ -1545,7 +1537,7 @@ function hideAllSpinners() {
             delete spinner.dataset.shownAt; // Clear timestamp
         }
     });
-    
+
     // Also hide any spinners found by class
     const allSpinners = document.querySelectorAll('.grid-spinner-container, .spinner-container');
     allSpinners.forEach(spinner => {
@@ -1555,9 +1547,9 @@ function hideAllSpinners() {
 }
 
 // Debug function to check for blocking elements (can be called from console)
-window.debugBlockingElements = function() {
+window.debugBlockingElements = function () {
     console.log('=== Checking for blocking elements ===');
-    
+
     // Check spinners
     const spinners = document.querySelectorAll('.grid-spinner-container');
     const visibleSpinners = [];
@@ -1573,7 +1565,7 @@ window.debugBlockingElements = function() {
         }
     });
     console.log('Visible spinners:', visibleSpinners);
-    
+
     // Check modals
     const modals = document.querySelectorAll('.modal');
     const visibleModals = [];
@@ -1590,7 +1582,7 @@ window.debugBlockingElements = function() {
         }
     });
     console.log('Visible modals:', visibleModals);
-    
+
     // Check for high z-index elements
     const allElements = document.querySelectorAll('*');
     const highZIndex = [];
@@ -1611,7 +1603,7 @@ window.debugBlockingElements = function() {
         }
     });
     console.log('High z-index elements:', highZIndex);
-    
+
     // Fix any stuck elements
     if (visibleSpinners.length > 0 || (visibleModals.length > 0 && visibleModals.some(m => !m.hasContent))) {
         console.log('Found blocking elements, fixing...');
@@ -1621,8 +1613,8 @@ window.debugBlockingElements = function() {
     } else {
         console.log('No obvious blocking elements found.');
     }
-    
-    return {spinners: visibleSpinners, modals: visibleModals, highZIndex: highZIndex};
+
+    return { spinners: visibleSpinners, modals: visibleModals, highZIndex: highZIndex };
 };
 
 // Load backups
@@ -1653,29 +1645,29 @@ async function loadBackups() {
     const backupsList = document.getElementById('backups-list');
     const backupsSpinner = document.getElementById('backups-spinner');
     const backupsWrapper = document.getElementById('backups-table-wrapper');
-    
+
     errorEl.style.display = 'none';
     backupsList.innerHTML = '';
-    
+
     // Clear search input when reloading
     const searchInput = document.getElementById('backup-search-input');
     if (searchInput) searchInput.value = '';
-    
+
     // Show spinner and prevent scrollbars
     if (backupsSpinner) backupsSpinner.style.display = 'flex';
     if (backupsWrapper) backupsWrapper.style.overflow = 'hidden';
-    
+
     try {
         const response = await fetch('/api/backups');
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load backups');
         }
-        
+
         // Store all backups for filtering and sorting
         allBackups = data.backups || [];
-        
+
         // Apply current sort if any, then render
         let backupsToDisplay = allBackups;
         if (currentBackupSortColumn) {
@@ -1687,9 +1679,9 @@ async function loadBackups() {
                 sortIndicator.style.color = 'var(--accent)';
             }
         }
-        
+
         renderBackups(backupsToDisplay);
-        
+
     } catch (error) {
         errorEl.textContent = `Error: ${error.message}`;
         errorEl.style.display = 'block';
@@ -1706,22 +1698,22 @@ async function loadStatistics() {
     const statisticsList = document.getElementById('statistics-list');
     const statisticsSpinner = document.getElementById('statistics-spinner');
     const statisticsWrapper = document.getElementById('statistics-table-wrapper');
-    
+
     errorEl.style.display = 'none';
     statisticsList.innerHTML = '';
-    
+
     // Show spinner and prevent scrollbars
     if (statisticsSpinner) statisticsSpinner.style.display = 'flex';
     if (statisticsWrapper) statisticsWrapper.style.overflow = 'hidden';
-    
+
     try {
         const response = await fetch('/api/statistics');
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load statistics');
         }
-        
+
         if (!data.containers || data.containers.length === 0) {
             statisticsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No containers found</td></tr>';
         } else {
@@ -1730,7 +1722,7 @@ async function loadStatistics() {
                 statisticsList.appendChild(row);
             });
         }
-        
+
     } catch (error) {
         errorEl.textContent = `Error: ${error.message}`;
         errorEl.style.display = 'block';
@@ -1745,10 +1737,10 @@ async function loadStatistics() {
 function createStatisticsRow(container) {
     const tr = document.createElement('tr');
     tr.className = 'statistics-row';
-    
+
     const statusClass = container.status === 'running' ? 'status-running' : 'status-stopped';
     const statusText = container.status === 'running' ? 'Running' : 'Stopped';
-    
+
     // Format RAM display
     let ramDisplay = '-';
     if (container.status === 'running' && container.memory_used_mb > 0) {
@@ -1764,19 +1756,19 @@ function createStatisticsRow(container) {
             ramDisplay = `${usedMB} MB`;
         }
     }
-    
+
     // Format CPU display
     let cpuDisplay = '-';
     if (container.status === 'running' && container.cpu_percent > 0) {
         cpuDisplay = `${container.cpu_percent.toFixed(2)}%`;
     }
-    
+
     // Format Network I/O display
     const networkIO = container.network_io && container.network_io !== '-' ? escapeHtml(container.network_io) : '-';
-    
+
     // Format Block I/O display
     const blockIO = container.block_io && container.block_io !== '-' ? escapeHtml(container.block_io) : '-';
-    
+
     tr.innerHTML = `
         <td>
             <div style="font-weight: 500; color: #fff;">${escapeHtml(container.name)}</div>
@@ -1791,72 +1783,73 @@ function createStatisticsRow(container) {
         <td style="color: var(--text-secondary);">${networkIO}</td>
         <td style="color: var(--text-secondary);">${blockIO}</td>
     `;
-    
+
     return tr;
 }
 
 // Audit Log functions
-let auditLogOffset = 0;
-const auditLogLimit = 100;
+let auditLogCurrentPage = 1;
+let auditLogTotalPages = 1;
+let auditLogTotal = 0;
+const auditLogLimit = 10;
 
 async function loadAuditLogs(reset = true) {
     const errorEl = document.getElementById('audit-log-error');
     const auditLogList = document.getElementById('audit-log-list');
     const auditLogSpinner = document.getElementById('audit-log-spinner');
     const auditLogWrapper = document.getElementById('audit-log-table-wrapper');
-    
+
     errorEl.style.display = 'none';
-    
+
     if (reset) {
-        auditLogOffset = 0;
-        auditLogList.innerHTML = '';
+        auditLogCurrentPage = 1;
     }
-    
+
+    // Calculate offset from current page
+    const auditLogOffset = (auditLogCurrentPage - 1) * auditLogLimit;
+
     // Show spinner
-    if (auditLogSpinner && reset) auditLogSpinner.style.display = 'flex';
-    if (auditLogWrapper && reset) auditLogWrapper.style.overflow = 'hidden';
-    
+    if (auditLogSpinner) auditLogSpinner.style.display = 'flex';
+    if (auditLogWrapper) auditLogWrapper.style.overflow = 'hidden';
+
+    // Clear existing logs
+    auditLogList.innerHTML = '';
+
     try {
         const operationTypeEl = document.getElementById('audit-filter-operation');
         const statusEl = document.getElementById('audit-filter-status');
+        const searchInput = document.getElementById('audit-log-search');
         const operationType = (operationTypeEl && operationTypeEl.value) || '';
         const status = (statusEl && statusEl.value) || '';
-        
+        const searchTerm = (searchInput && searchInput.value.trim()) || '';
+
         let url = `/api/audit-logs?limit=${auditLogLimit}&offset=${auditLogOffset}`;
         if (operationType) url += `&operation_type=${encodeURIComponent(operationType)}`;
         if (status) url += `&status=${encodeURIComponent(status)}`;
-        
+        if (searchTerm) url += `&search=${encodeURIComponent(searchTerm)}`;
+
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load audit logs');
         }
-        
+
+        auditLogTotal = data.total || 0;
+        auditLogTotalPages = Math.ceil(auditLogTotal / auditLogLimit);
+
         if (!data.logs || data.logs.length === 0) {
-            if (reset) {
-                auditLogList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666;">No audit logs found</td></tr>';
-            }
-            document.getElementById('audit-load-more-btn').style.display = 'none';
+            auditLogList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666;">No audit logs found</td></tr>';
+            updateAuditLogPagination();
         } else {
             data.logs.forEach(log => {
                 const row = createAuditLogRow(log);
                 auditLogList.appendChild(row);
             });
-            
-            // Show load more button if there are more logs
-            if (data.logs.length >= auditLogLimit && auditLogOffset + data.logs.length < data.total) {
-                document.getElementById('audit-load-more-btn').style.display = 'inline-block';
-            } else {
-                document.getElementById('audit-load-more-btn').style.display = 'none';
-            }
-            
-            auditLogOffset += data.logs.length;
+
+            updateAuditLogPagination();
         }
-        
-        // Load statistics
-        await loadAuditLogStatistics();
-        
+
     } catch (error) {
         errorEl.textContent = `Error: ${error.message}`;
         errorEl.style.display = 'block';
@@ -1867,8 +1860,33 @@ async function loadAuditLogs(reset = true) {
     }
 }
 
-async function loadMoreAuditLogs() {
-    await loadAuditLogs(false);
+function updateAuditLogPagination() {
+    const prevBtn = document.getElementById('audit-prev-btn');
+    const nextBtn = document.getElementById('audit-next-btn');
+    const pageInfo = document.getElementById('audit-page-info');
+
+    if (auditLogTotalPages <= 1) {
+        prevBtn.style.display = 'none';
+        nextBtn.style.display = 'none';
+        pageInfo.textContent = '';
+    } else {
+        prevBtn.style.display = auditLogCurrentPage > 1 ? 'inline-flex' : 'none';
+        nextBtn.style.display = auditLogCurrentPage < auditLogTotalPages ? 'inline-flex' : 'none';
+        
+        const start = auditLogTotal === 0 ? 0 : (auditLogCurrentPage - 1) * auditLogLimit + 1;
+        const end = Math.min(auditLogCurrentPage * auditLogLimit, auditLogTotal);
+        pageInfo.textContent = `Page ${auditLogCurrentPage} of ${auditLogTotalPages} (${start}-${end} of ${auditLogTotal})`;
+    }
+}
+
+async function loadAuditLogsPage(direction) {
+    if (direction === 'next' && auditLogCurrentPage < auditLogTotalPages) {
+        auditLogCurrentPage++;
+        await loadAuditLogs(false);
+    } else if (direction === 'prev' && auditLogCurrentPage > 1) {
+        auditLogCurrentPage--;
+        await loadAuditLogs(false);
+    }
 }
 
 async function clearAuditLogs() {
@@ -1879,16 +1897,16 @@ async function clearAuditLogs() {
                 const response = await fetch('/api/audit-logs/clear', {
                     method: 'DELETE'
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (!response.ok) {
                     throw new Error(data.error || 'Failed to clear audit logs');
                 }
-                
+
                 // Show success notification
                 showNotification(`Successfully cleared ${data.deleted_count || 0} audit log(s)`, 'success');
-                
+
                 // Reload audit logs (will show empty state)
                 await loadAuditLogs(true);
             } catch (error) {
@@ -1898,28 +1916,35 @@ async function clearAuditLogs() {
     );
 }
 
-async function loadAuditLogStatistics() {
-    try {
-        const response = await fetch('/api/audit-logs/statistics');
-        const data = await response.json();
-        
-        if (response.ok && data) {
-            document.getElementById('audit-total-logs').textContent = data.total_logs || 0;
-            document.getElementById('audit-last-24h').textContent = data.last_24h || 0;
-            document.getElementById('audit-last-7d').textContent = data.last_7d || 0;
-        }
-    } catch (error) {
-        console.error('Error loading audit log statistics:', error);
+// Debounce function for search
+let auditLogSearchTimeout = null;
+
+function filterAuditLogs() {
+    auditLogCurrentPage = 1; // Reset to first page when filtering
+    const searchInput = document.getElementById('audit-log-search');
+    if (!searchInput) return;
+
+    const searchTerm = searchInput.value.trim();
+
+    // Clear existing timeout
+    if (auditLogSearchTimeout) {
+        clearTimeout(auditLogSearchTimeout);
     }
+
+    // Debounce the search - wait 300ms after user stops typing
+    auditLogSearchTimeout = setTimeout(() => {
+        // Reload audit logs with search term
+        loadAuditLogs(true);
+    }, 300);
 }
 
 function createAuditLogRow(log) {
     const tr = document.createElement('tr');
-    
+
     // Format timestamp
     const timestamp = new Date(log.timestamp);
     const formattedTime = timestamp.toLocaleString();
-    
+
     // Format operation type
     const operationLabels = {
         'backup_manual': 'Manual Backup',
@@ -1929,20 +1954,20 @@ function createAuditLogRow(log) {
         'delete_backup': 'Delete Backup'
     };
     const operationLabel = operationLabels[log.operation_type] || log.operation_type;
-    
+
     // Format status with badge
-    const statusClass = log.status === 'completed' ? 'status-running' : 
-                       log.status === 'error' ? 'status-stopped' : 
-                       'status-stopped'; // Use existing class for started/pending
+    const statusClass = log.status === 'completed' ? 'status-running' :
+        log.status === 'error' ? 'status-stopped' :
+            'status-stopped'; // Use existing class for started/pending
     const statusText = log.status.charAt(0).toUpperCase() + log.status.slice(1);
-    
+
     // Format container info
     const containerInfo = log.container_name || log.container_id || '-';
     const containerId = log.container_id ? ` (${log.container_id.substring(0, 12)})` : '';
-    
+
     // Format backup filename
     const backupFile = log.backup_filename || '-';
-    
+
     // Format details
     let detailsHtml = '-';
     if (log.details) {
@@ -1963,10 +1988,20 @@ function createAuditLogRow(log) {
             detailsHtml = details.join(', ');
         }
     }
-    
+
     // Error message
     const errorMsg = log.error_message ? `<div style="color: var(--danger); font-size: 0.9em; margin-top: 4px;">${escapeHtml(log.error_message)}</div>` : '';
-    
+
+    // Add data attributes for filtering (explicitly separate fields for better search accuracy)
+    tr.setAttribute('data-timestamp', formattedTime.toLowerCase());
+    tr.setAttribute('data-operation', operationLabel.toLowerCase());
+    tr.setAttribute('data-container-name', (log.container_name || '').toLowerCase());
+    tr.setAttribute('data-container-id', (log.container_id || '').toLowerCase());
+    tr.setAttribute('data-backup-filename', (log.backup_filename || '').toLowerCase());
+    tr.setAttribute('data-status', statusText.toLowerCase());
+    tr.setAttribute('data-error', (log.error_message || '').toLowerCase());
+    tr.setAttribute('data-details', detailsHtml.toLowerCase());
+
     tr.innerHTML = `
         <td style="color: var(--text-secondary); font-size: 0.9em;">${formattedTime}</td>
         <td style="font-weight: 500;">${escapeHtml(operationLabel)}</td>
@@ -1981,7 +2016,7 @@ function createAuditLogRow(log) {
         </td>
         <td style="color: var(--text-secondary); font-size: 0.9em;">${detailsHtml}</td>
     `;
-    
+
     return tr;
 }
 
@@ -1991,14 +2026,14 @@ function createTotalRow(label, value) {
     tr.className = 'statistics-total-row';
     tr.style.backgroundColor = 'var(--card-bg)';
     tr.style.fontWeight = 'bold';
-    
+
     tr.innerHTML = `
         <td colspan="2" style="font-weight: 600; color: var(--text-primary);">${escapeHtml(label)}</td>
         <td>-</td>
         <td>-</td>
         <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(value)}</td>
     `;
-    
+
     return tr;
 }
 
@@ -2006,42 +2041,42 @@ function createTotalRow(label, value) {
 function createBackupRow(backup) {
     const tr = document.createElement('tr');
     tr.className = 'backup-row';
-    
+
     const backupType = backup.type || (backup.filename.endsWith('.zip') ? 'container' : 'network');
     const sizeMB = (backup.size / (1024 * 1024)).toFixed(2);
     const sizeKB = (backup.size / 1024).toFixed(2);
     const sizeDisplay = backup.size > 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`;
     const createdDate = new Date(backup.created).toLocaleString();
-    
+
     // Build type display
-    const typeDisplay = backupType === 'network' 
-        ? '<span style="color: #667eea;">🌐 Network</span>' 
+    const typeDisplay = backupType === 'network'
+        ? '<span style="color: #667eea;">🌐 Network</span>'
         : '<span style="color: #10b981;">📦 Container</span>';
-    
+
     // Build backup type display (manual/scheduled)
     const backupTypeValue = backup.backup_type || 'manual';
     const backupTypeDisplay = backupTypeValue === 'scheduled'
         ? '<span style="color: #f59e0b; font-weight: 500;"><i class="ph ph-clock-clockwise" style="margin-right: 4px;"></i>Scheduled</span>'
         : '<span style="color: var(--text-secondary);"><i class="ph ph-hand" style="margin-right: 4px;"></i>Manual</span>';
-    
+
     // Build actions column
     const actionsHtml = `
         <div class="btn-group" style="display: flex; gap: 4px; flex-wrap: nowrap;">
             <a href="/api/download/${backup.filename}" class="btn btn-success btn-sm" title="Download backup"><i class="ph ph-download-simple"></i> Download</a>
             ${backupType === 'container'
-                ? `<button class="btn btn-primary btn-sm" onclick="showRestoreModal('${escapeHtml(backup.filename)}')" title="Restore container backup"><i class="ph ph-upload-simple"></i> Restore</button>`
-                : `<button class="btn btn-primary btn-sm" onclick="restoreNetworkBackup('${escapeHtml(backup.filename)}')" title="Restore network backup"><i class="ph ph-upload-simple"></i> Restore</button>`
-            }
+            ? `<button class="btn btn-primary btn-sm" onclick="showRestoreModal('${escapeHtml(backup.filename)}')" title="Restore container backup"><i class="ph ph-upload-simple"></i> Restore</button>`
+            : `<button class="btn btn-primary btn-sm" onclick="restoreNetworkBackup('${escapeHtml(backup.filename)}')" title="Restore network backup"><i class="ph ph-upload-simple"></i> Restore</button>`
+        }
             <button class="btn btn-danger btn-sm" onclick="deleteBackup('${escapeHtml(backup.filename)}')" title="Delete backup"><i class="ph ph-trash"></i> Delete</button>
         </div>
     `;
-    
+
     // Build storage location display
     const storageLocation = backup.storage_location || 'local';
     const storageDisplay = storageLocation === 's3'
         ? '<span style="color: #3b82f6; font-weight: 500;"><i class="ph ph-cloud" style="margin-right: 4px;"></i>S3</span>'
         : '<span style="color: var(--text-secondary);"><i class="ph ph-hard-drives" style="margin-right: 4px;"></i>Local</span>';
-    
+
     // Add data attributes for filtering
     tr.setAttribute('data-filename', backup.filename.toLowerCase());
     tr.setAttribute('data-type', backupType);
@@ -2049,7 +2084,7 @@ function createBackupRow(backup) {
     tr.setAttribute('data-storage', storageLocation);
     tr.setAttribute('data-size', backup.size.toString());
     tr.setAttribute('data-created', createdDate.toLowerCase());
-    
+
     tr.innerHTML = `
         <td>
             <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(backup.filename)}</div>
@@ -2073,7 +2108,7 @@ function createBackupRow(backup) {
             ${actionsHtml}
         </td>
     `;
-    
+
     return tr;
 }
 
@@ -2081,18 +2116,18 @@ function createBackupRow(backup) {
 function filterBackups() {
     const searchInput = document.getElementById('backup-search-input');
     const backupsList = document.getElementById('backups-list');
-    
+
     if (!searchInput || !backupsList) return;
-    
+
     const searchTerm = searchInput.value.toLowerCase().trim();
     const rows = backupsList.querySelectorAll('.backup-row');
-    
+
     // Remove any existing "no results" message
     const noResultsRow = backupsList.querySelector('tr[data-no-results]');
     if (noResultsRow) {
         noResultsRow.remove();
     }
-    
+
     if (!searchTerm) {
         // Show all rows if search is empty
         rows.forEach(row => {
@@ -2100,7 +2135,7 @@ function filterBackups() {
         });
         return;
     }
-    
+
     // Filter rows based on search term
     let visibleCount = 0;
     rows.forEach(row => {
@@ -2109,14 +2144,14 @@ function filterBackups() {
         const backupType = row.getAttribute('data-backup-type') || '';
         const storage = row.getAttribute('data-storage') || '';
         const created = row.getAttribute('data-created') || '';
-        
+
         // Check if search term matches any field
         const matches = filename.includes(searchTerm) ||
-                       type.includes(searchTerm) ||
-                       backupType.includes(searchTerm) ||
-                       storage.includes(searchTerm) ||
-                       created.includes(searchTerm);
-        
+            type.includes(searchTerm) ||
+            backupType.includes(searchTerm) ||
+            storage.includes(searchTerm) ||
+            created.includes(searchTerm);
+
         if (matches) {
             row.style.display = '';
             visibleCount++;
@@ -2124,7 +2159,7 @@ function filterBackups() {
             row.style.display = 'none';
         }
     });
-    
+
     // Show "no results" message if no rows match (but only if there are backups to filter)
     if (visibleCount === 0 && rows.length > 0) {
         const tr = document.createElement('tr');
@@ -2143,19 +2178,19 @@ function sortBackups(column) {
         currentBackupSortColumn = column;
         currentBackupSortDirection = 'asc';
     }
-    
+
     // Update sort indicators (only for backup table)
     document.querySelectorAll('#backups-table .sort-indicator').forEach(indicator => {
         indicator.textContent = '';
         indicator.style.color = '';
     });
-    
+
     const sortIndicator = document.getElementById(`sort-backup-${column}`);
     if (sortIndicator) {
         sortIndicator.textContent = currentBackupSortDirection === 'asc' ? ' ▲' : ' ▼';
         sortIndicator.style.color = 'var(--accent)';
     }
-    
+
     // Sort and re-render backups
     const sorted = sortBackupsData([...allBackups], column, currentBackupSortDirection);
     renderBackups(sorted);
@@ -2165,8 +2200,8 @@ function sortBackups(column) {
 function sortBackupsData(backups, column, direction) {
     return backups.sort((a, b) => {
         let aVal, bVal;
-        
-        switch(column) {
+
+        switch (column) {
             case 'filename':
                 aVal = (a.filename || '').toLowerCase();
                 bVal = (b.filename || '').toLowerCase();
@@ -2196,7 +2231,7 @@ function sortBackupsData(backups, column, direction) {
             default:
                 return 0;
         }
-        
+
         if (aVal < bVal) return direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return direction === 'asc' ? 1 : -1;
         return 0;
@@ -2207,11 +2242,11 @@ function sortBackupsData(backups, column, direction) {
 function renderBackups(backups) {
     const backupsList = document.getElementById('backups-list');
     const backupsWrapper = document.getElementById('backups-table-wrapper');
-    
+
     if (!backupsList) return;
-    
+
     backupsList.innerHTML = '';
-    
+
     if (backups.length === 0) {
         backupsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No backups found</td></tr>';
     } else {
@@ -2220,7 +2255,7 @@ function renderBackups(backups) {
             backupsList.appendChild(row);
         });
     }
-    
+
     // Apply current filter if any
     const searchInput = document.getElementById('backup-search-input');
     if (searchInput && searchInput.value.trim()) {
@@ -2236,18 +2271,18 @@ function sortVolumes(column) {
         currentVolumeSortColumn = column;
         currentVolumeSortDirection = 'asc';
     }
-    
+
     document.querySelectorAll('#volumes-table .sort-indicator').forEach(indicator => {
         indicator.textContent = '';
         indicator.style.color = '';
     });
-    
+
     const sortIndicator = document.getElementById(`sort-volume-${column}`);
     if (sortIndicator) {
         sortIndicator.textContent = currentVolumeSortDirection === 'asc' ? ' ▲' : ' ▼';
         sortIndicator.style.color = 'var(--accent)';
     }
-    
+
     const sorted = sortVolumesData([...allVolumes], column, currentVolumeSortDirection);
     renderVolumes(sorted);
 }
@@ -2255,8 +2290,8 @@ function sortVolumes(column) {
 function sortVolumesData(volumes, column, direction) {
     return volumes.sort((a, b) => {
         let aVal, bVal;
-        
-        switch(column) {
+
+        switch (column) {
             case 'name':
                 aVal = (a.name || '').toLowerCase();
                 bVal = (b.name || '').toLowerCase();
@@ -2281,7 +2316,7 @@ function sortVolumesData(volumes, column, direction) {
                     if (!match) return 0;
                     const value = parseFloat(match[1]);
                     const unit = match[2].toUpperCase();
-                    const multipliers = {B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024, TB: 1024*1024*1024*1024};
+                    const multipliers = { B: 1, KB: 1024, MB: 1024 * 1024, GB: 1024 * 1024 * 1024, TB: 1024 * 1024 * 1024 * 1024 };
                     return value * (multipliers[unit] || 1);
                 };
                 aVal = parseSize(a.size);
@@ -2290,7 +2325,7 @@ function sortVolumesData(volumes, column, direction) {
             default:
                 return 0;
         }
-        
+
         if (aVal < bVal) return direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return direction === 'asc' ? 1 : -1;
         return 0;
@@ -2300,9 +2335,9 @@ function sortVolumesData(volumes, column, direction) {
 function renderVolumes(volumes) {
     const volumesList = document.getElementById('volumes-list');
     if (!volumesList) return;
-    
+
     volumesList.innerHTML = '';
-    
+
     if (volumes.length === 0) {
         volumesList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No volumes found</td></tr>';
     } else {
@@ -2321,18 +2356,18 @@ function sortImages(column) {
         currentImageSortColumn = column;
         currentImageSortDirection = 'asc';
     }
-    
+
     document.querySelectorAll('#images-table .sort-indicator').forEach(indicator => {
         indicator.textContent = '';
         indicator.style.color = '';
     });
-    
+
     const sortIndicator = document.getElementById(`sort-image-${column}`);
     if (sortIndicator) {
         sortIndicator.textContent = currentImageSortDirection === 'asc' ? ' ▲' : ' ▼';
         sortIndicator.style.color = 'var(--accent)';
     }
-    
+
     const sorted = sortImagesData([...allImages], column, currentImageSortDirection);
     renderImages(sorted);
 }
@@ -2340,8 +2375,8 @@ function sortImages(column) {
 function sortImagesData(images, column, direction) {
     return images.sort((a, b) => {
         let aVal, bVal;
-        
-        switch(column) {
+
+        switch (column) {
             case 'name':
                 aVal = (a.name || '').toLowerCase();
                 bVal = (b.name || '').toLowerCase();
@@ -2358,7 +2393,7 @@ function sortImagesData(images, column, direction) {
                     if (!match) return 0;
                     const value = parseFloat(match[1]);
                     const unit = match[2].toUpperCase();
-                    const multipliers = {B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024, TB: 1024*1024*1024*1024};
+                    const multipliers = { B: 1, KB: 1024, MB: 1024 * 1024, GB: 1024 * 1024 * 1024, TB: 1024 * 1024 * 1024 * 1024 };
                     return value * (multipliers[unit] || 1);
                 };
                 aVal = parseSize(a.size);
@@ -2371,7 +2406,7 @@ function sortImagesData(images, column, direction) {
             default:
                 return 0;
         }
-        
+
         if (aVal < bVal) return direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return direction === 'asc' ? 1 : -1;
         return 0;
@@ -2381,9 +2416,9 @@ function sortImagesData(images, column, direction) {
 function renderImages(images) {
     const imagesList = document.getElementById('images-list');
     if (!imagesList) return;
-    
+
     imagesList.innerHTML = '';
-    
+
     if (images.length === 0) {
         imagesList.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #666;">No images found</td></tr>';
     } else {
@@ -2402,18 +2437,18 @@ function sortNetworks(column) {
         currentNetworkSortColumn = column;
         currentNetworkSortDirection = 'asc';
     }
-    
+
     document.querySelectorAll('#networks-table .sort-indicator').forEach(indicator => {
         indicator.textContent = '';
         indicator.style.color = '';
     });
-    
+
     const sortIndicator = document.getElementById(`sort-network-${column}`);
     if (sortIndicator) {
         sortIndicator.textContent = currentNetworkSortDirection === 'asc' ? ' ▲' : ' ▼';
         sortIndicator.style.color = 'var(--accent)';
     }
-    
+
     const sorted = sortNetworksData([...allNetworks], column, currentNetworkSortDirection);
     renderNetworks(sorted);
 }
@@ -2421,8 +2456,8 @@ function sortNetworks(column) {
 function sortNetworksData(networks, column, direction) {
     return networks.sort((a, b) => {
         let aVal, bVal;
-        
-        switch(column) {
+
+        switch (column) {
             case 'name':
                 aVal = (a.name || '').toLowerCase();
                 bVal = (b.name || '').toLowerCase();
@@ -2446,7 +2481,7 @@ function sortNetworksData(networks, column, direction) {
             default:
                 return 0;
         }
-        
+
         if (aVal < bVal) return direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return direction === 'asc' ? 1 : -1;
         return 0;
@@ -2456,9 +2491,9 @@ function sortNetworksData(networks, column, direction) {
 function renderNetworks(networks) {
     const networksList = document.getElementById('networks-list');
     if (!networksList) return;
-    
+
     networksList.innerHTML = '';
-    
+
     if (networks.length === 0) {
         networksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666;">No networks found</td></tr>';
     } else {
@@ -2477,18 +2512,18 @@ function sortStacks(column) {
         currentStackSortColumn = column;
         currentStackSortDirection = 'asc';
     }
-    
+
     document.querySelectorAll('#stacks-table .sort-indicator').forEach(indicator => {
         indicator.textContent = '';
         indicator.style.color = '';
     });
-    
+
     const sortIndicator = document.getElementById(`sort-stack-${column}`);
     if (sortIndicator) {
         sortIndicator.textContent = currentStackSortDirection === 'asc' ? ' ▲' : ' ▼';
         sortIndicator.style.color = 'var(--accent)';
     }
-    
+
     const sorted = sortStacksData([...allStacks], column, currentStackSortDirection);
     renderStacks(sorted);
 }
@@ -2496,8 +2531,8 @@ function sortStacks(column) {
 function sortStacksData(stacks, column, direction) {
     return stacks.sort((a, b) => {
         let aVal, bVal;
-        
-        switch(column) {
+
+        switch (column) {
             case 'name':
                 aVal = (a.name || '').toLowerCase();
                 bVal = (b.name || '').toLowerCase();
@@ -2521,7 +2556,7 @@ function sortStacksData(stacks, column, direction) {
             default:
                 return 0;
         }
-        
+
         if (aVal < bVal) return direction === 'asc' ? -1 : 1;
         if (aVal > bVal) return direction === 'asc' ? 1 : -1;
         return 0;
@@ -2531,9 +2566,9 @@ function sortStacksData(stacks, column, direction) {
 function renderStacks(stacks) {
     const stacksList = document.getElementById('stacks-list');
     if (!stacksList) return;
-    
+
     stacksList.innerHTML = '';
-    
+
     if (stacks.length === 0) {
         stacksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No stacks found</td></tr>';
     } else {
@@ -2640,7 +2675,7 @@ async function uploadBackup(event) {
             statusBadge.textContent = 'Success';
             statusBadge.className = 'status-badge success';
             itemEl.style.borderColor = 'var(--accent)';
-            
+
             // Track JSON files for restore prompt
             if (file.name.endsWith('.json')) {
                 jsonFilesToRestore.push({
@@ -2660,12 +2695,12 @@ async function uploadBackup(event) {
     closeBtn.style.display = 'block';
     event.target.value = ''; // Reset file input
     loadBackups();
-    
+
     // Prompt to restore network backups if any were uploaded
     if (jsonFilesToRestore.length > 0) {
         for (const jsonFile of jsonFilesToRestore) {
             const networkName = jsonFile.networkName || 'unknown';
-            
+
             showConfirmationModal(`Network backup uploaded. Restore network "${networkName}"?`, async () => {
                 const restoreResponse = await fetch('/api/network/restore', {
                     method: 'POST',
@@ -2676,9 +2711,9 @@ async function uploadBackup(event) {
                         filename: jsonFile.filename
                     })
                 });
-                
+
                 const restoreData = await restoreResponse.json();
-                
+
                 if (!restoreResponse.ok) {
                     if (restoreResponse.status === 409) {
                         console.warn(`Network already exists: ${restoreData.network_name || 'unknown'}`);
@@ -2688,7 +2723,7 @@ async function uploadBackup(event) {
                 } else {
                     console.log(`Network restored: ${restoreData.network_name}`);
                 }
-                
+
                 loadNetworks();
                 loadBackups(); // Refresh backup grid after restore too
             });
@@ -2712,12 +2747,12 @@ async function showRestoreModal(filename) {
     document.getElementById('restore-filename').textContent = filename;
     document.getElementById('restore-content').style.display = 'block';
     document.getElementById('restore-progress').style.display = 'none';
-    
+
     // Show loading spinner, hide options and buttons during preview load
     const restoreLoading = document.getElementById('restore-loading');
     const restoreOptions = document.getElementById('restore-options');
     const modalActions = document.getElementById('restore-modal-actions');
-    
+
     // Show spinner using backup-progress class (same style as restore-progress)
     restoreLoading.className = 'backup-progress';
     restoreLoading.style.display = 'block';
@@ -2726,25 +2761,25 @@ async function showRestoreModal(filename) {
     restoreLoading.innerHTML = '<div class="spinner" style="margin: 0 auto;"></div><p style="margin-top: 20px;">Loading backup preview...</p>';
     restoreOptions.style.display = 'none';
     if (modalActions) modalActions.style.display = 'none';
-    
+
     document.getElementById('restore-modal').style.display = 'block';
-    
+
     try {
         // Fetch backup preview
         const response = await fetch(`/api/backup/${filename}/preview`);
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load backup preview');
         }
-        
+
         currentRestorePreview = data;
-        
+
         // Populate volumes section
         const volumesListEl = document.getElementById('restore-volumes-list');
         const volumesSectionEl = document.getElementById('restore-volumes-section');
         const overwriteCheckbox = document.getElementById('restore-overwrite-volumes');
-        
+
         if (data.volumes && data.volumes.length > 0) {
             volumesSectionEl.style.display = 'block';
             let volumesHtml = '<div style="margin-bottom: 10px; font-size: 0.9em; color: var(--text-secondary);">Volumes in backup:</div>';
@@ -2755,7 +2790,7 @@ async function showRestoreModal(filename) {
             });
             volumesHtml += '</ul>';
             volumesListEl.innerHTML = volumesHtml;
-            
+
             // Set checkbox based on whether volumes exist
             if (data.existing_volumes.length > 0) {
                 // Volumes exist - user can choose to overwrite or not
@@ -2769,11 +2804,11 @@ async function showRestoreModal(filename) {
         } else {
             volumesSectionEl.style.display = 'none';
         }
-        
+
         // Populate ports section
         const portsListEl = document.getElementById('restore-ports-list');
         const portsSectionEl = document.getElementById('restore-ports-section');
-        
+
         if (data.port_mappings && data.port_mappings.length > 0) {
             portsSectionEl.style.display = 'block';
             let portsHtml = '';
@@ -2789,12 +2824,12 @@ async function showRestoreModal(filename) {
         } else {
             portsSectionEl.style.display = 'none';
         }
-        
+
         // Hide loading spinner, show options and buttons
         restoreLoading.style.display = 'none';
         restoreOptions.style.display = 'block';
         if (modalActions) modalActions.style.display = 'flex';
-        
+
     } catch (error) {
         // Show error in loading area
         restoreLoading.className = '';
@@ -2830,10 +2865,10 @@ async function submitRestore() {
     if (!currentRestoreFilename) {
         return;
     }
-    
+
     // Get volume overwrite option
     const overwriteVolumes = document.getElementById('restore-overwrite-volumes').checked;
-    
+
     // Get port overrides
     const portOverrides = {};
     const portInputs = document.querySelectorAll('.restore-port-input');
@@ -2844,12 +2879,12 @@ async function submitRestore() {
             portOverrides[containerPort] = hostPort;
         }
     });
-    
+
     // Hide options, show progress
     document.getElementById('restore-content').style.display = 'none';
     const restoreProgressEl = document.getElementById('restore-progress');
     restoreProgressEl.style.display = 'block';
-    
+
     restoreProgressEl.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px;">
             <div class="spinner" style="margin: 0 auto;"></div>
@@ -2857,7 +2892,7 @@ async function submitRestore() {
             <p style="font-size: 0.9em; color: #cbd5e1; margin-top: 10px;">This may take a while for large backups.</p>
         </div>
     `;
-    
+
     try {
         const response = await fetch('/api/restore-backup', {
             method: 'POST',
@@ -2871,7 +2906,7 @@ async function submitRestore() {
                 port_overrides: Object.keys(portOverrides).length > 0 ? portOverrides : null
             })
         });
-        
+
         let data;
         try {
             const responseText = await response.text();
@@ -2883,7 +2918,7 @@ async function submitRestore() {
             console.error('Failed to parse response:', parseError);
             throw new Error('Invalid response from server. Restore may have succeeded - please refresh containers.');
         }
-        
+
         if (!response.ok) {
             // Handle other conflict errors
             if (response.status === 409) {
@@ -2891,28 +2926,14 @@ async function submitRestore() {
             }
             throw new Error(data.error || 'Restore failed');
         }
-        
+
         // Success - update UI
-        const restoreProgressEl = document.getElementById('restore-progress');
-        if (restoreProgressEl) {
-            restoreProgressEl.innerHTML = `
-                <div class="success-message">
-                    <h3>✅ Container Restored Successfully!</h3>
-                    <p>Container name: <strong>${escapeHtml(data.container_name || 'Unknown')}</strong></p>
-                    ${data.container_id ? `<p>Container ID: <strong>${escapeHtml(data.container_id)}</strong></p>` : ''}
-                </div>
-            `;
-        }
-        
-        // Close modal after showing success message
-        setTimeout(() => {
-            try {
-                closeRestoreModal();
-            } catch (closeError) {
-                console.error('Error closing modal:', closeError);
-            }
-        }, 3000);
-        
+        closeRestoreModal();
+        showNotification(
+            `✅ Container Restored Successfully!\nName: ${escapeHtml(data.container_name || 'Unknown')}`,
+            'success'
+        );
+
     } catch (error) {
         console.error('Restore error:', error);
         const restoreProgressEl = document.getElementById('restore-progress');
@@ -2950,19 +2971,19 @@ function escapeHtml(text) {
 }
 
 // Close modal when clicking outside
-window.onclick = function(event) {
+window.onclick = function (event) {
     // Safety check: ensure event exists
     if (!event || !event.target) {
         return;
     }
-    
+
     const detailsModal = document.getElementById('details-modal');
     const backupModal = document.getElementById('backup-modal');
     const restoreModal = document.getElementById('restore-modal');
     const envCheckModal = document.getElementById('env-check-modal');
     const backupAllModal = document.getElementById('backup-all-modal');
     const defaultCredentialsModal = document.getElementById('default-credentials-modal');
-    
+
     if (event.target === detailsModal) {
         detailsModal.style.display = 'none';
     }
@@ -2999,7 +3020,7 @@ window.onclick = function(event) {
 }
 
 // Close modals on ESC key press
-document.addEventListener('keydown', function(event) {
+document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
         closeAllModals();
         hideAllSpinners(); // Also hide spinners that might be blocking
@@ -3016,115 +3037,115 @@ document.addEventListener('keydown', function(event) {
 let clickBlockedCount = 0;
 let lastClickTime = 0;
 
-document.addEventListener('click', function(event) {
+document.addEventListener('click', function (event) {
     try {
         const now = Date.now();
         const target = event.target;
-    const isInteractive = target.tagName === 'BUTTON' || 
-                         target.tagName === 'A' || 
-                         target.closest('button') || 
-                         target.closest('a') ||
-                         target.closest('.nav-item');
-    
-    if (isInteractive) {
-        // Check for any blocking elements
-        const blockingElements = [];
-        
-        // Check for visible spinners
-        const visibleSpinners = document.querySelectorAll('.grid-spinner-container');
-        visibleSpinners.forEach(spinner => {
-            const display = window.getComputedStyle(spinner).display;
-            if (display === 'flex' || display === 'block') {
-                const spinnerRect = spinner.getBoundingClientRect();
-                const targetRect = target.getBoundingClientRect();
-                
-                // Check if spinner overlaps with click target
-                if (!(targetRect.right < spinnerRect.left || 
-                      targetRect.left > spinnerRect.right ||
-                      targetRect.bottom < spinnerRect.top || 
-                      targetRect.top > spinnerRect.bottom)) {
-                    blockingElements.push({type: 'spinner', element: spinner, id: spinner.id || 'unknown'});
-                }
-            }
-        });
-        
-        // Check for visible modals (excluding login)
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            const display = window.getComputedStyle(modal).display;
-            if (display === 'block' && modal.id !== 'login-modal') {
-                const modalRect = modal.getBoundingClientRect();
-                const targetRect = target.getBoundingClientRect();
-                
-                // Check if modal overlaps with click target but target is not inside modal content
-                const modalContent = modal.querySelector('.modal-content');
-                const isInsideContent = modalContent && modalContent.contains(target);
-                
-                if (!isInsideContent && 
-                    !(targetRect.right < modalRect.left || 
-                      targetRect.left > modalRect.right ||
-                      targetRect.bottom < modalRect.top || 
-                      targetRect.top > modalRect.bottom)) {
-                    blockingElements.push({type: 'modal', element: modal, id: modal.id || 'unknown'});
-                }
-            }
-        });
-        
-        // Check for elements with pointer-events: none that might be blocking
-        let checkElement = target;
-        while (checkElement && checkElement !== document.body) {
-            const computedStyle = window.getComputedStyle(checkElement);
-            if (computedStyle.pointerEvents === 'none') {
-                // Check if parent has higher z-index blocking
-                const parent = checkElement.parentElement;
-                if (parent) {
-                    const parentZIndex = parseInt(window.getComputedStyle(parent).zIndex) || 0;
-                    if (parentZIndex > 100) {
-                        blockingElements.push({type: 'pointer-events', element: checkElement, id: checkElement.id || checkElement.className || 'unknown'});
+        const isInteractive = target.tagName === 'BUTTON' ||
+            target.tagName === 'A' ||
+            target.closest('button') ||
+            target.closest('a') ||
+            target.closest('.nav-item');
+
+        if (isInteractive) {
+            // Check for any blocking elements
+            const blockingElements = [];
+
+            // Check for visible spinners
+            const visibleSpinners = document.querySelectorAll('.grid-spinner-container');
+            visibleSpinners.forEach(spinner => {
+                const display = window.getComputedStyle(spinner).display;
+                if (display === 'flex' || display === 'block') {
+                    const spinnerRect = spinner.getBoundingClientRect();
+                    const targetRect = target.getBoundingClientRect();
+
+                    // Check if spinner overlaps with click target
+                    if (!(targetRect.right < spinnerRect.left ||
+                        targetRect.left > spinnerRect.right ||
+                        targetRect.bottom < spinnerRect.top ||
+                        targetRect.top > spinnerRect.bottom)) {
+                        blockingElements.push({ type: 'spinner', element: spinner, id: spinner.id || 'unknown' });
                     }
                 }
-            }
-            checkElement = checkElement.parentElement;
-        }
-        
-        // If blocking elements found, log and fix
-        if (blockingElements.length > 0) {
-            console.warn('Click blocked by:', blockingElements.map(b => `${b.type}:${b.id}`).join(', '));
-            console.warn('Target:', target.tagName, target.className, target.id);
-            console.warn('Target rect:', target.getBoundingClientRect());
-            
-            clickBlockedCount++;
-            
-            // Auto-fix after 2 blocked clicks
-            if (clickBlockedCount > 2) {
-                console.warn('Auto-fixing blocking elements...');
-                
-                blockingElements.forEach(blocker => {
-                    if (blocker.type === 'spinner') {
-                        console.warn('Hiding spinner:', blocker.id);
-                        blocker.element.style.display = 'none';
-                    } else if (blocker.type === 'modal') {
-                        const content = blocker.element.querySelector('.modal-content');
-                        if (!content || content.offsetHeight === 0) {
-                            console.warn('Closing stuck modal:', blocker.id);
-                            blocker.element.style.display = 'none';
+            });
+
+            // Check for visible modals (excluding login)
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                const display = window.getComputedStyle(modal).display;
+                if (display === 'block' && modal.id !== 'login-modal') {
+                    const modalRect = modal.getBoundingClientRect();
+                    const targetRect = target.getBoundingClientRect();
+
+                    // Check if modal overlaps with click target but target is not inside modal content
+                    const modalContent = modal.querySelector('.modal-content');
+                    const isInsideContent = modalContent && modalContent.contains(target);
+
+                    if (!isInsideContent &&
+                        !(targetRect.right < modalRect.left ||
+                            targetRect.left > modalRect.right ||
+                            targetRect.bottom < modalRect.top ||
+                            targetRect.top > modalRect.bottom)) {
+                        blockingElements.push({ type: 'modal', element: modal, id: modal.id || 'unknown' });
+                    }
+                }
+            });
+
+            // Check for elements with pointer-events: none that might be blocking
+            let checkElement = target;
+            while (checkElement && checkElement !== document.body) {
+                const computedStyle = window.getComputedStyle(checkElement);
+                if (computedStyle.pointerEvents === 'none') {
+                    // Check if parent has higher z-index blocking
+                    const parent = checkElement.parentElement;
+                    if (parent) {
+                        const parentZIndex = parseInt(window.getComputedStyle(parent).zIndex) || 0;
+                        if (parentZIndex > 100) {
+                            blockingElements.push({ type: 'pointer-events', element: checkElement, id: checkElement.id || checkElement.className || 'unknown' });
                         }
                     }
-                });
-                
-                // Also hide all spinners as safety measure
-                hideAllSpinners();
-                clickBlockedCount = 0;
+                }
+                checkElement = checkElement.parentElement;
             }
-        } else {
-            // Reset counter if click went through
-            if (now - lastClickTime > 1000) {
-                clickBlockedCount = 0;
+
+            // If blocking elements found, log and fix
+            if (blockingElements.length > 0) {
+                console.warn('Click blocked by:', blockingElements.map(b => `${b.type}:${b.id}`).join(', '));
+                console.warn('Target:', target.tagName, target.className, target.id);
+                console.warn('Target rect:', target.getBoundingClientRect());
+
+                clickBlockedCount++;
+
+                // Auto-fix after 2 blocked clicks
+                if (clickBlockedCount > 2) {
+                    console.warn('Auto-fixing blocking elements...');
+
+                    blockingElements.forEach(blocker => {
+                        if (blocker.type === 'spinner') {
+                            console.warn('Hiding spinner:', blocker.id);
+                            blocker.element.style.display = 'none';
+                        } else if (blocker.type === 'modal') {
+                            const content = blocker.element.querySelector('.modal-content');
+                            if (!content || content.offsetHeight === 0) {
+                                console.warn('Closing stuck modal:', blocker.id);
+                                blocker.element.style.display = 'none';
+                            }
+                        }
+                    });
+
+                    // Also hide all spinners as safety measure
+                    hideAllSpinners();
+                    clickBlockedCount = 0;
+                }
+            } else {
+                // Reset counter if click went through
+                if (now - lastClickTime > 1000) {
+                    clickBlockedCount = 0;
+                }
             }
+
+            lastClickTime = now;
         }
-        
-        lastClickTime = now;
-    }
     } catch (e) {
         console.error('Error in safety check click handler:', e);
     }
@@ -3156,7 +3177,7 @@ function checkForStuckElements() {
 setInterval(checkForStuckElements, 10000);
 
 // Also check on page visibility change
-document.addEventListener('visibilitychange', function() {
+document.addEventListener('visibilitychange', function () {
     if (!document.hidden) {
         // Page became visible, check for stuck elements
         setTimeout(checkForStuckElements, 1000);
@@ -3170,36 +3191,33 @@ async function startContainer(containerId) {
             method: 'POST',
         });
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to start container');
         }
-        
-        // Small delay to ensure Docker has processed the change
-        setTimeout(() => {
-            loadContainers();
-        }, 300);
+        return true;
     } catch (error) {
         console.error(`Error starting container: ${error.message}`);
+        showNotification(`Error starting container: ${error.message}`, 'error');
+        return false;
     }
 }
+
 async function restartContainer(containerId) {
     try {
         const response = await fetch(`/api/container/${containerId}/restart`, {
             method: 'POST',
         });
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to restart container');
         }
-        
-        // Small delay to ensure Docker has processed the change
-        setTimeout(() => {
-            loadContainers();
-        }, 300);
+        return true;
     } catch (error) {
         console.error(`Error restarting container: ${error.message}`);
+        showNotification(`Error restarting container: ${error.message}`, 'error');
+        return false;
     }
 }
 
@@ -3209,17 +3227,15 @@ async function stopContainer(containerId) {
             method: 'POST',
         });
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to stop container');
         }
-        
-        // Small delay to ensure Docker has processed the change
-        setTimeout(() => {
-            loadContainers();
-        }, 300);
+        return true;
     } catch (error) {
         console.error(`Error stopping container: ${error.message}`);
+        showNotification(`Error stopping container: ${error.message}`, 'error');
+        return false;
     }
 }
 
@@ -3229,31 +3245,29 @@ async function killContainer(containerId) {
             method: 'POST',
         });
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to kill container');
         }
-        
-        // Small delay to ensure Docker has processed the change
-        setTimeout(() => {
-            loadContainers();
-        }, 300);
+        return true;
     } catch (error) {
         console.error(`Error killing container: ${error.message}`);
+        showNotification(`Error killing container: ${error.message}`, 'error');
+        return false;
     }
 }
 
 // Show delete options modal
 async function showDeleteOptions(containerId, containerName) {
     currentContainerId = containerId;
-    
+
     // Check if we're deleting multiple containers
     const selectedIds = window.selectedContainerIdsForDelete || [containerId];
     const isMultiple = selectedIds.length > 1;
-    
+
     const modal = document.getElementById('delete-container-modal');
     const modalContent = document.getElementById('delete-container-content');
-    
+
     // Show loading state
     modalContent.innerHTML = `
         <h3 style="color: #f1f5f9;">${isMultiple ? `Delete ${selectedIds.length} Containers` : `Delete Container: ${escapeHtml(containerName)}`}</h3>
@@ -3263,12 +3277,12 @@ async function showDeleteOptions(containerId, containerName) {
         </div>
     `;
     modal.style.display = 'block';
-    
+
     // Fetch details for all selected containers
     const allVolumes = new Set();
     const allImages = new Set();
     const containerNames = [];
-    
+
     try {
         for (const id of selectedIds) {
             try {
@@ -3276,7 +3290,7 @@ async function showDeleteOptions(containerId, containerName) {
                 if (detailsResponse.ok) {
                     const details = await detailsResponse.json();
                     containerNames.push(details.name || 'Unknown');
-                    
+
                     // Collect volumes
                     const mounts = details.mounts || [];
                     mounts.filter(m => m.Type === 'volume').forEach(m => {
@@ -3284,7 +3298,7 @@ async function showDeleteOptions(containerId, containerName) {
                             allVolumes.add(m.Name);
                         }
                     });
-                    
+
                     // Collect images
                     const imageInfo = details.image || 'unknown';
                     if (imageInfo && imageInfo !== 'unknown') {
@@ -3298,12 +3312,12 @@ async function showDeleteOptions(containerId, containerName) {
     } catch (err) {
         console.error('Error fetching container details:', err);
     }
-    
+
     const hasVolumes = allVolumes.size > 0;
     const hasImage = allImages.size > 0;
     const volumesList = Array.from(allVolumes).sort();
     const imagesList = Array.from(allImages).sort();
-    
+
     // Build info about what will be deleted
     let infoHtml = '';
     if (selectedIds.length > 0) {
@@ -3316,14 +3330,14 @@ async function showDeleteOptions(containerId, containerName) {
         }
         infoHtml += '</div>';
     }
-    
-    const titleText = isMultiple 
+
+    const titleText = isMultiple
         ? `Delete ${selectedIds.length} Containers`
         : `Delete Container: ${escapeHtml(containerName)}`;
-    const buttonText = isMultiple 
+    const buttonText = isMultiple
         ? `🗑️ Delete ${selectedIds.length} Containers`
         : `🗑️ Delete Container`;
-    
+
     // Build volumes checkboxes
     let volumesHtml = '';
     if (hasVolumes) {
@@ -3344,7 +3358,7 @@ async function showDeleteOptions(containerId, containerName) {
     } else {
         volumesHtml = '<p style="color: var(--text-secondary); margin-bottom: 15px;">No volumes to delete</p>';
     }
-    
+
     // Build images checkboxes
     let imagesHtml = '';
     if (hasImage) {
@@ -3365,7 +3379,7 @@ async function showDeleteOptions(containerId, containerName) {
     } else {
         imagesHtml = '<p style="color: var(--text-secondary);">No images to delete</p>';
     }
-    
+
     modalContent.innerHTML = `
         <h3 style="color: #f1f5f9;">${titleText}</h3>
         ${infoHtml}
@@ -3418,19 +3432,19 @@ function openAttachConsole(containerId, containerName) {
             fontSize: 14,
             convertEol: true
         });
-        
+
         // Initialize fit addon if available
         if (typeof FitAddon !== 'undefined') {
             fitAddon = new FitAddon.FitAddon();
             term.loadAddon(fitAddon);
         }
-        
+
         term.open(terminalContainer);
-        
+
         if (fitAddon) {
             fitAddon.fit();
         }
-        
+
         // Focus the terminal so typing works immediately
         term.focus();
 
@@ -3438,7 +3452,7 @@ function openAttachConsole(containerId, containerName) {
         term.writeln('Connected to: ' + containerName);
         term.writeln('Type "exit" to close this session.');
         term.writeln('');
-        
+
         const currentDir = containerCwd[containerId] ? containerCwd[containerId].split('/').pop() || '/' : '';
         const prompt = currentDir ? `${currentDir} $ ` : '$ ';
         term.write(`\r\n${prompt}`);
@@ -3487,7 +3501,7 @@ function openAttachConsole(containerId, containerName) {
                     }
             }
         });
-        
+
         // Handle window resize
         window.addEventListener('resize', handleResize);
     }, 100);
@@ -3527,8 +3541,8 @@ async function executeCommand(containerId, command) {
                 newDir = currentDir || '/';
             } else if (currentDir) {
                 // Relative path - resolve it
-                let combined = currentDir.endsWith('/') 
-                    ? currentDir + targetDir 
+                let combined = currentDir.endsWith('/')
+                    ? currentDir + targetDir
                     : currentDir + '/' + targetDir;
                 // Normalize path
                 const parts = combined.split('/').filter(p => p && p !== '.');
@@ -3546,7 +3560,7 @@ async function executeCommand(containerId, command) {
             } else {
                 newDir = '/' + targetDir;
             }
-            
+
             // Execute pwd command with the new working directory to verify and get actual path
             try {
                 const response = await fetch(`/api/container/${containerId}/exec`, {
@@ -3554,14 +3568,14 @@ async function executeCommand(containerId, command) {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         command: 'pwd',
                         working_dir: newDir
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.exit_code === 0) {
                     // Update our cwd tracker with the actual resolved directory
                     const pwdOutput = data.output.trim();
@@ -3578,7 +3592,7 @@ async function executeCommand(containerId, command) {
             } catch (e) {
                 term.write(`\x1b[1;31mConnection error: ${e.message}\x1b[0m\r\n`);
             }
-            
+
             // Update prompt
             const displayDir = containerCwd[containerId] ? containerCwd[containerId].split('/').pop() || '/' : '';
             const prompt = displayDir ? `${displayDir} $ ` : '$ ';
@@ -3592,12 +3606,12 @@ async function executeCommand(containerId, command) {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         command: 'pwd',
                         working_dir: '~'
                     })
                 });
-                
+
                 const data = await response.json();
                 if (data.exit_code === 0) {
                     const pwdOutput = data.output.trim();
@@ -3611,14 +3625,14 @@ async function executeCommand(containerId, command) {
                 // Ignore errors, just reset to root
                 containerCwd[containerId] = '/';
             }
-            
+
             const displayDir = containerCwd[containerId] ? containerCwd[containerId].split('/').pop() || '/' : '';
             const prompt = displayDir ? `${displayDir} $ ` : '$ ';
             term.write('\r\n' + prompt);
             return;
         }
     }
-    
+
     // For non-cd commands, execute with current working directory using Docker's -w flag
     try {
         const response = await fetch(`/api/container/${containerId}/exec`, {
@@ -3626,14 +3640,14 @@ async function executeCommand(containerId, command) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 command: cmdToExec,
                 working_dir: currentDir || undefined
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.exit_code === 0) {
             if (data.output) {
                 // Fix newlines for terminal (LF -> CRLF)
@@ -3658,7 +3672,7 @@ async function executeCommand(containerId, command) {
     } catch (e) {
         term.write(`\x1b[1;31mConnection error: ${e.message}\x1b[0m\r\n`);
     }
-    
+
     // Update prompt
     const displayDir = containerCwd[containerId] ? containerCwd[containerId].split('/').pop() || '/' : '';
     const prompt = displayDir ? `${displayDir} $ ` : '$ ';
@@ -3679,173 +3693,175 @@ async function deleteContainerWithOptions(containerId, containerName) {
     // Get selected volumes and images from individual checkboxes
     const selectedVolumes = new Set();
     const selectedImages = new Set();
-    
+
     document.querySelectorAll('.volume-checkbox-item:checked').forEach(cb => {
         selectedVolumes.add(cb.getAttribute('data-volume'));
     });
-    
+
     document.querySelectorAll('.image-checkbox-item:checked').forEach(cb => {
         selectedImages.add(cb.getAttribute('data-image'));
     });
-    
+
     // Check if we're deleting multiple containers
     const selectedIds = window.selectedContainerIdsForDelete || [containerId];
     const isMultiple = selectedIds.length > 1;
-    
+
     // Build confirmation message
-    let confirmMessage = isMultiple 
+    let confirmMessage = isMultiple
         ? `Delete ${selectedIds.length} selected containers?`
         : `Delete container "${containerName}"?`;
     const warnings = [];
-    
+
     if (selectedVolumes.size > 0) {
         warnings.push(`- ${selectedVolumes.size} volume(s): ${Array.from(selectedVolumes).join(', ')}`);
     }
     if (selectedImages.size > 0) {
         warnings.push(`- ${selectedImages.size} image(s): ${Array.from(selectedImages).join(', ')}`);
     }
-    
+
     if (warnings.length > 0) {
         confirmMessage += `\n\n⚠️  WARNING: This will also permanently delete:\n${warnings.join('\n')}`;
     } else {
         confirmMessage += `\n\nThis will stop and remove the container(s) only. Volumes and images will be kept.`;
     }
-    
+
     confirmMessage += `\n\nThis action cannot be undone!`;
-    
+
     showConfirmationModal(confirmMessage, async () => {
-    
-    try {
-        let totalDeletedVolumes = [];
-        let totalDeletedImages = new Set();
-        
-        // First, delete all selected containers (without volumes/images)
-        for (const id of selectedIds) {
-            try {
-                const response = await fetch(`/api/container/${id}/delete`, {
-                    method: 'DELETE',
-                });
-                const data = await response.json();
-                
-                if (!response.ok) {
-                    throw new Error(data.error || `Failed to delete container ${id}`);
+
+        try {
+            let totalDeletedVolumes = [];
+            let totalDeletedImages = new Set();
+
+            // First, delete all selected containers (without volumes/images)
+            for (const id of selectedIds) {
+                try {
+                    const response = await fetch(`/api/container/${id}/delete`, {
+                        method: 'DELETE',
+                    });
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || `Failed to delete container ${id}`);
+                    }
+                } catch (error) {
+                    console.error(`Error deleting container ${id}: ${error.message}`);
                 }
-            } catch (error) {
-                console.error(`Error deleting container ${id}: ${error.message}`);
             }
-        }
-        
-        // Then delete selected volumes individually
-        if (selectedVolumes.size > 0) {
-            try {
-                const volumesToDelete = Array.from(selectedVolumes);
-                const response = await fetch('/api/volumes/delete', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ names: volumesToDelete })
-                });
-                const data = await response.json();
-                
-                if (response.ok && data.deleted_count > 0) {
-                    totalDeletedVolumes.push(...volumesToDelete.slice(0, data.deleted_count));
+
+            // Then delete selected volumes individually
+            if (selectedVolumes.size > 0) {
+                try {
+                    const volumesToDelete = Array.from(selectedVolumes);
+                    const response = await fetch('/api/volumes/delete', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ names: volumesToDelete })
+                    });
+                    const data = await response.json();
+
+                    if (response.ok && data.deleted_count > 0) {
+                        totalDeletedVolumes.push(...volumesToDelete.slice(0, data.deleted_count));
+                    }
+                } catch (err) {
+                    console.error('Error deleting volumes:', err);
                 }
-            } catch (err) {
-                console.error('Error deleting volumes:', err);
             }
-        }
-        
-        // Finally, delete selected images individually
-        if (selectedImages.size > 0) {
-            try {
-                // Get all images to find IDs
-                const imageResponse = await fetch(`/api/images`);
-                if (imageResponse.ok) {
-                    const imagesData = await imageResponse.json();
-                    
-                    for (const imageName of selectedImages) {
-                        try {
-                            // Try to find image by name (e.g., "nginx:latest")
-                            let imageToDelete = imagesData.images.find(img => img.name === imageName);
-                            
-                            // If not found by exact name, try by repository:tag
-                            if (!imageToDelete && imageName.includes(':')) {
-                                const [repo, tag] = imageName.split(':');
-                                imageToDelete = imagesData.images.find(img => 
-                                    img.repository === repo && img.tag === tag
-                                );
-                            }
-                            
-                            // If still not found, try by repository only (for <none> tags)
-                            if (!imageToDelete) {
-                                imageToDelete = imagesData.images.find(img => 
-                                    img.repository === imageName
-                                );
-                            }
-                            
-                            if (imageToDelete && !totalDeletedImages.has(imageToDelete.id)) {
-                                const deleteImageResponse = await fetch(`/api/image/${imageToDelete.id}/delete`, {
-                                    method: 'DELETE',
-                                });
-                                if (deleteImageResponse.ok) {
-                                    totalDeletedImages.add(imageToDelete.id);
+
+            // Finally, delete selected images individually
+            if (selectedImages.size > 0) {
+                try {
+                    // Get all images to find IDs
+                    const imageResponse = await fetch(`/api/images`);
+                    if (imageResponse.ok) {
+                        const imagesData = await imageResponse.json();
+
+                        for (const imageName of selectedImages) {
+                            try {
+                                // Try to find image by name (e.g., "nginx:latest")
+                                let imageToDelete = imagesData.images.find(img => img.name === imageName);
+
+                                // If not found by exact name, try by repository:tag
+                                if (!imageToDelete && imageName.includes(':')) {
+                                    const [repo, tag] = imageName.split(':');
+                                    imageToDelete = imagesData.images.find(img =>
+                                        img.repository === repo && img.tag === tag
+                                    );
                                 }
+
+                                // If still not found, try by repository only (for <none> tags)
+                                if (!imageToDelete) {
+                                    imageToDelete = imagesData.images.find(img =>
+                                        img.repository === imageName
+                                    );
+                                }
+
+                                if (imageToDelete && !totalDeletedImages.has(imageToDelete.id)) {
+                                    const deleteImageResponse = await fetch(`/api/image/${imageToDelete.id}/delete`, {
+                                        method: 'DELETE',
+                                    });
+                                    if (deleteImageResponse.ok) {
+                                        totalDeletedImages.add(imageToDelete.id);
+                                    }
+                                }
+                            } catch (err) {
+                                console.log(`Image deletion failed for ${imageName} (non-critical):`, err);
                             }
-                        } catch (err) {
-                            console.log(`Image deletion failed for ${imageName} (non-critical):`, err);
                         }
                     }
+                } catch (err) {
+                    console.error('Error deleting images:', err);
                 }
-            } catch (err) {
-                console.error('Error deleting images:', err);
             }
+
+            closeDeleteContainerModal();
+            window.selectedContainerIdsForDelete = null; // Clear stored IDs
+
+            let successMessage = isMultiple
+                ? `${selectedIds.length} containers deleted`
+                : 'Container deleted';
+            if (totalDeletedVolumes.length > 0) {
+                successMessage += ` | Deleted ${totalDeletedVolumes.length} volume(s): ${totalDeletedVolumes.join(', ')}`;
+            }
+            if (totalDeletedImages.size > 0) {
+                successMessage += ` | Deleted ${totalDeletedImages.size} image(s)`;
+            }
+
+            showNotification(successMessage, 'success');
+            loadContainers();
+            // Also refresh networks, volumes, and images since deleting containers affects them
+            loadNetworks();
+            loadVolumes();
+            loadImages();
+            resetSelection();
+        } catch (error) {
+            console.error(`Error deleting containers: ${error.message}`);
         }
-        
-        closeDeleteContainerModal();
-        window.selectedContainerIdsForDelete = null; // Clear stored IDs
-        
-        let successMessage = isMultiple 
-            ? `${selectedIds.length} containers deleted`
-            : 'Container deleted';
-        if (totalDeletedVolumes.length > 0) {
-            successMessage += ` | Deleted ${totalDeletedVolumes.length} volume(s): ${totalDeletedVolumes.join(', ')}`;
-        }
-        if (totalDeletedImages.size > 0) {
-            successMessage += ` | Deleted ${totalDeletedImages.size} image(s)`;
-        }
-        
-        console.log(successMessage);
-        loadContainers();
-        // Also refresh networks, volumes, and images since deleting containers affects them
-        loadNetworks();
-        loadVolumes();
-        loadImages();
-        resetSelection();
-    } catch (error) {
-        console.error(`Error deleting containers: ${error.message}`);
-    }
     });
 }
 
 
 async function deleteBackup(filename) {
     showConfirmationModal(`Delete backup "${filename}"?\n\nThis action cannot be undone.`, async () => {
-    
-    try {
-        const response = await fetch(`/api/backup/${filename}`, {
-            method: 'DELETE',
-        });
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to delete backup');
+
+        try {
+            const response = await fetch(`/api/backup/${filename}`, {
+                method: 'DELETE',
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to delete backup');
+            }
+
+            showNotification('Backup deleted successfully', 'success');
+            loadBackups();
+        } catch (error) {
+            console.error(`Error deleting backup: ${error.message}`);
+            showNotification(`Error deleting backup: ${error.message}`, 'error');
         }
-        
-        loadBackups();
-    } catch (error) {
-        console.error(`Error deleting backup: ${error.message}`);
-    }
     });
 }
 
@@ -3934,7 +3950,7 @@ async function downloadAllBackups() {
                 // Update status
                 if (progress.status === 'archiving') {
                     statusEl.innerHTML = `Archiving: ${progress.completed} / ${progress.total} files`;
-                    
+
                     // Update current file
                     if (progress.current_file) {
                         const fileIndex = files.indexOf(progress.current_file);
@@ -3972,13 +3988,13 @@ async function downloadAllBackups() {
                 } else if (progress.status === 'complete') {
                     // Clear interval first to prevent race conditions
                     clearInterval(progressInterval);
-                    
+
                     // Prevent multiple downloads
                     if (downloadTriggered) {
                         return;
                     }
                     downloadTriggered = true;
-                    
+
                     // Update all files as completed
                     files.forEach((filename, index) => {
                         const fileEl = document.getElementById(`download-file-${index}`);
@@ -4043,21 +4059,23 @@ function closeDownloadAllModal() {
 async function deleteAllBackups() {
     showConfirmationModal('Are you sure you want to DELETE ALL BACKUPS?\n\nThis will permanently remove ALL backup files (containers and networks).\n\nThis action CANNOT be undone!', () => {
         showConfirmationModal('Please confirm again: DELETE ALL BACKUPS?', async () => {
-    
-    try {
-        const response = await fetch('/api/backups/delete-all', {
-            method: 'DELETE',
-        });
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to delete all backups');
-        }
-        
-        loadBackups();
-    } catch (error) {
-        console.error(`Error deleting all backups: ${error.message}`);
-    }
+
+            try {
+                const response = await fetch('/api/backups/delete-all', {
+                    method: 'DELETE',
+                });
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to delete all backups');
+                }
+
+                showNotification('All backups deleted successfully', 'success');
+                loadBackups();
+            } catch (error) {
+                console.error(`Error deleting all backups: ${error.message}`);
+                showNotification(`Error deleting all backups: ${error.message}`, 'error');
+            }
         });
     });
 }
@@ -4105,12 +4123,12 @@ async function refreshLogs() {
 
     const logsContainer = document.getElementById('logs-container');
     const refreshBtn = document.getElementById('refresh-logs-btn');
-    
+
     // Disable button and show loading state
     refreshBtn.disabled = true;
     const originalHtml = refreshBtn.innerHTML;
     refreshBtn.innerHTML = '<i class="ph ph-arrows-clockwise" style="animation: spin 1s linear infinite;"></i> Refreshing...';
-    
+
     try {
         await loadLogsContent(currentLogsContainerId, logsContainer);
     } finally {
@@ -4131,25 +4149,25 @@ async function loadVolumes() {
     const volumesList = document.getElementById('volumes-list');
     const volumesSpinner = document.getElementById('volumes-spinner');
     const volumesWrapper = document.getElementById('volumes-table-wrapper');
-    
+
     errorEl.style.display = 'none';
     volumesList.innerHTML = '';
-    
+
     // Show spinner and prevent scrollbars
     if (volumesSpinner) volumesSpinner.style.display = 'flex';
     if (volumesWrapper) volumesWrapper.style.overflow = 'hidden';
-    
+
     try {
         const response = await fetch('/api/volumes');
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load volumes');
         }
-        
+
         // Store all volumes for sorting
         allVolumes = data.volumes || [];
-        
+
         // Apply current sort if any, then render
         let volumesToDisplay = allVolumes;
         if (currentVolumeSortColumn) {
@@ -4161,9 +4179,9 @@ async function loadVolumes() {
                 sortIndicator.style.color = 'var(--accent)';
             }
         }
-        
+
         renderVolumes(volumesToDisplay);
-        
+
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
         errorEl.style.display = 'block';
@@ -4222,37 +4240,37 @@ let currentVolumePath = '/';
 async function exploreVolume(volumeName, path = '/') {
     currentVolumeName = volumeName;
     currentVolumePath = path;
-    
+
     // Show modal
     const modal = document.getElementById('volume-explore-modal');
     const modalTitle = document.getElementById('volume-explore-title');
     const fileList = document.getElementById('volume-file-list');
     const loadingEl = document.getElementById('volume-explore-loading');
-    
+
     modalTitle.textContent = `Exploring: ${volumeName}`;
     modal.style.display = 'block';
-    loadingEl.style.display = 'flex';
+    loadingEl.style.display = 'block';
     fileList.innerHTML = '';
-    
+
     try {
         const response = await fetch(`/api/volume/${encodeURIComponent(volumeName)}/explore?path=${encodeURIComponent(path)}`);
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to explore volume');
         }
-        
+
         loadingEl.style.display = 'none';
-        
+
         // Debug logging
         console.log('Volume exploration response:', data);
         console.log('Files found:', data.files ? data.files.length : 0);
-        
+
         // Show breadcrumb
         const breadcrumb = document.createElement('div');
         breadcrumb.className = 'volume-breadcrumb';
         breadcrumb.style.cssText = 'margin-bottom: 15px; padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #cbd5e1;';
-        
+
         const pathParts = path.split('/').filter(p => p);
         let breadcrumbHtml = '<a href="#" onclick="exploreVolume(\'' + escapeHtml(volumeName) + '\', \'/\'); return false;" style="color: #3b82f6; text-decoration: none;">📁 Root</a>';
         let currentPath = '';
@@ -4262,7 +4280,7 @@ async function exploreVolume(volumeName, path = '/') {
         });
         breadcrumb.innerHTML = breadcrumbHtml;
         fileList.appendChild(breadcrumb);
-        
+
         // Show files
         console.log('Processing files:', data.files);
         if (data.files && data.files.length > 0) {
@@ -4272,12 +4290,12 @@ async function exploreVolume(volumeName, path = '/') {
                 const fileItem = document.createElement('div');
                 fileItem.className = 'volume-file-item';
                 fileItem.style.cssText = 'padding: 12px; margin: 5px 0; background: #1e293b; border: 1px solid #334155; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease;';
-                fileItem.onmouseover = function() { this.style.background = '#334155'; this.style.borderColor = '#3b82f6'; };
-                fileItem.onmouseout = function() { this.style.background = '#1e293b'; this.style.borderColor = '#334155'; };
-                
+                fileItem.onmouseover = function () { this.style.background = '#334155'; this.style.borderColor = '#3b82f6'; };
+                fileItem.onmouseout = function () { this.style.background = '#1e293b'; this.style.borderColor = '#334155'; };
+
                 const icon = file.type === 'directory' ? '📁' : '📄';
                 const size = file.size ? ` (${file.size} bytes)` : '';
-                
+
                 fileItem.innerHTML = `
                     <div onclick="${file.type === 'directory' ? `exploreVolume('${escapeHtml(volumeName)}', '${escapeHtml(file.path)}')` : `viewVolumeFile('${escapeHtml(volumeName)}', '${escapeHtml(file.path)}')`}" style="color: #f1f5f9; flex: 1; display: flex; align-items: center;">
                         <strong style="color: #f1f5f9;">${icon} ${escapeHtml(file.name)}</strong>
@@ -4291,7 +4309,7 @@ async function exploreVolume(volumeName, path = '/') {
                         </button>
                     ` : ''}
                 `;
-                
+
                 fileList.appendChild(fileItem);
             });
         } else {
@@ -4324,28 +4342,28 @@ async function viewVolumeFile(volumeName, filePath) {
     const modalTitle = document.getElementById('volume-file-title');
     const fileContent = document.getElementById('volume-file-content');
     const loadingEl = document.getElementById('volume-file-loading');
-    
+
     modalTitle.textContent = `File: ${filePath}`;
     modal.style.display = 'block';
     loadingEl.style.display = 'flex';
     fileContent.innerHTML = '';
-    
+
     try {
         const response = await fetch(`/api/volume/${encodeURIComponent(volumeName)}/file?path=${encodeURIComponent(filePath)}`);
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to read file');
         }
-        
+
         loadingEl.style.display = 'none';
-        
+
         // Display file content
         const pre = document.createElement('pre');
         pre.style.cssText = 'background: #0a0f1c; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; max-height: 500px; overflow-y: auto; border: 1px solid #334155; font-family: "SF Mono", "Monaco", "Cascadia Code", "Roboto Mono", monospace; font-size: 0.875em; line-height: 1.6;';
         pre.textContent = data.content || '(empty file)';
         fileContent.appendChild(pre);
-        
+
         // Show file info
         const info = document.createElement('div');
         info.style.cssText = 'margin-top: 10px; padding: 12px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; font-size: 0.9em; color: #cbd5e1;';
@@ -4370,41 +4388,41 @@ function closeVolumeFileModal() {
 async function deleteVolume(volumeName) {
     showConfirmationModal(`Delete volume "${volumeName}"?\n\nThis will permanently remove the volume and all its data. This action cannot be undone.`, async () => {
 
-    try {
-        const response = await fetch(`/api/volume/${volumeName}/delete`, {
-            method: 'DELETE',
-        });
-        const data = await response.json();
+        try {
+            const response = await fetch(`/api/volume/${volumeName}/delete`, {
+                method: 'DELETE',
+            });
+            const data = await response.json();
 
-        if (!response.ok) {
-            // Check if volume is in use
-            if (data.in_use) {
+            if (!response.ok) {
+                // Check if volume is in use
+                if (data.in_use) {
+                    showAlertModal(
+                        `Cannot delete volume "${volumeName}"\n\n${data.message || 'This volume is currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using this volume before attempting to delete it.'}`,
+                        'Volume In Use'
+                    );
+                    return;
+                }
+                throw new Error(data.error || 'Failed to delete volume');
+            }
+
+            console.log('Volume deleted');
+            loadVolumes();
+        } catch (error) {
+            console.error(`Error deleting volume: ${error.message}`);
+            // Check error message for "in use" pattern as fallback
+            if (error.message.toLowerCase().includes('in use') || error.message.toLowerCase().includes('is being used')) {
                 showAlertModal(
-                    `Cannot delete volume "${volumeName}"\n\n${data.message || 'This volume is currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using this volume before attempting to delete it.'}`,
+                    `Cannot delete volume "${volumeName}"\n\nThis volume is currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using this volume before attempting to delete it.`,
                     'Volume In Use'
                 );
-                return;
+            } else {
+                showAlertModal(
+                    `Failed to delete volume "${volumeName}"\n\n${error.message}`,
+                    'Error'
+                );
             }
-            throw new Error(data.error || 'Failed to delete volume');
         }
-
-        console.log('Volume deleted');
-        loadVolumes();
-    } catch (error) {
-        console.error(`Error deleting volume: ${error.message}`);
-        // Check error message for "in use" pattern as fallback
-        if (error.message.toLowerCase().includes('in use') || error.message.toLowerCase().includes('is being used')) {
-            showAlertModal(
-                `Cannot delete volume "${volumeName}"\n\nThis volume is currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using this volume before attempting to delete it.`,
-                'Volume In Use'
-            );
-        } else {
-            showAlertModal(
-                `Failed to delete volume "${volumeName}"\n\n${error.message}`,
-                'Error'
-            );
-        }
-    }
     });
 }
 
@@ -4449,52 +4467,54 @@ async function deleteSelectedVolumes() {
 
     showConfirmationModal(`Are you sure you want to delete ${volumeNames.length} selected volumes? This action cannot be undone.`, async () => {
 
-    try {
-        const response = await fetch('/api/volumes/delete', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ names: volumeNames }),
-        });
-        const data = await response.json();
+        try {
+            const response = await fetch('/api/volumes/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ names: volumeNames }),
+            });
+            const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to delete volumes');
-        }
-
-        console.log(data.message);
-        
-        // Check for volumes in use
-        if (data.in_use_volumes && data.in_use_volumes.length > 0) {
-            const inUseList = data.in_use_volumes.join(', ');
-            showAlertModal(
-                `Cannot delete ${data.in_use_volumes.length} volume(s): ${inUseList}\n\nThese volumes are currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using these volumes before attempting to delete them.`,
-                'Volumes In Use'
-            );
-        }
-        
-        if (data.errors && data.errors.length > 0) {
-            const inUseErrors = data.errors.filter(e => e.includes('is in use'));
-            const otherErrors = data.errors.filter(e => !e.includes('is in use'));
-            
-            if (otherErrors.length > 0) {
-                console.warn(`Some volumes could not be deleted:\n${otherErrors.join('\n')}`);
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to delete volumes');
             }
+
+            console.log(data.message);
+
+            // Check for volumes in use
+            if (data.in_use_volumes && data.in_use_volumes.length > 0) {
+                const inUseList = data.in_use_volumes.join(', ');
+                showAlertModal(
+                    `Cannot delete ${data.in_use_volumes.length} volume(s): ${inUseList}\n\nThese volumes are currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using these volumes before attempting to delete them.`,
+                    'Volumes In Use'
+                );
+            }
+
+            if (data.errors && data.errors.length > 0) {
+                const inUseErrors = data.errors.filter(e => e.includes('is in use'));
+                const otherErrors = data.errors.filter(e => !e.includes('is in use'));
+
+                if (otherErrors.length > 0) {
+                    console.warn(`Some volumes could not be deleted:\n${otherErrors.join('\n')}`);
+                }
+            }
+
+            if (data.deleted_count > 0) {
+                console.log(`Successfully deleted ${data.deleted_count} volume(s)`);
+                showNotification(`Successfully deleted ${data.deleted_count} volume(s)`, 'success');
+            }
+        } catch (error) {
+            console.error(`Error deleting selected volumes: ${error.message}`);
+            showNotification(`Failed to delete volumes: ${error.message}`, 'error');
+            showAlertModal(
+                `Failed to delete volumes\n\n${error.message}`,
+                'Error'
+            );
+        } finally {
+            loadVolumes();
         }
-        
-        if (data.deleted_count > 0) {
-            console.log(`Successfully deleted ${data.deleted_count} volume(s)`);
-        }
-    } catch (error) {
-        console.error(`Error deleting selected volumes: ${error.message}`);
-        showAlertModal(
-            `Failed to delete volumes\n\n${error.message}`,
-            'Error'
-        );
-    } finally {
-        loadVolumes();
-    }
     });
 }
 // Load images
@@ -4503,38 +4523,38 @@ async function loadImages() {
     const imagesList = document.getElementById('images-list');
     const imagesSpinner = document.getElementById('images-spinner');
     const imagesWrapper = document.getElementById('images-table-wrapper');
-    
+
     errorEl.style.display = 'none';
     imagesList.innerHTML = '';
-    
+
     // Show spinner and prevent scrollbars
     if (imagesSpinner) imagesSpinner.style.display = 'flex';
     if (imagesWrapper) imagesWrapper.style.overflow = 'hidden';
-    
+
     try {
         const response = await fetch('/api/images');
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load images');
         }
-        
+
         // Store all images for sorting
         allImages = data.images || [];
-        
+
         // Check for dangling images (images with <none> tag)
         const cleanupBtn = document.getElementById('cleanup-dangling-images-btn');
         const hasDanglingImages = allImages.some(image => {
             // Dangling images have <none> tag (tag field) or repository is <none>
-            return (image.tag && image.tag === '<none>') || 
-                   (image.repository && image.repository === '<none>') ||
-                   image.name === '<none>:<none>';
+            return (image.tag && image.tag === '<none>') ||
+                (image.repository && image.repository === '<none>') ||
+                image.name === '<none>:<none>';
         });
-        
+
         if (cleanupBtn) {
             cleanupBtn.disabled = !hasDanglingImages;
         }
-        
+
         // Apply current sort if any, then render
         let imagesToDisplay = allImages;
         if (currentImageSortColumn) {
@@ -4546,9 +4566,9 @@ async function loadImages() {
                 sortIndicator.style.color = 'var(--accent)';
             }
         }
-        
+
         renderImages(imagesToDisplay);
-        
+
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
         errorEl.style.display = 'block';
@@ -4563,16 +4583,16 @@ async function loadImages() {
 function createImageRow(image) {
     const tr = document.createElement('tr');
     tr.className = 'image-row';
-    
+
     const imageName = image.name === '<none>:<none>' ? '<span style="color: var(--text-light);"><none></span>' : image.name;
     const createdDate = image.created ? new Date(image.created).toLocaleString() : 'Unknown';
-    
+
     // Check if image is in use or is self
     // Handle both boolean true and string "true" cases
     const inUse = image.in_use === true || image.in_use === 'true' || image.in_use === 1;
     const isDisabled = image.is_self || inUse;
     const disabledReason = image.is_self ? 'self' : (inUse ? 'in_use' : '');
-    
+
     tr.innerHTML = `
         <td class="checkbox-cell">
             <input type="checkbox" class="image-checkbox" data-image-id="${image.id}" data-in-use="${inUse ? 'true' : 'false'}" onclick="handleImageCheckboxClick(this);" ${isDisabled ? 'disabled' : ''}>
@@ -4592,7 +4612,7 @@ function createImageRow(image) {
             <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
         </td>
     `;
-    
+
     return tr;
 }
 
@@ -4600,7 +4620,7 @@ function handleImageCheckboxClick(checkbox) {
     const selectedCheckboxes = document.querySelectorAll('.image-checkbox:checked');
     const deleteBtn = document.getElementById('delete-selected-images-btn');
     const hasSelection = selectedCheckboxes.length > 0;
-    
+
     // Check if any selected images are in use or are self
     let hasInUseOrSelf = false;
     if (hasSelection) {
@@ -4612,7 +4632,7 @@ function handleImageCheckboxClick(checkbox) {
             }
         });
     }
-    
+
     deleteBtn.disabled = !hasSelection || hasInUseOrSelf;
 }
 
@@ -4664,41 +4684,59 @@ async function deleteSelectedImages() {
 
     showConfirmationModal(`Are you sure you want to delete ${imageIds.length} selected images? This action cannot be undone.`, async () => {
 
-    for (const imageId of imageIds) {
-        try {
-            const response = await fetch(`/api/image/${imageId}/delete`, {
-                method: 'DELETE',
-            });
-            if (!response.ok) {
-                const data = await response.json();
-                console.error(`Failed to delete image ${imageId}: ${data.error}`);
+        let successCount = 0;
+        let errors = [];
+
+        for (const imageId of imageIds) {
+            try {
+                const response = await fetch(`/api/image/${imageId}/delete`, {
+                    method: 'DELETE',
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    console.error(`Failed to delete image ${imageId}: ${data.error}`);
+                    errors.push(data.error || `Failed to delete image ${imageId}`);
+                } else {
+                    successCount++;
+                }
+            } catch (error) {
+                console.error(`Error deleting image ${imageId}: ${error.message}`);
+                errors.push(error.message);
             }
-        } catch (error) {
-            console.error(`Error deleting image ${imageId}: ${error.message}`);
         }
-    }
-    loadImages();
+
+        if (successCount > 0) {
+            showNotification(selectedCheckboxes.length === 1 ? 'Image deleted successfully' : `${successCount} images deleted successfully`, 'success');
+        }
+
+        if (errors.length > 0) {
+            showNotification(`Failed to delete ${errors.length} image(s)`, 'error');
+        }
+
+        loadImages();
     });
 }
 
 async function deleteImage(imageId, imageName) {
     showConfirmationModal(`Delete image "${imageName}"?\n\nThis will permanently remove the image. This action cannot be undone.`, async () => {
-    
-    try {
-        const response = await fetch(`/api/image/${imageId}/delete`, {
-            method: 'DELETE',
-        });
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to delete image');
+
+        try {
+            const response = await fetch(`/api/image/${imageId}/delete`, {
+                method: 'DELETE',
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to delete image');
+            }
+
+            console.log('Image deleted');
+            showNotification('Image deleted successfully', 'success');
+            loadImages();
+        } catch (error) {
+            console.error(`Error deleting image: ${error.message}`);
+            showNotification(`Error deleting image: ${error.message}`, 'error');
         }
-        
-        console.log('Image deleted');
-        loadImages();
-    } catch (error) {
-        console.error(`Error deleting image: ${error.message}`);
-    }
     });
 }
 
@@ -4708,25 +4746,27 @@ async function cleanupDanglingImages() {
     if (cleanupBtn && cleanupBtn.disabled) {
         return; // Don't proceed if button is disabled
     }
-    
+
     showConfirmationModal('Clean up dangling images?\n\nThis will remove all <none> images that are not used by any container. This action cannot be undone.', async () => {
-    
-    try {
-        const response = await fetch('/api/cleanup/dangling-images', {
-            method: 'POST',
-        });
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to cleanup images');
+
+        try {
+            const response = await fetch('/api/cleanup/dangling-images', {
+                method: 'POST',
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to cleanup images');
+            }
+
+            console.log(data.message);
+            showNotification(data.message, 'success');
+            // Reload images to update button state
+            loadImages();
+        } catch (error) {
+            console.error(`Error cleaning up dangling images: ${error.message}`);
+            showNotification(`Error cleaning up dangling images: ${error.message}`, 'error');
         }
-        
-        console.log(data.message);
-        // Reload images to update button state
-        loadImages();
-    } catch (error) {
-        console.error(`Error cleaning up dangling images: ${error.message}`);
-    }
     });
 }
 
@@ -4736,25 +4776,25 @@ async function loadNetworks() {
     const networksList = document.getElementById('networks-list');
     const networksSpinner = document.getElementById('networks-spinner');
     const networksWrapper = document.getElementById('networks-table-wrapper');
-    
+
     errorEl.style.display = 'none';
     networksList.innerHTML = '';
-    
+
     // Show spinner and prevent scrollbars
     if (networksSpinner) networksSpinner.style.display = 'flex';
     if (networksWrapper) networksWrapper.style.overflow = 'hidden';
-    
+
     try {
         const response = await fetch('/api/networks');
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load networks');
         }
-        
+
         // Store all networks for sorting
         allNetworks = data.networks || [];
-        
+
         // Apply current sort if any, then render
         let networksToDisplay = allNetworks;
         if (currentNetworkSortColumn) {
@@ -4766,9 +4806,9 @@ async function loadNetworks() {
                 sortIndicator.style.color = 'var(--accent)';
             }
         }
-        
+
         renderNetworks(networksToDisplay);
-        
+
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
         errorEl.style.display = 'block';
@@ -4783,21 +4823,21 @@ async function loadNetworks() {
 function createNetworkRow(network) {
     const tr = document.createElement('tr');
     tr.className = 'network-row';
-    
+
     // Skip default networks (bridge, host, none) and Docker Swarm system networks
     // docker_gwbridge and ingress are automatically created by Docker Swarm and used by ingress-sbox
-    const isDefault = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress'].includes(network.name) || 
-                      (network.scope === 'swarm' && network.name.startsWith('docker_gwbridge'));
-    
+    const isDefault = ['bridge', 'host', 'none', 'docker_gwbridge', 'ingress'].includes(network.name) ||
+        (network.scope === 'swarm' && network.name.startsWith('docker_gwbridge'));
+
     // Count ALL containers using this network (including stopped containers)
     // network.containers from backend includes all containers (running and stopped)
     const containerCount = network.containers !== undefined ? network.containers : 0;
-    
+
     // Show container count for bridge, host, and none networks (can be used by user containers) and non-built-in networks
     // Hide for docker_gwbridge and ingress which only have Docker Swarm system containers
     const shouldShowContainerCount = !isDefault || network.name === 'bridge' || network.name === 'host' || network.name === 'none';
     const containerDisplay = shouldShowContainerCount && containerCount > 0 ? containerCount : (shouldShowContainerCount ? '0' : '-');
-    
+
     // Build subnet/gateway display
     let subnetDisplay = '-';
     if (network.subnet) {
@@ -4806,20 +4846,20 @@ function createNetworkRow(network) {
             subnetDisplay += ` / ${escapeHtml(network.gateway)}`;
         }
     }
-    
+
     // Build actions column - buttons side by side
     let actionsHtml = '<div class="btn-group" style="display: flex; gap: 4px; flex-wrap: nowrap;">';
-    
+
     // View Containers button if network has containers (count > 0)
     if (containerCount > 0) {
         actionsHtml += `<button class="btn btn-secondary btn-sm" onclick="viewNetworkContainers('${escapeHtml(network.name)}')" title="View containers using this network"><i class="ph ph-cube"></i> View Containers</button>`;
     }
-    
+
     // Backup button for non-default networks
     if (!isDefault) {
         actionsHtml += `<button class="btn btn-warning btn-sm" onclick="backupNetwork('${escapeHtml(network.id)}', '${escapeHtml(network.name)}')" title="Backup network"><i class="ph ph-floppy-disk"></i> Backup</button>`;
     }
-    
+
     // Delete button for non-default networks - disabled/ghosted when containers > 0
     if (!isDefault) {
         if (containerCount > 0) {
@@ -4828,9 +4868,9 @@ function createNetworkRow(network) {
             actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteNetwork('${escapeHtml(network.id)}', '${escapeHtml(network.name)}')" title="Delete network"><i class="ph ph-trash"></i> Delete</button>`;
         }
     }
-    
+
     actionsHtml += '</div>';
-    
+
     tr.innerHTML = `
         <td>
             <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(network.name)} ${isDefault ? '<span style="color: #999; font-size: 0.8em;">(Built-in)</span>' : ''}</div>
@@ -4852,91 +4892,95 @@ function createNetworkRow(network) {
             ${actionsHtml}
         </td>
     `;
-    
+
     return tr;
 }
 
 // Backup network
 async function backupNetwork(networkId, networkName) {
     showConfirmationModal(`Backup network "${networkName}"?`, async () => {
-    
-    try {
-        const response = await fetch(`/api/network/${networkId}/backup`, {
-            method: 'POST',
-        });
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to backup network');
+
+        try {
+            const response = await fetch(`/api/network/${networkId}/backup`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to backup network');
+            }
+
+            console.log(`Network backed up: ${data.filename}`);
+            showNotification(`Network backed up successfully: ${data.filename}`, 'success');
+            loadNetworks();
+            // Refresh backups list if we're on the backups tab
+            const backupsTab = document.getElementById('backups-tab');
+            if (backupsTab && backupsTab.style.display !== 'none') {
+                loadBackups();
+            }
+        } catch (error) {
+            console.error(`Error backing up network: ${error.message}`);
+            showNotification(`Error backing up network: ${error.message}`, 'error');
         }
-        
-        console.log(`Network backed up: ${data.filename}`);
-        loadNetworks();
-        // Refresh backups list if we're on the backups tab
-        const backupsTab = document.getElementById('backups-tab');
-        if (backupsTab && backupsTab.style.display !== 'none') {
-            loadBackups();
-        }
-    } catch (error) {
-        console.error(`Error backing up network: ${error.message}`);
-    }
     });
 }
 
 // Delete network
 async function deleteNetwork(networkId, networkName) {
     showConfirmationModal(`Delete network "${networkName}"?\n\nThis will remove the network. Containers using this network will be disconnected.\n\nThis action cannot be undone.`, async () => {
-    
-    try {
-        const response = await fetch(`/api/network/${networkId}/delete`, {
-            method: 'DELETE',
-        });
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to delete network');
+
+        try {
+            const response = await fetch(`/api/network/${networkId}/delete`, {
+                method: 'DELETE',
+            });
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to delete network');
+            }
+
+            console.log('Network deleted');
+            showNotification('Network deleted successfully', 'success');
+            loadNetworks();
+        } catch (error) {
+            console.error(`Error deleting network: ${error.message}`);
+            showNotification(`Error deleting network: ${error.message}`, 'error');
         }
-        
-        console.log('Network deleted');
-        loadNetworks();
-    } catch (error) {
-        console.error(`Error deleting network: ${error.message}`);
-    }
     });
 }
 
 // Restore network backup from backups tab
 async function restoreNetworkBackup(filename) {
     showConfirmationModal(`Restore network from backup "${filename}"?`, async () => {
-    
-    try {
-        const response = await fetch('/api/network/restore', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                filename: filename
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            if (response.status === 409) {
-                console.warn(`Network already exists: ${data.network_name || 'unknown'}`);
+
+        try {
+            const response = await fetch('/api/network/restore', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    filename: filename
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if (response.status === 409) {
+                    console.warn(`Network already exists: ${data.network_name || 'unknown'}`);
+                } else {
+                    throw new Error(data.error || 'Restore failed');
+                }
             } else {
-                throw new Error(data.error || 'Restore failed');
+                console.log(`Network restored: ${data.network_name}`);
+                // Refresh networks and backups lists
+                loadNetworks();
+                loadBackups();
             }
-        } else {
-            console.log(`Network restored: ${data.network_name}`);
-            // Refresh networks and backups lists
-            loadNetworks();
-            loadBackups();
+        } catch (error) {
+            console.error(`Error restoring network backup: ${error.message}`);
         }
-    } catch (error) {
-        console.error(`Error restoring network backup: ${error.message}`);
-    }
     });
 }
 
@@ -4945,29 +4989,29 @@ async function restoreNetworkBackup(filename) {
 async function checkEnvironment() {
     const modal = document.getElementById('env-check-modal');
     const resultsDiv = document.getElementById('env-check-results');
-    
+
     modal.style.display = 'block';
     resultsDiv.innerHTML = '';
     resultsDiv.style.display = 'none';
-    
+
     try {
         const response = await fetch('/api/check-environment');
         const data = await response.json();
-        
+
         resultsDiv.style.display = 'block';
-        
+
         const allGood = data.docker_socket && data.docker_cli && data.busybox;
         const headerColor = allGood ? '#10b981' : '#ef4444';
         const headerIcon = allGood ? '✅' : '⚠️';
         const headerText = allGood ? 'System Ready' : 'Issues Detected';
-        
+
         let html = `
             <div style="text-align: center; margin-bottom: 20px; padding: 15px; background: ${allGood ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; border-radius: 8px; border: 1px solid ${headerColor};">
                 <h3 style="color: ${headerColor}; margin: 0;">${headerIcon} ${headerText}</h3>
             </div>
             <div style="background: #1e293b; border-radius: 8px; padding: 15px; max-height: 300px; overflow-y: auto; border: 1px solid #334155;">
         `;
-        
+
         if (data.details && data.details.length > 0) {
             data.details.forEach(line => {
                 const isError = line.startsWith('❌');
@@ -4978,9 +5022,9 @@ async function checkEnvironment() {
                          </div>`;
             });
         }
-        
+
         html += '</div>';
-        
+
         if (!data.busybox) {
             html += `
                 <div style="margin-top: 15px; padding: 12px; background: rgba(245, 158, 11, 0.1); border: 1px solid #f59e0b; border-radius: 6px;">
@@ -4993,9 +5037,9 @@ async function checkEnvironment() {
                 </div>
             `;
         }
-        
+
         resultsDiv.innerHTML = html;
-        
+
     } catch (error) {
         loadingEl.style.display = 'none';
         resultsDiv.style.display = 'block';
@@ -5021,24 +5065,24 @@ async function loadStacks() {
     const errorEl = document.getElementById('stacks-error');
     const stacksList = document.getElementById('stacks-list');
     const stacksSpinner = document.getElementById('stacks-spinner');
-    
+
     errorEl.style.display = 'none';
     stacksList.innerHTML = '';
-    
+
     // Show spinner
     if (stacksSpinner) stacksSpinner.style.display = 'flex';
-    
+
     try {
         const response = await fetch('/api/stacks');
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load stacks');
         }
-        
+
         // Store all stacks for sorting
         allStacks = data.stacks || [];
-        
+
         // Apply current sort if any, then render
         let stacksToDisplay = allStacks;
         if (currentStackSortColumn) {
@@ -5050,9 +5094,9 @@ async function loadStacks() {
                 sortIndicator.style.color = 'var(--accent)';
             }
         }
-        
+
         renderStacks(stacksToDisplay);
-        
+
     } catch (error) {
         errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
         errorEl.style.display = 'block';
@@ -5065,19 +5109,19 @@ async function loadStacks() {
 function createStackRow(stack) {
     const tr = document.createElement('tr');
     tr.className = 'stack-row';
-    
-    const typeBadge = stack.type === 'swarm' 
+
+    const typeBadge = stack.type === 'swarm'
         ? '<span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; font-weight: 600;">Swarm</span>'
         : '<span style="background: var(--secondary); color: white; padding: 2px 8px; border-radius: 3px; font-size: 0.8em; font-weight: 600;">Compose</span>';
-    
+
     const servicesList = stack.services && stack.services.length > 0
         ? stack.services.map(s => `<span style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 3px; font-size: 0.85em; margin-right: 4px;">${escapeHtml(s)}</span>`).join('')
         : '<span style="color: var(--text-light);">-</span>';
-    
+
     const networksList = stack.networks && stack.networks.length > 0
         ? stack.networks.map(n => `<span style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 3px; font-size: 0.85em; margin-right: 4px;">${escapeHtml(n)}</span>`).join('')
         : '<span style="color: var(--text-light);">-</span>';
-    
+
     // Actions column: Delete for Swarm stacks, View Containers for Compose stacks
     const actionsCell = stack.type === 'swarm'
         ? `<td style="white-space: nowrap;">
@@ -5090,7 +5134,7 @@ function createStackRow(stack) {
                 <i class="ph ph-cube"></i> View Containers
             </button>
         </td>`;
-    
+
     tr.innerHTML = `
         <td>
             <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(stack.name)}</div>
@@ -5114,7 +5158,7 @@ function createStackRow(stack) {
         </td>
         ${actionsCell}
     `;
-    
+
     return tr;
 }
 
@@ -5156,7 +5200,7 @@ let currentStackFilter = null;
 function viewStackContainers(stackName) {
     // Switch to containers section
     showSection('containers', document.querySelector('.nav-item[onclick*="containers"]'));
-    
+
     // Wait for containers to load, then filter
     setTimeout(() => {
         const rows = document.querySelectorAll('.container-row');
@@ -5170,19 +5214,19 @@ function viewStackContainers(stackName) {
                 if (matchesStack) visibleCount++;
             }
         });
-        
+
         // Track filter state
         isFilteredByStack = true;
         currentStackFilter = stackName;
-        
+
         // Show clear filter button
         const clearFilterBtn = document.getElementById('clear-filter-btn');
         if (clearFilterBtn) clearFilterBtn.style.display = 'inline-block';
-        
+
         // Uncheck select all when filtering
         const selectAllCheckbox = document.getElementById('select-all-containers');
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
-        
+
         // Show notification
         showNotification(`Showing ${visibleCount} container(s) in stack "${stackName}"`, 'info');
     }, 500);
@@ -5196,18 +5240,18 @@ function clearStackFilter() {
     });
     isFilteredByStack = false;
     currentStackFilter = null;
-    
+
     // Hide clear filter button
     const clearFilterBtn = document.getElementById('clear-filter-btn');
     if (clearFilterBtn) clearFilterBtn.style.display = 'none';
-    
+
     // Uncheck select all
     const selectAllCheckbox = document.getElementById('select-all-containers');
     if (selectAllCheckbox) selectAllCheckbox.checked = false;
-    
+
     // Clear any selections
     resetSelection();
-    
+
     showNotification('Filter cleared - showing all containers', 'info');
 }
 
@@ -5215,7 +5259,7 @@ function clearStackFilter() {
 function viewContainerByName(containerName) {
     // Switch to containers section
     showSection('containers', document.querySelector('.nav-item[onclick*="containers"]'));
-    
+
     // Wait for containers to load, then filter
     setTimeout(() => {
         const rows = document.querySelectorAll('.container-row');
@@ -5230,19 +5274,19 @@ function viewContainerByName(containerName) {
                 if (matchesName) visibleCount++;
             }
         });
-        
+
         // Track filter state
         isFilteredByStack = true;
         currentStackFilter = containerName;
-        
+
         // Show clear filter button
         const clearFilterBtn = document.getElementById('clear-filter-btn');
         if (clearFilterBtn) clearFilterBtn.style.display = 'inline-block';
-        
+
         // Uncheck select all when filtering
         const selectAllCheckbox = document.getElementById('select-all-containers');
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
-        
+
         // Show notification
         showNotification(`Showing container "${containerName}"`, 'info');
     }, 500);
@@ -5252,7 +5296,7 @@ function viewContainerByName(containerName) {
 function viewNetworkContainers(networkName) {
     // Switch to containers section
     showSection('containers', document.querySelector('.nav-item[onclick*="containers"]'));
-    
+
     // Ensure containers are loaded, then filter
     const filterContainers = () => {
         const rows = document.querySelectorAll('.container-row');
@@ -5261,7 +5305,7 @@ function viewNetworkContainers(networkName) {
             setTimeout(filterContainers, 200);
             return;
         }
-        
+
         let visibleCount = 0;
         rows.forEach(row => {
             const networksAttr = row.getAttribute('data-networks');
@@ -5274,23 +5318,23 @@ function viewNetworkContainers(networkName) {
                 row.style.display = 'none';
             }
         });
-        
+
         // Track filter state
         isFilteredByStack = true;
         currentStackFilter = networkName;
-        
+
         // Show clear filter button
         const clearFilterBtn = document.getElementById('clear-filter-btn');
         if (clearFilterBtn) clearFilterBtn.style.display = 'inline-block';
-        
+
         // Uncheck select all when filtering
         const selectAllCheckbox = document.getElementById('select-all-containers');
         if (selectAllCheckbox) selectAllCheckbox.checked = false;
-        
+
         // Show notification
         showNotification(`Showing ${visibleCount} container(s) using network "${networkName}"`, 'info');
     };
-    
+
     // Start filtering after a short delay to allow containers to load
     setTimeout(filterContainers, 500);
 }
@@ -5306,11 +5350,11 @@ async function deleteStack(stackName, stackType) {
                     method: 'DELETE',
                 });
                 const data = await response.json();
-                
+
                 if (!response.ok) {
                     throw new Error(data.error || 'Failed to delete stack');
                 }
-                
+
                 showNotification(`Stack "${stackName}" deleted successfully`, 'success');
                 await loadStacks();
             } catch (error) {
@@ -5324,24 +5368,24 @@ async function deleteSelectedStacks() {
     if (selectedStacks.size === 0) {
         return;
     }
-    
+
     const stackNames = Array.from(selectedStacks);
     const stackList = stackNames.map(name => `"${name}"`).join(', ');
-    
+
     showConfirmationModal(
         `Delete ${selectedStacks.size} stack${selectedStacks.size !== 1 ? 's' : ''}?`,
         `This will delete: ${stackList}. This action cannot be undone.`,
         async () => {
             let successCount = 0;
             let errorCount = 0;
-            
+
             for (const stackName of stackNames) {
                 try {
                     const response = await fetch(`/api/stack/${encodeURIComponent(stackName)}/delete`, {
                         method: 'DELETE',
                     });
                     const data = await response.json();
-                    
+
                     if (response.ok) {
                         successCount++;
                     } else {
@@ -5353,14 +5397,14 @@ async function deleteSelectedStacks() {
                     console.error(`Error deleting stack ${stackName}:`, error);
                 }
             }
-            
+
             if (successCount > 0) {
                 showNotification(`Deleted ${successCount} stack${successCount !== 1 ? 's' : ''} successfully`, 'success');
             }
             if (errorCount > 0) {
                 showNotification(`Failed to delete ${errorCount} stack${errorCount !== 1 ? 's' : ''}`, 'error');
             }
-            
+
             await loadStacks();
         }
     );
@@ -5372,16 +5416,16 @@ function startStatsPolling() {
         clearInterval(systemStatsInterval);
         systemStatsInterval = null;
     }
-    
+
     // Update system stats immediately (always needed for top bar)
     updateSystemStats();
-    
+
     // System stats (top bar) - update every 5 seconds
     // Apply cached stats immediately if available
     if (systemStatsCache) {
         applyCachedSystemStats();
     }
-    
+
     systemStatsInterval = setInterval(() => {
         updateSystemStats();
     }, 5000);
@@ -5392,14 +5436,14 @@ async function updateSystemStats() {
         // Add timeout to fetch request (10 seconds)
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
-        
+
         const response = await fetch('/api/system-stats', {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
-        
+
         const data = await response.json();
-        
+
         // If we get a 401, stop polling (session expired)
         if (response.status === 401) {
             console.warn('Authentication expired, stopping stats polling');
@@ -5409,16 +5453,16 @@ async function updateSystemStats() {
             }
             return;
         }
-        
+
         if (!response.ok || data.error) {
             consecutiveSystemStatsErrors++;
             console.error('System stats API error:', response.status, data.error || response.statusText);
-            
+
             // If we have cached stats, use them
             if (systemStatsCache && consecutiveSystemStatsErrors < 5) {
                 applyCachedSystemStats();
             }
-            
+
             // If too many consecutive errors, restart polling after a delay
             if (consecutiveSystemStatsErrors >= 10) {
                 console.warn('Too many system stats errors, restarting polling...');
@@ -5433,10 +5477,10 @@ async function updateSystemStats() {
             }
             return;
         }
-        
+
         // Reset error counter on success
         consecutiveSystemStatsErrors = 0;
-        
+
         // Update cache
         systemStatsCache = {
             cpu_percent: data.cpu_percent || 0,
@@ -5445,25 +5489,25 @@ async function updateSystemStats() {
             memory_percent: data.memory_percent || 0,
             timestamp: Date.now()
         };
-        
+
         const cpuEl = document.getElementById('system-cpu');
         const ramEl = document.getElementById('system-ram');
-        
+
         if (cpuEl) {
             cpuEl.textContent = `${data.cpu_percent || 0}%`;
         }
-        
+
         if (ramEl) {
             const memUsed = data.memory_used_mb || 0;
             const memTotal = data.memory_total_mb || 0;
             const memPercent = data.memory_percent || 0;
             ramEl.textContent = `${Math.round(memUsed)} MB / ${Math.round(memTotal)} MB (${memPercent.toFixed(1)}%)`;
         }
-        
+
     } catch (error) {
         consecutiveSystemStatsErrors++;
         console.error('Failed to update system stats:', error);
-        
+
         // If fetch was aborted (timeout), use cached stats
         if (error.name === 'AbortError') {
             console.warn('System stats request timed out, using cached values');
@@ -5471,7 +5515,7 @@ async function updateSystemStats() {
                 applyCachedSystemStats();
             }
         }
-        
+
         // If too many consecutive errors, restart polling
         if (consecutiveSystemStatsErrors >= 10) {
             console.warn('Too many system stats errors, restarting polling...');
@@ -5489,14 +5533,14 @@ async function updateSystemStats() {
 
 function applyCachedSystemStats() {
     if (!systemStatsCache) return;
-    
+
     const cpuEl = document.getElementById('system-cpu');
     const ramEl = document.getElementById('system-ram');
-    
+
     if (cpuEl) {
         cpuEl.textContent = `${systemStatsCache.cpu_percent}%`;
     }
-    
+
     if (ramEl) {
         const memUsed = systemStatsCache.memory_used_mb || 0;
         const memTotal = systemStatsCache.memory_total_mb || 0;
@@ -5507,13 +5551,16 @@ function applyCachedSystemStats() {
 
 
 // Initialize on page load
-document.addEventListener('DOMContentLoaded', async function() {
+document.addEventListener('DOMContentLoaded', async function () {
     // Check authentication status first and wait for it to complete
     await checkAuthStatus();
-    
+
+    // Start time display - always visible in top bar
+    startTimeDisplay();
+
     // Show dashboard section by default
     showSection('dashboard', document.querySelector('.nav-item'));
-    
+
     // Start stats polling only after auth check is complete
     startStatsPolling();
 });
@@ -5534,11 +5581,20 @@ async function startSelectedContainers() {
         return;
     }
 
+    let successCount = 0;
     for (const containerId of selectedIds) {
-        await startContainer(containerId);
+        if (await startContainer(containerId)) {
+            successCount++;
+        }
     }
+
+    if (successCount > 0) {
+        const msg = successCount === 1 ? 'Container started successfully.' : `${successCount} containers started successfully.`;
+        showNotification(msg, 'success');
+    }
+
     resetSelection();
-    loadContainers();
+    setTimeout(() => loadContainers(), 300);
 }
 
 async function restartSelectedContainers() {
@@ -5548,11 +5604,20 @@ async function restartSelectedContainers() {
         return;
     }
 
+    let successCount = 0;
     for (const containerId of selectedIds) {
-        await restartContainer(containerId);
+        if (await restartContainer(containerId)) {
+            successCount++;
+        }
     }
+
+    if (successCount > 0) {
+        const msg = successCount === 1 ? 'Container restarted successfully.' : `${successCount} containers restarted successfully.`;
+        showNotification(msg, 'success');
+    }
+
     resetSelection();
-    loadContainers();
+    setTimeout(() => loadContainers(), 300);
 }
 
 async function stopSelectedContainers() {
@@ -5562,11 +5627,20 @@ async function stopSelectedContainers() {
         return;
     }
 
+    let successCount = 0;
     for (const containerId of selectedIds) {
-        await stopContainer(containerId);
+        if (await stopContainer(containerId)) {
+            successCount++;
+        }
     }
+
+    if (successCount > 0) {
+        const msg = successCount === 1 ? 'Container stopped successfully.' : `${successCount} containers stopped successfully.`;
+        showNotification(msg, 'success');
+    }
+
     resetSelection();
-    loadContainers();
+    setTimeout(() => loadContainers(), 300);
 }
 
 async function killSelectedContainers() {
@@ -5576,11 +5650,20 @@ async function killSelectedContainers() {
         return;
     }
 
+    let successCount = 0;
     for (const containerId of selectedIds) {
-        await killContainer(containerId);
+        if (await killContainer(containerId)) {
+            successCount++;
+        }
     }
+
+    if (successCount > 0) {
+        const msg = successCount === 1 ? 'Container killed successfully.' : `${successCount} containers killed successfully.`;
+        showNotification(msg, 'success');
+    }
+
     resetSelection();
-    loadContainers();
+    setTimeout(() => loadContainers(), 300);
 }
 
 async function backupSelectedContainers() {
@@ -5609,26 +5692,26 @@ async function backupSelectedContainers() {
         showNotification('A backup operation is already in progress.', 'warning');
         return;
     }
-    
+
     if (isBackupInProgress) {
         showNotification('A single backup is already in progress. Please wait for it to finish.', 'warning');
         return;
     }
-    
+
     backupAllInProgress = true;
     backupAllCancelled = false;
-    
+
     // Show modal
     const modal = document.getElementById('backup-all-modal');
     const statusEl = document.getElementById('backup-all-status');
     const listEl = document.getElementById('backup-all-list');
     const closeBtn = document.getElementById('backup-all-close-btn');
     const cancelBtn = document.getElementById('backup-all-cancel-btn');
-    
+
     modal.style.display = 'block';
     closeBtn.style.display = 'none';
     cancelBtn.style.display = 'inline-block';
-    
+
     // Prepare list of selected containers
     const selectedContainers = [];
     uniqueIds.forEach(id => {
@@ -5638,13 +5721,13 @@ async function backupSelectedContainers() {
         const name = nameElement ? nameElement.textContent : id.substring(0, 12);
         selectedContainers.push({ id, name });
     });
-    
+
     const totalContainers = selectedContainers.length;
     let completed = 0;
     let failed = 0;
-    
+
     statusEl.innerHTML = `<span>Backing up ${totalContainers} selected container(s)...</span>`;
-    
+
     // Initialize list
     listEl.innerHTML = selectedContainers.map(container => {
         return `
@@ -5658,7 +5741,7 @@ async function backupSelectedContainers() {
             </div>
         `;
     }).join('');
-    
+
     try {
         // Backup each container sequentially
         for (let i = 0; i < selectedContainers.length; i++) {
@@ -5666,12 +5749,12 @@ async function backupSelectedContainers() {
                 statusEl.innerHTML = `<span style="color: var(--danger);">❌ Backup cancelled by user.</span>`;
                 break;
             }
-            
+
             const container = selectedContainers[i];
             const itemEl = document.getElementById(`backup-item-${container.id}`);
-            
+
             if (!itemEl) continue;
-            
+
             // Update status to "In Progress" with progress display
             itemEl.innerHTML = `
                 <div style="flex: 1;">
@@ -5690,13 +5773,13 @@ async function backupSelectedContainers() {
 
             // Update overall status *before* starting the backup for the current container
             statusEl.innerHTML = `<span>Processing container ${i + 1} of ${totalContainers}...</span>`;
-            
+
             try {
                 // Call backup API with queue parameter for backup-all operations
                 const backupResponse = await fetch(`/api/backup/${container.id}?queue=true`, {
                     method: 'POST',
                 });
-                
+
                 const backupData = await backupResponse.json();
 
                 if (!backupResponse.ok) {
@@ -5718,7 +5801,7 @@ async function backupSelectedContainers() {
                     }
                     throw new Error(backupData.error || 'Failed to create backup');
                 }
-                
+
                 // Handle queued backups (202 status)
                 if (backupResponse.status === 202 || backupData.status === 'queued') {
                     // Backup was queued, update UI and start polling
@@ -5736,18 +5819,18 @@ async function backupSelectedContainers() {
                         </div>
                     `;
                     itemEl.style.borderLeftColor = 'var(--warning)';
-                    
+
                     // Get progress elements for queued backup
                     const stepEl = document.getElementById(`backup-step-${container.id}`);
                     const progressBar = document.getElementById(`backup-bar-${container.id}`);
                     const pctEl = document.getElementById(`backup-pct-${container.id}`);
-                    
+
                     // Start polling for progress
                     if (backupData.progress_id && stepEl && progressBar && pctEl) {
                         let backupCompleted = false;
                         const progressInterval = setInterval(async () => {
                             if (backupCompleted) return;
-                            
+
                             try {
                                 const progressResponse = await fetch(`/api/backup-progress/${backupData.progress_id}`);
                                 if (!progressResponse.ok) {
@@ -5755,7 +5838,7 @@ async function backupSelectedContainers() {
                                     console.warn(`Progress endpoint returned ${progressResponse.status}, continuing to poll...`);
                                     return;
                                 }
-                                
+
                                 let progress;
                                 try {
                                     progress = await progressResponse.json();
@@ -5763,18 +5846,18 @@ async function backupSelectedContainers() {
                                     console.error('Failed to parse progress JSON:', jsonError);
                                     return; // Continue polling
                                 }
-                                
+
                                 // Only mark as completed if status is actually 'complete' or 'error'
                                 if (progress.status !== 'complete' && progress.status !== 'error') {
                                     // Still processing - continue polling
                                     return;
                                 }
-                                
+
                                 // Update UI
                                 stepEl.textContent = progress.step || 'Processing...';
                                 progressBar.style.width = `${progress.progress}%`;
                                 pctEl.textContent = `${progress.progress}%`;
-                                
+
                                 // Update border color when backup starts
                                 if (progress.status === 'running' || progress.status === 'starting' || progress.status === 'waiting') {
                                     if (progress.status === 'waiting') {
@@ -5795,7 +5878,7 @@ async function backupSelectedContainers() {
                                         }
                                     }
                                 }
-                                
+
                                 if (progress.status === 'complete') {
                                     clearInterval(progressInterval);
                                     backupCompleted = true;
@@ -5822,7 +5905,7 @@ async function backupSelectedContainers() {
                                 }
                             }
                         }, 300);
-                        
+
                         // Wait for backup to complete
                         await new Promise((resolve, reject) => {
                             const checkComplete = setInterval(() => {
@@ -5832,7 +5915,7 @@ async function backupSelectedContainers() {
                                     resolve();
                                 }
                             }, 100);
-                            
+
                             setTimeout(() => {
                                 clearInterval(checkComplete);
                                 clearInterval(progressInterval);
@@ -5847,23 +5930,23 @@ async function backupSelectedContainers() {
                         console.warn('No progress tracking available for queued backup');
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
-                    
+
                     // Mark as completed only after backup actually completes
                     completed++;
                     continue; // Move to next container
                 }
-                
+
                 // Get progress elements
                 const stepEl = document.getElementById(`backup-step-${container.id}`);
                 const progressBar = document.getElementById(`backup-bar-${container.id}`);
                 const pctEl = document.getElementById(`backup-pct-${container.id}`);
-                
+
                 // Poll for progress if we have a progress_id
                 if (backupData.progress_id && stepEl && progressBar && pctEl) {
                     let backupCompleted = false;
                     const progressInterval = setInterval(async () => {
                         if (backupCompleted) return;
-                        
+
                         try {
                             const progressResponse = await fetch(`/api/backup-progress/${backupData.progress_id}`);
                             if (!progressResponse.ok) {
@@ -5871,7 +5954,7 @@ async function backupSelectedContainers() {
                                 backupCompleted = true;
                                 return;
                             }
-                            
+
                             let progress;
                             try {
                                 progress = await progressResponse.json();
@@ -5881,12 +5964,12 @@ async function backupSelectedContainers() {
                                 backupCompleted = true;
                                 return;
                             }
-                            
+
                             // Update UI immediately
                             stepEl.textContent = progress.step || 'Processing...';
                             progressBar.style.width = `${progress.progress}%`;
                             pctEl.textContent = `${progress.progress}%`;
-                            
+
                             if (progress.status === 'complete') {
                                 clearInterval(progressInterval);
                                 backupCompleted = true;
@@ -5969,9 +6052,9 @@ async function backupSelectedContainers() {
                 `;
                 itemEl.style.borderLeftColor = 'var(--danger)';
             }
-            
+
         }
-        
+
         // Final status
         if (!backupAllCancelled) {
             if (failed === 0) {
@@ -5979,17 +6062,17 @@ async function backupSelectedContainers() {
             } else {
                 statusEl.innerHTML = `<span style="color: var(--warning);">⚠️ Backup process completed with ${failed} error(s).</span>`;
             }
-            
+
             // Reload backups list
             loadBackups();
         }
-        
+
         // Deselect items after backup
         resetSelection();
-        
+
         closeBtn.style.display = 'inline-block';
         cancelBtn.style.display = 'none';
-        
+
     } catch (error) {
         statusEl.innerHTML = `<span style="color: var(--danger);">❌ Error: ${escapeHtml(error.message)}</span>`;
         closeBtn.style.display = 'inline-block';
@@ -6008,7 +6091,7 @@ async function deleteSelectedContainers() {
 
     // Store selected container IDs globally for bulk delete
     window.selectedContainerIdsForDelete = selectedIds;
-    
+
     // Get first container name for display (or show count)
     const firstContainerId = selectedIds[0];
     const containerRow = document.querySelector(`.container-checkbox[data-container-id="${firstContainerId}"]`)?.closest('tr');
@@ -6019,7 +6102,7 @@ async function deleteSelectedContainers() {
             containerName = nameElement.textContent.trim().replace(/\s*\(self\)$/, '');
         }
     }
-    
+
     // Show delete modal with checkboxes (applies to all selected containers)
     if (selectedIds.length === 1) {
         showDeleteOptions(firstContainerId, containerName);
@@ -6107,7 +6190,7 @@ async function loadSchedulerConfig() {
     schedulerLoadingConfig = true; // Prevent auto-save during load
     try {
         const response = await fetch('/api/scheduler/config');
-        
+
         // Check response status before parsing JSON
         if (!response.ok) {
             // Try to parse JSON error response, but handle HTML errors gracefully
@@ -6115,7 +6198,7 @@ async function loadSchedulerConfig() {
             try {
                 const errorData = await response.json();
                 errorMessage = errorData.error || errorMessage;
-                
+
                 // Handle authentication errors
                 if (response.status === 401) {
                     errorMessage = 'Authentication required. Please refresh the page and log in again.';
@@ -6130,18 +6213,18 @@ async function loadSchedulerConfig() {
             }
             throw new Error(errorMessage);
         }
-        
+
         schedulerConfig = await response.json();
-        
+
         // Update UI with config
         document.getElementById('schedule-type').value = schedulerConfig.schedule_type || 'daily';
         document.getElementById('schedule-hour').value = schedulerConfig.hour || 2;
         document.getElementById('day-of-week').value = schedulerConfig.day_of_week || 0;
         document.getElementById('schedule-lifecycle').value = schedulerConfig.lifecycle || 7;
-        
+
         updateScheduleUI();
         updateSchedulerStatus();
-        
+
         // Load containers after config is loaded so checkboxes can be set correctly
         loadSchedulerContainers();
     } catch (error) {
@@ -6158,16 +6241,16 @@ async function loadSchedulerContainers() {
     const spinner = document.getElementById('scheduler-containers-spinner');
     const list = document.getElementById('scheduler-containers-list');
     const wrapper = document.getElementById('scheduler-containers-table-wrapper');
-    
+
     if (spinner) {
         spinner.style.display = 'flex';
         spinner.dataset.shownAt = Date.now(); // Track when shown
     }
     if (list) list.innerHTML = '';
-    
+
     try {
         const response = await fetch('/api/containers');
-        
+
         // Check response status before parsing JSON
         if (!response.ok) {
             // Try to parse JSON error response, but handle HTML errors gracefully
@@ -6175,7 +6258,7 @@ async function loadSchedulerContainers() {
             try {
                 const errorData = await response.json();
                 errorMessage = errorData.error || errorMessage;
-                
+
                 // Handle authentication errors
                 if (response.status === 401) {
                     errorMessage = 'Authentication required. Please refresh the page and log in again.';
@@ -6190,16 +6273,16 @@ async function loadSchedulerContainers() {
             }
             throw new Error(errorMessage);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.error) {
             throw new Error(data.error);
         }
-        
+
         const containers = data.containers || [];
         const selectedIds = schedulerConfig ? (schedulerConfig.selected_containers || []) : [];
-        
+
         // Update select all checkbox
         const selectAllCheckbox = document.getElementById('scheduler-select-all');
         if (selectAllCheckbox) {
@@ -6208,7 +6291,7 @@ async function loadSchedulerContainers() {
             selectAllCheckbox.checked = allSelected;
             selectAllCheckbox.indeterminate = !allSelected && visibleContainers.some(c => selectedIds.includes(c.id));
         }
-        
+
         if (containers.length === 0) {
             list.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-secondary);">No containers found</td></tr>';
         } else {
@@ -6217,7 +6300,7 @@ async function loadSchedulerContainers() {
                 if (container.is_self) {
                     return;
                 }
-                
+
                 const isSelected = selectedIds.includes(container.id);
                 const tr = document.createElement('tr');
                 tr.className = 'scheduler-container-row';
@@ -6229,14 +6312,14 @@ async function loadSchedulerContainers() {
                         updateSelectAllCheckbox();
                     }
                 };
-                
+
                 const statusLower = container.status.toLowerCase();
                 const statusClass = statusLower === 'running' ? 'status-running' : 'status-stopped';
                 const statusDisplay = container.status_text || container.status.toUpperCase();
-                
+
                 const imageInfo = container.image_info || {};
                 const imageName = imageInfo.name || container.image || 'unknown';
-                
+
                 tr.innerHTML = `
                     <td class="checkbox-cell" onclick="event.stopPropagation();">
                         <input type="checkbox" 
@@ -6256,11 +6339,11 @@ async function loadSchedulerContainers() {
                         <div style="color: #fff; font-size: 0.9em;">${escapeHtml(imageName)}</div>
                     </td>
                 `;
-                
+
                 list.appendChild(tr);
             });
         }
-        
+
         if (spinner) {
             spinner.style.display = 'none';
             delete spinner.dataset.shownAt;
@@ -6280,7 +6363,7 @@ function toggleSelectAllSchedulerContainers() {
     const selectAllCheckbox = document.getElementById('scheduler-select-all');
     const checkboxes = document.querySelectorAll('.scheduler-container-checkbox');
     const isChecked = selectAllCheckbox.checked;
-    
+
     checkboxes.forEach(checkbox => {
         checkbox.checked = isChecked;
     });
@@ -6291,13 +6374,13 @@ function toggleSelectAllSchedulerContainers() {
 function updateSelectAllCheckbox() {
     const selectAllCheckbox = document.getElementById('scheduler-select-all');
     const checkboxes = document.querySelectorAll('.scheduler-container-checkbox');
-    
+
     if (checkboxes.length === 0) {
         selectAllCheckbox.checked = false;
         selectAllCheckbox.indeterminate = false;
         return;
     }
-    
+
     const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
     selectAllCheckbox.checked = checkedCount === checkboxes.length;
     selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < checkboxes.length;
@@ -6306,13 +6389,13 @@ function updateSelectAllCheckbox() {
 function updateScheduleUI() {
     const scheduleType = document.getElementById('schedule-type').value;
     const dayOfWeekContainer = document.getElementById('day-of-week-container');
-    
+
     if (scheduleType === 'weekly') {
         dayOfWeekContainer.style.display = 'block';
     } else {
         dayOfWeekContainer.style.display = 'none';
     }
-    
+
     // Auto-save when schedule type changes
     autoSaveSchedulerConfig();
 }
@@ -6321,22 +6404,24 @@ function updateSchedulerStatus() {
     const statusIcon = document.getElementById('scheduler-status-icon');
     const statusText = document.getElementById('scheduler-status-text');
     const nextRun = document.getElementById('scheduler-next-run');
-    
+
+    if (!statusIcon || !statusText) return;
+
     if (!schedulerConfig) {
         statusIcon.textContent = '⏸️';
         statusText.textContent = 'Scheduler disabled (no containers selected)';
-        nextRun.style.display = 'none';
+        if (nextRun) nextRun.style.display = 'none';
         return;
     }
-    
+
     const enabled = schedulerConfig.enabled;
     const selectedCount = schedulerConfig.selected_containers ? schedulerConfig.selected_containers.length : 0;
-    
+
     if (enabled && selectedCount > 0) {
         statusIcon.textContent = '✅';
         statusText.textContent = `Scheduler enabled: ${selectedCount} container(s) selected`;
-        
-        if (schedulerConfig.next_run) {
+
+        if (schedulerConfig.next_run && nextRun) {
             const nextRunDate = new Date(schedulerConfig.next_run);
             // Use DD-MM-YYYY HH:MM:SS format
             const year = nextRunDate.getFullYear();
@@ -6348,30 +6433,30 @@ function updateSchedulerStatus() {
             nextRun.textContent = `Next backup: ${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
             nextRun.style.display = 'block';
         } else {
-            nextRun.style.display = 'none';
+            if (nextRun) nextRun.style.display = 'none';
         }
     } else {
         statusIcon.textContent = '⏸️';
         statusText.textContent = 'Scheduler disabled (no containers selected)';
-        nextRun.style.display = 'none';
+        if (nextRun) nextRun.style.display = 'none';
     }
 }
 
 async function forceBackup() {
     const btn = document.getElementById('force-backup-btn');
     if (!btn) return;
-    
+
     // Check if scheduler is enabled
     if (!schedulerConfig || !schedulerConfig.enabled || !schedulerConfig.selected_containers || schedulerConfig.selected_containers.length === 0) {
         showNotification('Scheduler is disabled. Please select at least one container to backup.', 'warning');
         return;
     }
-    
+
     // Disable button and show loading state
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="ph ph-spinner" style="animation: spin 1s linear infinite;"></i> Running...';
-    
+
     try {
         const response = await fetch('/api/scheduler/test', {
             method: 'POST',
@@ -6379,23 +6464,23 @@ async function forceBackup() {
                 'Content-Type': 'application/json'
             }
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to trigger backup');
         }
-        
+
         const containerCount = schedulerConfig.selected_containers.length;
         showNotification(`Force backup triggered for ${containerCount} container(s). Backups are running in the background.`, 'success');
-        
+
         // Optionally refresh the backup list after a short delay
         setTimeout(() => {
             if (currentSection === 'backup-vault-section') {
                 loadBackups();
             }
         }, 2000);
-        
+
     } catch (error) {
         console.error('Error triggering force backup:', error);
         showNotification(`Failed to trigger backup: ${error.message}`, 'error');
@@ -6414,12 +6499,12 @@ function autoSaveSchedulerConfig() {
     if (schedulerLoadingConfig) {
         return;
     }
-    
+
     // Clear existing timer
     if (schedulerAutoSaveTimer) {
         clearTimeout(schedulerAutoSaveTimer);
     }
-    
+
     // Debounce: wait 500ms after last change before saving
     schedulerAutoSaveTimer = setTimeout(() => {
         saveSchedulerConfig(true); // true = silent save (no notification)
@@ -6429,19 +6514,19 @@ function autoSaveSchedulerConfig() {
 async function saveSchedulerConfig(silent = false) {
     const errorEl = document.getElementById('scheduler-error');
     errorEl.style.display = 'none';
-    
+
     try {
         const scheduleType = document.getElementById('schedule-type').value;
         const hour = parseInt(document.getElementById('schedule-hour').value);
         const dayOfWeek = scheduleType === 'weekly' ? parseInt(document.getElementById('day-of-week').value) : null;
         const lifecycle = parseInt(document.getElementById('schedule-lifecycle').value);
-        
+
         // Get selected container IDs
         const checkboxes = document.querySelectorAll('.scheduler-container-checkbox');
         const selectedContainers = Array.from(checkboxes)
             .filter(cb => cb.checked)
             .map(cb => cb.getAttribute('data-container-id'));
-        
+
         const config = {
             schedule_type: scheduleType,
             hour: hour,
@@ -6449,7 +6534,7 @@ async function saveSchedulerConfig(silent = false) {
             lifecycle: lifecycle,
             selected_containers: selectedContainers
         };
-        
+
         const response = await fetch('/api/scheduler/config', {
             method: 'POST',
             headers: {
@@ -6457,17 +6542,17 @@ async function saveSchedulerConfig(silent = false) {
             },
             body: JSON.stringify(config)
         });
-        
+
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to save scheduler config');
         }
-        
+
         const result = await response.json();
         schedulerConfig = result.config;
-        
+
         updateSchedulerStatus();
-        
+
         if (!silent) {
             showNotification('Scheduler configuration saved successfully!', 'success');
         }
@@ -6492,10 +6577,10 @@ function startTimeDisplay() {
     if (timeDisplayInterval) {
         clearInterval(timeDisplayInterval);
     }
-    
+
     // Update time immediately
     updateTimeDisplay();
-    
+
     // Update every second
     timeDisplayInterval = setInterval(updateTimeDisplay, 1000);
 }
@@ -6519,7 +6604,7 @@ function updateTimeDisplay() {
         const minutes = String(now.getMinutes()).padStart(2, '0');
         const seconds = String(now.getSeconds()).padStart(2, '0');
         const formatted = `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
-        timeEl.textContent = `🕐 ${formatted}`;
+        timeEl.textContent = formatted;
     }
 }
 
@@ -6530,11 +6615,11 @@ async function loadStorageSettings() {
     try {
         const response = await fetch('/api/storage/settings');
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to load storage settings');
         }
-        
+
         currentStorageSettings = data;
         const toggle = document.getElementById('storage-toggle');
         if (toggle) {
@@ -6548,7 +6633,7 @@ async function loadStorageSettings() {
 async function toggleStorageType() {
     const toggle = document.getElementById('storage-toggle');
     if (!toggle) return;
-    
+
     if (toggle.checked) {
         // Switching to S3 - show configuration modal (will load saved settings from database)
         await showS3ConfigModal();
@@ -6567,11 +6652,11 @@ function showLocalStorageConfirmModal() {
 function closeLocalStorageConfirmModal() {
     const modal = document.getElementById('local-storage-confirm-modal');
     const toggle = document.getElementById('storage-toggle');
-    
+
     if (modal) {
         modal.style.display = 'none';
     }
-    
+
     // Reset toggle if user cancelled
     if (toggle && currentStorageSettings && currentStorageSettings.storage_type === 's3') {
         toggle.checked = true;
@@ -6581,10 +6666,10 @@ function closeLocalStorageConfirmModal() {
 async function confirmSwitchToLocal() {
     const toggle = document.getElementById('storage-toggle');
     closeLocalStorageConfirmModal();
-    
+
     // Save settings to local
     await saveStorageSettings('local');
-    
+
     // Ensure toggle is unchecked (it should be already, but just in case)
     if (toggle) {
         toggle.checked = false;
@@ -6595,17 +6680,17 @@ async function showS3ConfigModal() {
     const modal = document.getElementById('s3-config-modal');
     const errorEl = document.getElementById('s3-config-error');
     const successEl = document.getElementById('s3-config-success');
-    
+
     if (!modal) return;
-    
+
     errorEl.style.display = 'none';
     successEl.style.display = 'none';
-    
+
     // Always reload settings from database to get latest values
     try {
         const response = await fetch('/api/storage/settings');
         const data = await response.json();
-        
+
         if (response.ok && data) {
             // Populate form fields with saved settings
             document.getElementById('s3-bucket').value = data.s3_bucket || '';
@@ -6622,7 +6707,7 @@ async function showS3ConfigModal() {
                 secretKeyField.value = '';
                 secretKeyField.placeholder = '';
             }
-            
+
             // Update currentStorageSettings (without secret key for security)
             currentStorageSettings = data;
         }
@@ -6641,18 +6726,18 @@ async function showS3ConfigModal() {
             }
         }
     }
-    
+
     modal.style.display = 'block';
 }
 
 function closeS3ConfigModal() {
     const modal = document.getElementById('s3-config-modal');
     const toggle = document.getElementById('storage-toggle');
-    
+
     if (modal) {
         modal.style.display = 'none';
     }
-    
+
     // Reset toggle if settings weren't saved
     if (toggle && currentStorageSettings && currentStorageSettings.storage_type === 'local') {
         toggle.checked = false;
@@ -6664,25 +6749,19 @@ async function testS3Connection() {
     const region = document.getElementById('s3-region').value.trim();
     const accessKey = document.getElementById('s3-access-key').value.trim();
     const secretKey = document.getElementById('s3-secret-key').value.trim();
-    
+
     // For testing, secret key is required
     if (!bucket || !region || !accessKey || !secretKey) {
-        showS3Error('Please fill in all fields (including secret key for testing)');
+        showNotification('Please fill in all fields (including secret key for testing)', 'warning');
         return;
     }
-    
-    const errorEl = document.getElementById('s3-config-error');
-    const successEl = document.getElementById('s3-config-success');
-    
-    errorEl.style.display = 'none';
-    successEl.style.display = 'none';
-    
+
     // Show loading state
     const testBtn = event.target.closest('button');
     const originalText = testBtn.innerHTML;
     testBtn.disabled = true;
     testBtn.innerHTML = '<i class="ph ph-spinner" style="animation: spin 1s linear infinite;"></i> Testing...';
-    
+
     try {
         const response = await fetch('/api/storage/test-s3', {
             method: 'POST',
@@ -6696,52 +6775,48 @@ async function testS3Connection() {
                 s3_secret_key: secretKey
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
-            successEl.style.display = 'block';
-            successEl.querySelector('p').textContent = data.message || 'S3 connection test successful!';
+            showNotification(data.message || 'S3 connection test successful!', 'success');
         } else {
-            showS3Error(data.message || 'S3 connection test failed');
+            showNotification(data.message || 'S3 connection test failed', 'error');
         }
     } catch (error) {
-        showS3Error(`Error testing connection: ${error.message}`);
+        showNotification(`Error testing connection: ${error.message}`, 'error');
     } finally {
         testBtn.disabled = false;
         testBtn.innerHTML = originalText;
     }
 }
 
+// Deprecated: use showNotification directly
 function showS3Error(message) {
-    const errorEl = document.getElementById('s3-config-error');
-    errorEl.textContent = message;
-    errorEl.style.display = 'block';
+    showNotification(message, 'error');
 }
 
 async function saveS3Config(event) {
     event.preventDefault();
-    
+
     const bucket = document.getElementById('s3-bucket').value.trim();
     const region = document.getElementById('s3-region').value.trim();
     const accessKey = document.getElementById('s3-access-key').value.trim();
     const secretKey = document.getElementById('s3-secret-key').value.trim();
-    
+
     // Validate required fields (secret key can be empty if preserving existing)
     if (!bucket || !region || !accessKey) {
-        showS3Error('Please fill in bucket, region, and access key');
+        showNotification('Please fill in bucket, region, and access key', 'warning');
         return;
     }
-    
+
     // If secret key is empty, send masked value to preserve existing
     const secretKeyToSend = secretKey || '***';
-    
-    const errorEl = document.getElementById('s3-config-error');
-    const successEl = document.getElementById('s3-config-success');
-    
-    errorEl.style.display = 'none';
-    successEl.style.display = 'none';
-    
+
+    // Close modal immediately as requested
+    closeS3ConfigModal();
+    showNotification('Saving S3 configuration...', 'info');
+
     await saveStorageSettings('s3', bucket, region, accessKey, secretKeyToSend);
 }
 
@@ -6760,36 +6835,33 @@ async function saveStorageSettings(storageType, bucket = '', region = '', access
                 s3_secret_key: secretKey
             })
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
             throw new Error(data.error || 'Failed to save storage settings');
         }
-        
+
         // Update current settings
         await loadStorageSettings();
-        
+
         // Show success message
         if (storageType === 's3') {
-            const successEl = document.getElementById('s3-config-success');
-            if (successEl) {
-                successEl.style.display = 'block';
-                successEl.querySelector('p').textContent = 'S3 settings saved successfully!';
-            }
-            setTimeout(() => {
-                closeS3ConfigModal();
-                loadBackups(); // Refresh backup list
-            }, 1500);
+            showNotification('S3 settings saved successfully!', 'success');
         } else {
-            loadBackups(); // Refresh backup list
+            showNotification('Switched to local storage successfully', 'success');
         }
+
+        // Refresh backup list
+        loadBackups();
+
     } catch (error) {
+        console.error('Error saving storage settings:', error);
+        showNotification(`Error saving settings: ${error.message}`, 'error');
+
+        // If it was an S3 save that failed, helpful to let the user know they might need to try again
         if (storageType === 's3') {
-            showS3Error(error.message);
-        } else {
-            console.error('Error saving storage settings:', error);
-            alert(`Error: ${error.message}`);
+            // We could re-open the modal here, but keeping it simple as per "close immediately"
         }
     }
 }
