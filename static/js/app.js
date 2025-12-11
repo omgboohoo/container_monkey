@@ -1539,7 +1539,7 @@ function hideAllSpinners() {
     });
 
     // Also hide any spinners found by class
-    const allSpinners = document.querySelectorAll('.grid-spinner-container, .spinner-container');
+    const allSpinners = document.querySelectorAll('.spinner-container');
     allSpinners.forEach(spinner => {
         spinner.style.display = 'none';
         delete spinner.dataset.shownAt;
@@ -1551,7 +1551,7 @@ window.debugBlockingElements = function () {
     console.log('=== Checking for blocking elements ===');
 
     // Check spinners
-    const spinners = document.querySelectorAll('.grid-spinner-container');
+    const spinners = document.querySelectorAll('.spinner-container');
     const visibleSpinners = [];
     spinners.forEach(spinner => {
         const display = window.getComputedStyle(spinner).display;
@@ -3052,7 +3052,7 @@ document.addEventListener('click', function (event) {
             const blockingElements = [];
 
             // Check for visible spinners
-            const visibleSpinners = document.querySelectorAll('.grid-spinner-container');
+            const visibleSpinners = document.querySelectorAll('.spinner-container');
             visibleSpinners.forEach(spinner => {
                 const display = window.getComputedStyle(spinner).display;
                 if (display === 'flex' || display === 'block') {
@@ -3154,7 +3154,7 @@ document.addEventListener('click', function (event) {
 // Additional safety: Check for stuck elements on page load and periodically
 function checkForStuckElements() {
     // Check for visible spinners that shouldn't be visible
-    const spinners = document.querySelectorAll('.grid-spinner-container, .spinner-container');
+    const spinners = document.querySelectorAll('.spinner-container');
     spinners.forEach(spinner => {
         const display = window.getComputedStyle(spinner).display;
         const spinnerData = spinner.dataset; // Declare outside if/else block
