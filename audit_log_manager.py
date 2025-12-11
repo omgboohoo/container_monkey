@@ -69,7 +69,8 @@ class AuditLogManager:
                  container_id: Optional[str] = None,
                  status: Optional[str] = None,
                  start_date: Optional[str] = None,
-                 end_date: Optional[str] = None) -> Dict[str, Any]:
+                 end_date: Optional[str] = None,
+                 search: Optional[str] = None) -> Dict[str, Any]:
         """
         Get audit logs with optional filtering
         
@@ -81,6 +82,7 @@ class AuditLogManager:
             status: Filter by status
             start_date: Filter by start date (ISO format)
             end_date: Filter by end date (ISO format)
+            search: Search term to match across all text fields
             
         Returns:
             Dict with logs and total count
@@ -112,6 +114,24 @@ class AuditLogManager:
             if end_date:
                 where_clauses.append("timestamp <= ?")
                 params.append(end_date)
+            
+            # Add search filter - search across all text fields
+            if search:
+                search_term = f"%{search.lower()}%"
+                search_clauses = [
+                    "LOWER(CAST(timestamp AS TEXT)) LIKE ?",
+                    "LOWER(operation_type) LIKE ?",
+                    "LOWER(container_id) LIKE ?",
+                    "LOWER(container_name) LIKE ?",
+                    "LOWER(backup_filename) LIKE ?",
+                    "LOWER(status) LIKE ?",
+                    "LOWER(error_message) LIKE ?",
+                    "LOWER(user) LIKE ?",
+                    "LOWER(details) LIKE ?"
+                ]
+                where_clauses.append(f"({' OR '.join(search_clauses)})")
+                # Add search_term for each search clause
+                params.extend([search_term] * len(search_clauses))
             
             where_clause = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
             

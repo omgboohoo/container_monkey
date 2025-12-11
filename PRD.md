@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.3**
+**Version 0.3.4**
 
 ## Overview
 

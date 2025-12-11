@@ -829,6 +829,7 @@ def get_audit_logs():
         status = request.args.get('status')
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
+        search = request.args.get('search')
         
         result = audit_log_manager.get_logs(
             limit=limit,
@@ -837,7 +838,8 @@ def get_audit_logs():
             container_id=container_id,
             status=status,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            search=search
         )
         
         if 'error' in result:
