@@ -92,7 +92,7 @@ volume_manager = VolumeManager()
 network_manager = NetworkManager(app.config['BACKUP_DIR'], storage_settings_manager=storage_settings_manager)
 image_manager = ImageManager()
 stack_manager = StackManager()
-backup_file_manager = BackupFileManager(app.config['BACKUP_DIR'], audit_log_manager=audit_log_manager, storage_settings_manager=storage_settings_manager)
+backup_file_manager = BackupFileManager(app.config['BACKUP_DIR'], audit_log_manager=audit_log_manager, storage_settings_manager=storage_settings_manager, ui_settings_manager=ui_settings_manager)
 
 # Initialize backup manager
 backup_manager = None
@@ -105,7 +105,8 @@ if docker_api_client:
         reconstruct_docker_run_command_fn=docker_utils.reconstruct_docker_run_command,
         generate_docker_compose_fn=docker_utils.generate_docker_compose,
         audit_log_manager=audit_log_manager,
-        storage_settings_manager=storage_settings_manager
+        storage_settings_manager=storage_settings_manager,
+        ui_settings_manager=ui_settings_manager
     )
     print("✅ Backup manager initialized")
 

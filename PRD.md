@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.5**
+**Version 0.3.6**
 
 ## Overview
 
@@ -27,14 +27,15 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - `scheduler_manager.py` - Scheduled backup management and lifecycle cleanup
   - `audit_log_manager.py` - Audit logging for backup operations
   - `storage_settings_manager.py` - Storage settings management (local vs S3)
+  - `ui_settings_manager.py` - UI settings management (server name, etc.)
   - `s3_storage_manager.py` - S3 storage operations
   - `encryption_utils.py` - Encryption utilities for securing credentials
 - **Storage**: Docker volumes for backup persistence
   - Organized directory structure: `backups/` subdirectory for backup files, `config/` subdirectory for configuration
   - Automatic migration of existing files to organized structure on startup
-- **Database**: SQLite database for user management (stored in `config/` subdirectory of backup volume)
+- **Database**: SQLite database (`monkey.db`) for user management, audit logs, storage settings, and UI settings (stored in `config/` subdirectory of backup volume)
 - **Rate Limiting**: Flask-Limiter 3.5.0 for API protection (progress endpoint exempt)
-- **Server**: Flask development server (container port 80, host port 666 by default)
+- **Server**: Flask development server (container port 80, host port 1066 by default)
 
 ### Frontend
 - **Language**: Vanilla JavaScript (ES6+)
@@ -68,8 +69,17 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - Bulk backup operations with queue management
 - **Backup Type Tracking**: Backups tagged as Manual or Scheduled in backup vault
 - **Storage Location Tracking**: Backup vault shows storage location (Local or S3) for each backup
-- **Backup Vault Search Filter**: Real-time search filter to quickly find backups by filename, type, backup type, storage location, or creation date
-- **Sortable Backup Columns**: All backup vault columns are sortable (Filename, Type, Backup Type, Storage, Size, Created) with visual sort indicators
+- **Backup Vault Search Filter**: Real-time search filter to quickly find backups by filename, type, backup type, storage location, server name, or creation date
+- **Sortable Backup Columns**: All backup vault columns are sortable (Filename, Type, Backup Type, Storage, Server, Size, Created) with visual sort indicators
+- **Multi-Server Backup Identification**: Server name tracking for shared S3 vaults
+  - Customizable server name setting displayed in top bar
+  - Server name included in every backup as metadata
+  - Companion JSON files (`.tar.gz.json`) store server name alongside backups
+  - Backup vault displays server name column showing origin server for each backup
+  - Enables multiple Container Monkey instances sharing the same S3 bucket to identify backup origins
+  - Performance optimized: reads lightweight JSON files instead of opening tar archives
+  - Companion JSON files automatically deleted when backups are deleted
+  - Backward compatible with backups created before server name tracking
 - **S3 Storage Support**: Optional cloud storage for backups
   - Toggle between local and S3 storage from backup vault interface
   - S3 configuration modal with bucket name, region, access key, and secret key fields
@@ -78,6 +88,7 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - All backups (manual, scheduled, uploaded) automatically use selected storage type
   - S3 backups download to temp directory for restore operations
   - Temp files automatically cleaned up after restore completes
+  - Companion JSON files uploaded/downloaded with backups in S3 storage
 - **Backup Scheduler**: Automated scheduled backups
   - Single schedule configuration (daily or weekly)
   - Select containers to include in scheduled backups
@@ -246,6 +257,12 @@ GET    /api/audit-logs/statistics               # Get audit log statistics
 DELETE /api/audit-logs/clear                    # Clear all audit logs
 ```
 
+### UI Settings Endpoints
+```
+GET    /api/ui/settings/<key>                   # Get UI setting value (e.g., server_name)
+POST   /api/ui/settings/<key>                   # Set UI setting value (e.g., server_name)
+```
+
 ### UI Endpoints
 ```
 GET    /                                        # Main application page
@@ -276,7 +293,7 @@ GET    /console/<container_id>                  # Container console page
 
 ## Key Technical Decisions
 
-1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`, `scheduler_manager.py`, `audit_log_manager.py`, `storage_settings_manager.py`, `s3_storage_manager.py`, `encryption_utils.py`) for better maintainability and separation of concerns
+1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`, `scheduler_manager.py`, `audit_log_manager.py`, `storage_settings_manager.py`, `ui_settings_manager.py`, `s3_storage_manager.py`, `encryption_utils.py`) for better maintainability and separation of concerns
 2. **Direct Docker Socket API**: Uses direct HTTP requests to Docker socket (`docker_api.py`) for better reliability than docker-py library
 3. **Modular Backup System**: Backup functionality separated into `backup_manager.py` and `backup_file_manager.py` modules for maintainability
 4. **Sequential Backup Queue**: Queue processor ensures backups complete fully (including tar.gz writing) before starting next

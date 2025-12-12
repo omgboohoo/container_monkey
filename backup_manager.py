@@ -20,7 +20,7 @@ class BackupManager:
     
     def __init__(self, docker_api_client, backup_dir: str, app_container_name: str, app_volume_name: str,
                  reconstruct_docker_run_command_fn: Callable, generate_docker_compose_fn: Callable,
-                 audit_log_manager=None, storage_settings_manager=None):
+                 audit_log_manager=None, storage_settings_manager=None, ui_settings_manager=None):
         """
         Initialize BackupManager
         
@@ -33,6 +33,7 @@ class BackupManager:
             generate_docker_compose_fn: Function to generate docker-compose yaml
             audit_log_manager: Optional AuditLogManager instance for logging
             storage_settings_manager: Optional StorageSettingsManager instance for S3 storage
+            ui_settings_manager: Optional UISettingsManager instance for getting server name
         """
         self.docker_api_client = docker_api_client
         # Backup files go in backups/ subdirectory
@@ -44,6 +45,7 @@ class BackupManager:
         self.generate_docker_compose = generate_docker_compose_fn
         self.audit_log_manager = audit_log_manager
         self.storage_settings_manager = storage_settings_manager
+        self.ui_settings_manager = ui_settings_manager
         
         # Progress tracking
         self.backup_progress: Dict[str, Dict] = {}
@@ -572,6 +574,13 @@ class BackupManager:
                 if not image_name or image_name == 'unknown':
                     image_name = inspect_data.get('Image', 'unknown')
                 
+                # Get server name from settings
+                server_name = 'My Server Name'  # Default
+                if self.ui_settings_manager:
+                    server_name = self.ui_settings_manager.get_setting('server_name', 'My Server Name')
+                    if not server_name or server_name == '':
+                        server_name = 'My Server Name'
+                
                 metadata = {
                     'container_id': inspect_data.get('Id', container_id),
                     'container_name': inspect_data.get('Name', '').lstrip('/'),
@@ -580,6 +589,7 @@ class BackupManager:
                     'image': image_name,
                     'image_backed_up': os.path.exists(image_file) and os.path.getsize(image_file) > 100,
                     'status': 'running' if inspect_data.get('State', {}).get('Running') else 'stopped',
+                    'server_name': server_name,
                 }
                 metadata_file = os.path.join(temp_dir, 'backup_metadata.json')
                 with open(metadata_file, 'w') as f:
@@ -628,6 +638,18 @@ class BackupManager:
                 if tar_thread_error[0]:
                     raise tar_thread_error[0]
                 
+                # Create companion JSON file with server name
+                companion_json_filename = f"{backup_filename}.json"
+                companion_json_path = os.path.join(self.backup_dir, companion_json_filename)
+                companion_metadata = {'server_name': server_name}
+                try:
+                    with open(companion_json_path, 'w') as f:
+                        json.dump(companion_metadata, f, indent=2)
+                    print(f"✅ Created companion JSON: {companion_json_filename}")
+                except Exception as e:
+                    print(f"⚠️  Error creating companion JSON: {e}")
+                    safe_log_error(e, context="create_companion_json")
+                
                 # Upload to S3 if enabled
                 if self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled():
                     self.backup_progress[progress_id]['step'] = 'Uploading to S3...'
@@ -644,10 +666,25 @@ class BackupManager:
                         if not upload_result.get('success'):
                             raise Exception(f"S3 upload failed: {upload_result.get('error', 'Unknown error')}")
                         print(f"✅ Backup uploaded to S3: {backup_filename}")
-                        # Remove local file after successful S3 upload
+                        
+                        # Upload companion JSON file to S3
+                        if os.path.exists(companion_json_path):
+                            try:
+                                companion_upload_result = s3_manager.upload_file(companion_json_path, companion_json_filename)
+                                if companion_upload_result.get('success'):
+                                    print(f"✅ Companion JSON uploaded to S3: {companion_json_filename}")
+                                else:
+                                    print(f"⚠️  Failed to upload companion JSON to S3: {companion_upload_result.get('error', 'Unknown error')}")
+                            except Exception as e:
+                                print(f"⚠️  Error uploading companion JSON to S3: {e}")
+                        
+                        # Remove local files after successful S3 upload
                         try:
                             os.remove(backup_path)
                             print(f"🗑️  Removed local backup file after S3 upload")
+                            if os.path.exists(companion_json_path):
+                                os.remove(companion_json_path)
+                                print(f"🗑️  Removed local companion JSON after S3 upload")
                         except:
                             pass
                     except Exception as e:

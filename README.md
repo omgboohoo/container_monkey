@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.5**
+**Version 0.3.6**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -13,11 +13,12 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - **Backup & Restore**: Full container backup with volumes, port mappings, and restore functionality
 - **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules, force backup option
 - **S3 Storage Support**: Store backups in AWS S3, toggle between local and S3 storage, enables shared vaults across Container Monkey instances
+- **Multi-Server Identification**: Server name tracking allows multiple Container Monkey instances sharing the same S3 bucket to identify which server created each backup
 - **Backup Audit Log**: Comprehensive audit logging for all backup operations, restores, and lifecycle management
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
 - **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
 - **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled and storage location (Local/S3)
-- **Backup Vault Search**: Real-time search filter to quickly find backups by filename, type, storage, or date
+- **Backup Vault Search**: Real-time search filter to quickly find backups by filename, type, storage, server name, or date
 - **Sortable Backup Columns**: All backup vault columns are sortable with visual indicators for easy organization
 - **Web Console**: Interactive terminal access to containers
 - **Logs Viewer**: Real-time container logs viewing
@@ -36,7 +37,7 @@ chmod +x build_deploy_local_docker.sh
 ./build_deploy_local_docker.sh
 ```
 
-Access the web UI at: http://localhost:666
+Access the web UI at: http://localhost:1066
 
 **Default login credentials:**
 - Username: `admin`
@@ -64,14 +65,14 @@ sudo docker load -i /home/ubuntu/container-monkey.tar
 ```bash
 sudo docker run -d \
   --name container-monkey \
-  -p 666:80 \
+  -p 1066:80 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v container-monkey:/backups \
   --restart always \
   container-monkey
 ```
 
-Access the web UI at: http://your-server:666
+Access the web UI at: http://your-server:1066
 
 **Default login credentials:**
 - Username: `admin`
@@ -81,7 +82,7 @@ Access the web UI at: http://your-server:666
 
 - Docker Engine installed and running
 - Access to `/var/run/docker.sock` (or Docker context)
-- Port 666 available on host (maps to container port 80)
+- Port 1066 available on host (maps to container port 80)
 
 ## Configuration
 

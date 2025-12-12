@@ -19,7 +19,7 @@ from error_utils import safe_log_error
 class BackupFileManager:
     """Manages backup file operations"""
     
-    def __init__(self, backup_dir: str, audit_log_manager=None, storage_settings_manager=None):
+    def __init__(self, backup_dir: str, audit_log_manager=None, storage_settings_manager=None, ui_settings_manager=None):
         """
         Initialize BackupFileManager
         
@@ -27,6 +27,7 @@ class BackupFileManager:
             backup_dir: Base directory (backups go in backups/ subdirectory)
             audit_log_manager: Optional AuditLogManager instance for logging
             storage_settings_manager: Optional StorageSettingsManager instance for S3 storage
+            ui_settings_manager: Optional UISettingsManager instance for getting server name
         """
         # Backup files go in backups/ subdirectory
         self.backup_dir = os.path.join(backup_dir, 'backups')
@@ -37,11 +38,44 @@ class BackupFileManager:
         self.download_all_progress = {}
         self.audit_log_manager = audit_log_manager
         self.storage_settings_manager = storage_settings_manager
+        self.ui_settings_manager = ui_settings_manager
+    
+    def _read_companion_json(self, filename: str, storage_location: str, s3_manager=None) -> str:
+        """Read server name from companion JSON file"""
+        companion_json_filename = f"{filename}.json"
+        server_name = 'Unknown Server'  # Default
+        
+        try:
+            if storage_location == 's3' and s3_manager:
+                # Try to download companion JSON from S3
+                try:
+                    download_result = s3_manager.download_fileobj(companion_json_filename)
+                    if download_result.get('success'):
+                        json_content = download_result.get('content', b'')
+                        if json_content:
+                            metadata = json.loads(json_content.decode('utf-8'))
+                            server_name = metadata.get('server_name', 'Unknown Server')
+                except Exception as e:
+                    # Companion JSON doesn't exist or error reading - use default
+                    pass
+            else:
+                # Read from local file
+                companion_json_path = os.path.join(self.backup_dir, companion_json_filename)
+                if os.path.exists(companion_json_path):
+                    with open(companion_json_path, 'r') as f:
+                        metadata = json.load(f)
+                        server_name = metadata.get('server_name', 'Unknown Server')
+        except Exception as e:
+            # Error reading companion JSON - use default
+            pass
+        
+        return server_name if server_name else 'Unknown Server'
     
     def list_backups(self) -> Dict[str, Any]:
         """List all available backups (containers and networks)"""
         try:
             backups = []
+            s3_manager = None
             
             # Check if S3 storage is enabled
             use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
@@ -61,15 +95,21 @@ class BackupFileManager:
                     if s3_result.get('success'):
                         for file_info in s3_result.get('files', []):
                             filename = file_info['key']
+                            # Skip companion JSON files
+                            if filename.endswith('.json') and not filename.startswith('network_'):
+                                continue
+                            
                             if filename.endswith(('.zip', '.tar.gz')):
                                 backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
+                                server_name = self._read_companion_json(filename, 's3', s3_manager)
                                 backups.append({
                                     'filename': filename,
                                     'size': file_info['size'],
                                     'created': file_info['last_modified'],
                                     'type': 'container',
                                     'backup_type': backup_type,
-                                    'storage_location': 's3'
+                                    'storage_location': 's3',
+                                    'server_name': server_name
                                 })
                             elif filename.startswith('network_') and filename.endswith('.json'):
                                 backups.append({
@@ -78,7 +118,8 @@ class BackupFileManager:
                                     'created': file_info['last_modified'],
                                     'type': 'network',
                                     'backup_type': 'manual',
-                                    'storage_location': 's3'
+                                    'storage_location': 's3',
+                                    'server_name': 'Unknown Server'  # Network backups don't have server name
                                 })
                 except Exception as e:
                     print(f"⚠️  Error listing S3 backups: {e}")
@@ -91,6 +132,10 @@ class BackupFileManager:
                     if not os.path.isfile(file_path):
                         continue
                     
+                    # Skip companion JSON files
+                    if filename.endswith('.json') and not filename.startswith('network_'):
+                        continue
+                    
                     # Skip if already in backups list from S3
                     if any(b['filename'] == filename for b in backups):
                         continue
@@ -99,13 +144,15 @@ class BackupFileManager:
                     
                     if filename.endswith(('.zip', '.tar.gz')):
                         backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
+                        server_name = self._read_companion_json(filename, 'local')
                         backups.append({
                             'filename': filename,
                             'size': stat.st_size,
                             'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
                             'type': 'container',
                             'backup_type': backup_type,
-                            'storage_location': 'local'
+                            'storage_location': 'local',
+                            'server_name': server_name
                         })
                     elif filename.startswith('network_') and filename.endswith('.json'):
                         backups.append({
@@ -114,7 +161,8 @@ class BackupFileManager:
                             'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
                             'type': 'network',
                             'backup_type': 'manual',
-                            'storage_location': 'local'
+                            'storage_location': 'local',
+                            'server_name': 'Unknown Server'  # Network backups don't have server name
                         })
             
             backups.sort(key=lambda x: x['created'], reverse=True)
@@ -168,13 +216,15 @@ class BackupFileManager:
         return None
     
     def delete_backup(self, filename: str, user: Optional[str] = None) -> Dict[str, Any]:
-        """Delete a backup file"""
+        """Delete a backup file and its companion JSON"""
         filename = os.path.basename(filename)
+        companion_json_filename = f"{filename}.json"
         
         # Check if S3 storage is enabled
         use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
         
         deleted = False
+        s3_manager = None
         
         if use_s3:
             # Delete from S3
@@ -191,6 +241,9 @@ class BackupFileManager:
                     delete_result = s3_manager.delete_file(filename)
                     if delete_result.get('success'):
                         deleted = True
+                        # Also delete companion JSON from S3
+                        if s3_manager.file_exists(companion_json_filename):
+                            s3_manager.delete_file(companion_json_filename)
             except Exception as e:
                 print(f"⚠️  Error deleting from S3: {e}")
         
@@ -200,6 +253,13 @@ class BackupFileManager:
             try:
                 os.remove(file_path)
                 deleted = True
+                # Also delete companion JSON locally
+                companion_json_path = os.path.join(self.backup_dir, companion_json_filename)
+                if os.path.exists(companion_json_path):
+                    try:
+                        os.remove(companion_json_path)
+                    except Exception as e:
+                        print(f"⚠️  Error deleting companion JSON {companion_json_filename}: {e}")
             except Exception as e:
                 if not deleted:
                     return {'error': f'Failed to delete backup: {str(e)}'}
@@ -248,14 +308,32 @@ class BackupFileManager:
                         s3_files = list_result.get('files', [])
                         for file_info in s3_files:
                             filename = file_info.get('key', '')  # Use 'key' not 'name'
-                            # Only delete backup files (tar.gz, zip, network JSON)
-                            if filename.endswith(('.tar.gz', '.zip')) or (filename.startswith('network_') and filename.endswith('.json')):
+                            # Only delete backup files (tar.gz, zip, network JSON) - skip companion JSON files
+                            if filename.endswith('.json') and not filename.startswith('network_'):
+                                # This is a companion JSON file - delete it
+                                try:
+                                    delete_result = s3_manager.delete_file(filename)
+                                    if delete_result.get('success'):
+                                        print(f"✅ Deleted companion JSON {filename} from S3")
+                                except Exception as e:
+                                    print(f"⚠️  Error deleting companion JSON {filename} from S3: {e}")
+                            elif filename.endswith(('.tar.gz', '.zip')) or (filename.startswith('network_') and filename.endswith('.json')):
                                 try:
                                     delete_result = s3_manager.delete_file(filename)
                                     if delete_result.get('success'):
                                         deleted_count += 1
                                         deleted_files.append(filename)
                                         print(f"✅ Deleted {filename} from S3")
+                                        
+                                        # Also delete companion JSON if it exists
+                                        if filename.endswith(('.tar.gz', '.zip')):
+                                            companion_json_filename = f"{filename}.json"
+                                            if s3_manager.file_exists(companion_json_filename):
+                                                try:
+                                                    s3_manager.delete_file(companion_json_filename)
+                                                    print(f"✅ Deleted companion JSON {companion_json_filename} from S3")
+                                                except Exception as e:
+                                                    print(f"⚠️  Error deleting companion JSON {companion_json_filename} from S3: {e}")
                                     else:
                                         print(f"⚠️  Failed to delete {filename} from S3: {delete_result.get('error', 'Unknown error')}")
                                 except Exception as e:
@@ -272,6 +350,10 @@ class BackupFileManager:
                 for filename in os.listdir(self.backup_dir):
                     file_path = os.path.join(self.backup_dir, filename)
                     if os.path.isfile(file_path):
+                        # Skip companion JSON files (they'll be deleted with their backup)
+                        if filename.endswith('.json') and not filename.startswith('network_'):
+                            continue
+                        
                         if filename.endswith(('.tar.gz', '.zip')) or (filename.startswith('network_') and filename.endswith('.json')):
                             try:
                                 os.remove(file_path)
@@ -279,6 +361,17 @@ class BackupFileManager:
                                 if filename not in deleted_files:
                                     deleted_count += 1
                                     deleted_files.append(filename)
+                                
+                                # Also delete companion JSON if it exists
+                                if filename.endswith(('.tar.gz', '.zip')):
+                                    companion_json_filename = f"{filename}.json"
+                                    companion_json_path = os.path.join(self.backup_dir, companion_json_filename)
+                                    if os.path.exists(companion_json_path):
+                                        try:
+                                            os.remove(companion_json_path)
+                                            print(f"✅ Deleted companion JSON {companion_json_filename}")
+                                        except Exception as e:
+                                            print(f"⚠️  Error deleting companion JSON {companion_json_filename}: {e}")
                             except Exception as e:
                                 print(f"⚠️  Error deleting local file {filename}: {e}")
             
@@ -333,6 +426,17 @@ class BackupFileManager:
             except Exception as e:
                 return {'error': f'Error processing backup: {str(e)}'}
             
+            # Get server name from metadata or current server settings
+            server_name = metadata.get('server_name')
+            if not server_name and self.ui_settings_manager:
+                server_name = self.ui_settings_manager.get_setting('server_name', 'Unknown Server')
+            if not server_name:
+                server_name = 'Unknown Server'
+            
+            # Create companion JSON file
+            companion_json_filename = f"{filename}.json"
+            companion_metadata = {'server_name': server_name}
+            
             # Check if S3 storage is enabled
             use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
             
@@ -351,6 +455,12 @@ class BackupFileManager:
                     if not upload_result.get('success'):
                         return {'error': f'S3 upload failed: {upload_result.get("error", "Unknown error")}'}
                     
+                    # Upload companion JSON to S3
+                    companion_json_bytes = json.dumps(companion_metadata, indent=2).encode('utf-8')
+                    companion_upload_result = s3_manager.upload_fileobj(io.BytesIO(companion_json_bytes), companion_json_filename)
+                    if companion_upload_result.get('success'):
+                        print(f"✅ Uploaded companion JSON to S3: {companion_json_filename}")
+                    
                     return {
                         'success': True,
                         'filename': filename,
@@ -364,6 +474,15 @@ class BackupFileManager:
                 file_path = os.path.join(self.backup_dir, filename)
                 with open(file_path, 'wb') as f:
                     f.write(file_content)
+                
+                # Create companion JSON file locally
+                companion_json_path = os.path.join(self.backup_dir, companion_json_filename)
+                try:
+                    with open(companion_json_path, 'w') as f:
+                        json.dump(companion_metadata, f, indent=2)
+                    print(f"✅ Created companion JSON: {companion_json_filename}")
+                except Exception as e:
+                    print(f"⚠️  Error creating companion JSON: {e}")
                 
                 return {
                     'success': True,

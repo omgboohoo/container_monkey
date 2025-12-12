@@ -465,6 +465,18 @@ class SchedulerManager:
                                 deleted_count += 1
                                 deleted_backups.append(backup_to_delete['filename'])
                                 print(f"🗑️  Deleted old scheduled backup: {backup_to_delete['filename']}")
+                                
+                                # Also delete companion JSON file if it exists
+                                filename = backup_to_delete['filename']
+                                if filename.endswith(('.tar.gz', '.zip')):
+                                    companion_json_filename = f"{filename}.json"
+                                    companion_json_path = os.path.join(self.backup_dir, companion_json_filename)
+                                    if os.path.exists(companion_json_path):
+                                        try:
+                                            os.remove(companion_json_path)
+                                            print(f"🗑️  Deleted companion JSON: {companion_json_filename}")
+                                        except Exception as e:
+                                            print(f"⚠️  Error deleting companion JSON {companion_json_filename}: {e}")
                         except Exception as e:
                             print(f"⚠️  Error deleting backup {backup_to_delete['filename']}: {e}")
             

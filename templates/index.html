@@ -27,13 +27,15 @@
         <!-- Top Bar - Full Width -->
         <div class="top-bar">
             <div class="top-bar-content">
-                <div class="top-bar-title-wrapper">
-                    <h1 class="top-bar-title">
-                        <i class="ph-fill ph-cube"></i>
-                        <span>Container Monkey</span>
-                    </h1>
+                <div class="top-bar-left">
+                    <div class="top-bar-title-wrapper">
+                        <h1 class="top-bar-title">
+                            <i class="ph-fill ph-cube"></i>
+                            <span>Container Monkey</span>
+                        </h1>
+                    </div>
                 </div>
-                <div class="top-bar-right">
+                <div class="top-bar-center">
                     <div class="top-bar-stats" id="top-bar-stats">
                         <div class="stat-item">
                             <i class="ph ph-cpu" style="font-size: 1em;"></i>
@@ -49,6 +51,12 @@
                             <i class="ph ph-clock" style="font-size: 1em;"></i>
                             <span class="stat-value" id="current-time">--</span>
                         </div>
+                    </div>
+                </div>
+                <div class="top-bar-right">
+                    <div id="server-name-display" class="server-name-panel" style="display: none; cursor: pointer;" onclick="showSettingsModal(); return false;" title="Click to edit server name">
+                        <i class="ph ph-server" style="margin-right: 8px; font-size: 1em;"></i>
+                        <span></span>
                     </div>
                     <div class="user-menu-container" id="user-menu-container" style="display: none;">
                         <div class="user-menu-trigger" onclick="toggleUserMenu()">
@@ -132,7 +140,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.5</span>
+                    v0.3.6</span>
             </div>
         </aside>
 
@@ -612,6 +620,10 @@
                                 <th class="sortable" data-sort="storage" onclick="sortBackups('storage')"
                                     style="cursor: pointer; user-select: none;">
                                     Storage <span class="sort-indicator" id="sort-backup-storage"></span>
+                                </th>
+                                <th class="sortable" data-sort="server" onclick="sortBackups('server')"
+                                    style="cursor: pointer; user-select: none;">
+                                    Server <span class="sort-indicator" id="sort-backup-server"></span>
                                 </th>
                                 <th class="sortable" data-sort="size" onclick="sortBackups('size')"
                                     style="cursor: pointer; user-select: none;">
@@ -1338,6 +1350,34 @@
                     <button type="button" class="btn btn-secondary btn-sm"
                         onclick="closeChangeUsernameModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary btn-sm">Change Username</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <span class="close" onclick="closeSettingsModal()">&times;</span>
+            <h2 style="margin-top: 0;">Server Name</h2>
+            <div id="settings-error" class="error" style="display: none; margin-bottom: 20px;"></div>
+            <div id="settings-success" class="success-message" style="display: none; margin-bottom: 20px;">
+                <h3>Success!</h3>
+                <p id="settings-success-message">Server name saved successfully.</p>
+            </div>
+            <form id="settings-form" onsubmit="saveSettings(event); return false;">
+                <div style="margin-bottom: 24px;">
+                    <input type="text" id="server-name"
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em; box-sizing: border-box;"
+                        placeholder="My Server Name">
+                    <p style="font-size: 0.85em; color: var(--text-secondary); margin-top: 8px; margin-bottom: 0;">
+                        This name will be displayed in the top bar.
+                    </p>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                        onclick="closeSettingsModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Save Server Name</button>
                 </div>
             </form>
         </div>

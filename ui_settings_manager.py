@@ -30,6 +30,12 @@ class UISettingsManager:
             Setting value or default
         """
         try:
+            import os
+            # Ensure database directory exists
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
@@ -45,10 +51,11 @@ class UISettingsManager:
             if row:
                 value = row[0]
                 # Convert string booleans to actual booleans
-                if value.lower() == 'true':
-                    return True
-                elif value.lower() == 'false':
-                    return False
+                if isinstance(value, str):
+                    if value.lower() == 'true':
+                        return True
+                    elif value.lower() == 'false':
+                        return False
                 return value
             
             return default
@@ -68,11 +75,20 @@ class UISettingsManager:
             Dict with success status
         """
         try:
+            import os
+            # Ensure database directory exists
+            db_dir = os.path.dirname(self.db_path)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
-            # Convert value to string
-            value_str = str(value).lower() if isinstance(value, bool) else str(value)
+            # Convert value to string (don't lowercase non-boolean values)
+            if isinstance(value, bool):
+                value_str = str(value).lower()
+            else:
+                value_str = str(value)
             
             # Check if setting exists
             cursor.execute('SELECT COUNT(*) FROM ui_settings WHERE setting_key = ?', (key,))

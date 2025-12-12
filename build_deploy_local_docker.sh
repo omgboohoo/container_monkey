@@ -16,7 +16,7 @@ echo "🧹 Cleaning up old container-monkey resources..."
 CONTAINER_NAME="container-monkey"
 IMAGE_NAME="container-monkey"
 VOLUME_NAME="container-monkey"
-PORT_MAPPING="666:80"
+PORT_MAPPING="1066:80"
 FLASK_PORT=80
 
 # Stop and remove existing container
@@ -76,7 +76,7 @@ echo ""
 echo "📊 Container status:"
 sudo docker ps --filter "name=$CONTAINER_NAME" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 echo ""
-echo "🌐 Access the web UI at: http://localhost:666"
+echo "🌐 Access the web UI at: http://localhost:1066"
 echo "📋 View logs: sudo docker logs -f $CONTAINER_NAME"
 echo "📦 Image saved to: container-monkey.tar"
 echo ""

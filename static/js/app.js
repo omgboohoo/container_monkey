@@ -165,6 +165,9 @@ async function handleLogin(event) {
             document.getElementById('user-menu-username').textContent = currentUsername;
             document.getElementById('login-form').reset();
 
+            // Load server name after login
+            await loadServerName();
+
             // Check if default credentials were used
             if (data.is_default_credentials) {
                 showDefaultCredentialsModal();
@@ -2125,11 +2128,16 @@ function createBackupRow(backup) {
         ? '<span style="color: #3b82f6; font-weight: 500;"><i class="ph ph-cloud" style="margin-right: 4px;"></i>S3</span>'
         : '<span style="color: var(--text-secondary);"><i class="ph ph-hard-drives" style="margin-right: 4px;"></i>Local</span>';
 
+    // Build server name display
+    const serverName = backup.server_name || 'Unknown Server';
+    const serverDisplay = `<span style="color: var(--text-primary);"><i class="ph ph-server" style="margin-right: 4px; color: var(--text-secondary);"></i>${escapeHtml(serverName)}</span>`;
+
     // Add data attributes for filtering
     tr.setAttribute('data-filename', backup.filename.toLowerCase());
     tr.setAttribute('data-type', backupType);
     tr.setAttribute('data-backup-type', backupTypeValue);
     tr.setAttribute('data-storage', storageLocation);
+    tr.setAttribute('data-server', serverName.toLowerCase());
     tr.setAttribute('data-size', backup.size.toString());
     tr.setAttribute('data-created', createdDate.toLowerCase());
 
@@ -2145,6 +2153,9 @@ function createBackupRow(backup) {
         </td>
         <td>
             ${storageDisplay}
+        </td>
+        <td>
+            ${serverDisplay}
         </td>
         <td>
             <div style="color: var(--text-secondary);">${sizeDisplay}</div>
@@ -2191,6 +2202,7 @@ function filterBackups() {
         const type = row.getAttribute('data-type') || '';
         const backupType = row.getAttribute('data-backup-type') || '';
         const storage = row.getAttribute('data-storage') || '';
+        const server = row.getAttribute('data-server') || '';
         const created = row.getAttribute('data-created') || '';
 
         // Check if search term matches any field
@@ -2198,6 +2210,7 @@ function filterBackups() {
             type.includes(searchTerm) ||
             backupType.includes(searchTerm) ||
             storage.includes(searchTerm) ||
+            server.includes(searchTerm) ||
             created.includes(searchTerm);
 
         if (matches) {
@@ -2212,7 +2225,7 @@ function filterBackups() {
     if (visibleCount === 0 && rows.length > 0) {
         const tr = document.createElement('tr');
         tr.setAttribute('data-no-results', 'true');
-        tr.innerHTML = '<td colspan="7" style="text-align: center; padding: 40px; color: #666;">No backups match your search</td>';
+        tr.innerHTML = '<td colspan="8" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups match your search</td>';
         backupsList.appendChild(tr);
     }
 }
@@ -2268,6 +2281,10 @@ function sortBackupsData(backups, column, direction) {
                 aVal = (a.storage_location || 'local').toLowerCase();
                 bVal = (b.storage_location || 'local').toLowerCase();
                 break;
+            case 'server':
+                aVal = (a.server_name || 'Unknown Server').toLowerCase();
+                bVal = (b.server_name || 'Unknown Server').toLowerCase();
+                break;
             case 'size':
                 aVal = a.size || 0;
                 bVal = b.size || 0;
@@ -2296,7 +2313,7 @@ function renderBackups(backups) {
     backupsList.innerHTML = '';
 
     if (backups.length === 0) {
-        backupsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No backups found</td></tr>';
+        backupsList.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups found</td></tr>';
     } else {
         backups.forEach(backup => {
             const row = createBackupRow(backup);
@@ -5624,6 +5641,11 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Check authentication status first and wait for it to complete
     await checkAuthStatus();
 
+    // Load server name only if user is authenticated
+    if (isAuthenticated) {
+        await loadServerName();
+    }
+
     // Start time display - always visible in top bar
     startTimeDisplay();
 
@@ -6938,4 +6960,169 @@ async function saveStorageSettings(storageType, bucket = '', region = '', access
         }
     }
 }
+
+// --- Settings Functions ---
+
+async function loadServerName() {
+    try {
+        const response = await apiRequest('/api/ui/settings/server_name');
+        const serverNameDisplay = document.getElementById('server-name-display');
+        if (!serverNameDisplay) return;
+
+        if (response.ok) {
+            const data = await response.json();
+            // Check if value is null, undefined, or empty - only then use default
+            let serverName = data.value;
+            if (serverName === null || serverName === undefined || serverName === '') {
+                serverName = 'My Server Name';
+            } else {
+                serverName = serverName.trim() || 'My Server Name';
+            }
+            
+            // Update only the text span, preserve the icon
+            const span = serverNameDisplay.querySelector('span');
+            if (span) {
+                span.textContent = serverName;
+            } else {
+                serverNameDisplay.textContent = serverName;
+            }
+            
+            // Show the panel
+            serverNameDisplay.style.display = 'flex';
+        } else {
+            // If error, use default and show
+            const span = serverNameDisplay.querySelector('span');
+            if (span) {
+                span.textContent = 'My Server Name';
+            } else {
+                serverNameDisplay.textContent = 'My Server Name';
+            }
+            serverNameDisplay.style.display = 'flex';
+        }
+    } catch (error) {
+        console.error('Error loading server name:', error);
+        // On error, show default
+        const serverNameDisplay = document.getElementById('server-name-display');
+        if (serverNameDisplay) {
+            const span = serverNameDisplay.querySelector('span');
+            if (span) {
+                span.textContent = 'My Server Name';
+            } else {
+                serverNameDisplay.textContent = 'My Server Name';
+            }
+            serverNameDisplay.style.display = 'flex';
+        }
+    }
+}
+
+function showSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (!modal) return;
+
+    // Hide error/success messages
+    document.getElementById('settings-error').style.display = 'none';
+    document.getElementById('settings-success').style.display = 'none';
+
+    // Load current settings
+    loadSettingsForm();
+
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+
+    // Focus and select all text in the input field
+    setTimeout(() => {
+        const serverNameInput = document.getElementById('server-name');
+        if (serverNameInput) {
+            serverNameInput.focus();
+            serverNameInput.select();
+        }
+    }, 100); // Small delay to ensure modal is fully rendered
+}
+
+function closeSettingsModal() {
+    const modal = document.getElementById('settings-modal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+}
+
+async function loadSettingsForm() {
+    try {
+        const response = await apiRequest('/api/ui/settings/server_name');
+        if (response.ok) {
+            const data = await response.json();
+            const serverNameInput = document.getElementById('server-name');
+            if (serverNameInput) {
+                serverNameInput.value = data.value || 'My Server Name';
+            }
+        } else {
+            // Use default if not set
+            const serverNameInput = document.getElementById('server-name');
+            if (serverNameInput) {
+                serverNameInput.value = 'My Server Name';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        // Use default on error
+        const serverNameInput = document.getElementById('server-name');
+        if (serverNameInput) {
+            serverNameInput.value = 'My Server Name';
+        }
+    }
+}
+
+async function saveSettings(event) {
+    event.preventDefault();
+
+    const serverName = document.getElementById('server-name').value.trim() || 'My Server Name';
+
+    // Hide previous messages
+    document.getElementById('settings-error').style.display = 'none';
+    document.getElementById('settings-success').style.display = 'none';
+
+    try {
+        const response = await apiRequest('/api/ui/settings/server_name', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                value: serverName
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save settings');
+        }
+
+        // Update display in top bar
+        await loadServerName();
+
+        // Show toast notification
+        showNotification('Server name saved successfully', 'success');
+
+        // Close modal immediately
+        closeSettingsModal();
+
+    } catch (error) {
+        console.error('Error saving settings:', error);
+        showNotification(`Error saving settings: ${error.message}`, 'error');
+    }
+}
+
+// Close settings modal when clicking outside (set up in DOMContentLoaded)
+document.addEventListener('DOMContentLoaded', function() {
+    const settingsModal = document.getElementById('settings-modal');
+    if (settingsModal) {
+        settingsModal.addEventListener('click', function(e) {
+            if (e.target === settingsModal) {
+                closeSettingsModal();
+            }
+        });
+    }
+});
 

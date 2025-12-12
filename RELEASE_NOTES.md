@@ -1,5 +1,69 @@
 # Release Notes
 
+## Version 0.3.6
+
+### New Features
+- **Server Name Management**: Server name configuration and display
+  - **Server Name Setting**: Customizable server name displayed in top bar right panel
+  - **Persistent Storage**: Settings saved to database and persist across container restarts
+  - **Default Value**: Server name defaults to "My Server Name" if not set
+  - **Top Bar Display**: Server name shown in styled panel on right side of top bar (after stats, before user menu)
+  - **Clickable Panel**: Clicking server name opens Server Name modal for quick editing
+  - **Server Name Modal**: Clean modal interface for managing server name (renamed from Settings modal)
+  - **Streamlined Access**: Removed Settings menu item from sidebar; access via server name panel only
+
+- **Multi-Server Backup Identification**: Server name tracking for shared S3 vaults
+  - **Server Name in Backups**: Every backup includes server name metadata for identification
+  - **Companion JSON Files**: Each backup has a companion `.tar.gz.json` file containing server name
+  - **Backup Vault Server Column**: New "Server" column in backup vault displays origin server name
+  - **Shared S3 Vault Support**: Enables multiple Container Monkey instances sharing the same S3 bucket to identify which server created each backup
+  - **Performance Optimized**: Server name read from lightweight JSON files instead of opening tar archives
+  - **Automatic Cleanup**: Companion JSON files automatically deleted when backups are deleted
+  - **Backward Compatible**: Old backups without server name metadata display "Unknown Server"
+  - **S3 Integration**: Companion JSON files uploaded/downloaded with backups in S3 storage
+  - **Upload Support**: Uploaded backups automatically get companion JSON files with server name from metadata or current server settings
+
+### UI Improvements
+- **Top Bar Layout Refinements**:
+  - **Server Name Panel**: Moved server name display to right side of top bar (after stats, before user menu)
+  - **Centered Stats**: CPU/RAM/time stats now centered in top bar for better visual balance
+  - **Three-Column Layout**: Logo (left), Stats (center), Server Name + User Menu (right)
+  - **Clickable Server Name**: Click server name panel to open Server Name modal for quick editing
+
+- **Server Name Modal**:
+  - **Simplified Interface**: Removed redundant "Server Name" label (title already indicates purpose)
+  - **Renamed from Settings**: Modal renamed from "Settings" to "Server Name" to reflect its sole purpose
+  - **Removed Sidebar Menu**: Settings menu item removed from sidebar (access via server name panel only)
+  - **Clean Input Focus**: Fixed corrupted border appearance when input field is active/focused
+
+- **Backup Vault Enhancements**:
+  - **Server Column**: New sortable "Server" column showing origin server for each backup
+  - **Server Search**: Server name included in backup vault search/filter functionality
+  - **Centered Empty State**: "No backups found" message now properly centered in grid
+
+- **Modal Input Fixes**: Improved input field focus states across all modals
+  - **Settings Modal**: Fixed corrupted border on server name input when focused
+  - **S3 Config Modal**: Fixed corrupted borders on all S3 configuration inputs (bucket, region, access key, secret key)
+  - **Proper Overflow Handling**: Form containers allow focus borders to display without clipping
+
+- **Dashboard Improvements**:
+  - **Panel Hover Fix**: Dashboard panel hover transform no longer gets cut off at top
+  - **Proper Overflow**: Added padding and overflow settings to prevent hover effects from being clipped
+
+- **Server Name Modal UX Improvements**:
+  - **Auto-Focus**: Input field automatically receives focus when modal opens
+  - **Select All Text**: All text in input field is automatically selected for easy replacement
+
+### Configuration Changes
+- **Default Port Update**: Changed default host port from 666 to 1066
+  - Updated in README.md, PRD.md, website/index.html, build_deploy_local_docker.sh, and docker.txt
+  - Container port remains 80; only host port mapping changed
+
+### Version Update
+- Updated version number to 0.3.6 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.5
 
 ### UI Improvements
