@@ -140,10 +140,10 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - Real-time system CPU/RAM stats in top bar
 - **Statistics Page**: Comprehensive container statistics view with background caching, refresh countdown, and manual refresh button
   - All containers displayed in a grid format
-  - Shows CPU %, RAM usage, Network I/O, Block I/O, and Last Refresh countdown for each container
+  - Shows CPU %, RAM usage, Network I/O, Block I/O, and Next Refresh countdown for each container
   - Status badges (running/stopped) matching container viewer styling
   - Background caching for instant page load (stats refresh every 5 minutes automatically)
-  - Last Refresh column shows countdown timer (5:00 to 0:00) indicating time until next automatic refresh
+  - Next Refresh column shows countdown timer (5:00 to 0:00) indicating time until next automatic refresh
   - Countdown updates every second in real-time
   - Manual refresh button (enabled by default, allows on-demand refresh)
   - No automatic refresh on page visit - users see cached data immediately and can refresh manually if needed
@@ -246,7 +246,7 @@ GET    /api/network-backups                     # List network backups (from S3 
 ```
 GET    /api/dashboard-stats                     # Get dashboard statistics
 GET    /api/system-stats                        # Get system CPU/RAM stats
-GET    /api/statistics                          # Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O, Last Refresh) - returns cached stats immediately
+GET    /api/statistics                          # Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O, Next Refresh) - returns cached stats immediately
 POST   /api/statistics/refresh                  # Trigger background refresh of statistics cache
 GET    /api/system-time                         # Get current system time
 GET    /api/check-environment                   # Check Docker environment

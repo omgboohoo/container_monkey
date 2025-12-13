@@ -11,7 +11,7 @@
   - **Incremental Updates**: Grid updates incrementally as new stats arrive, preserving existing data while refreshing
 
 ### Statistics Page Enhancements
-- **Last Refresh Column**: Added "Last Refresh" column showing countdown until next automatic refresh
+- **Next Refresh Column**: Added "Next Refresh" column showing countdown until next automatic refresh
   - **Countdown Display**: Shows countdown timer from 5:00 to 0:00 (MM:SS format) indicating time until next background refresh
   - **Real-Time Updates**: Countdown updates every second to show current time remaining
   - **Visual Feedback**: Users can see exactly when the next automatic refresh will occur
