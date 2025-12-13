@@ -2,6 +2,9 @@
 let isAuthenticated = false;
 let currentUsername = '';
 
+// Statistics loading abort controller
+let statisticsAbortController = null;
+
 // CSRF Token helper functions
 function getCsrfToken() {
     // Try to get from window (injected by template)
@@ -1534,6 +1537,7 @@ function closeAllModals() {
         'attach-console-modal',
         'logs-modal',
         'download-all-modal',
+        'delete-all-modal',
         'upload-progress-modal',
         'confirmation-modal',
         'change-password-modal',
@@ -1738,7 +1742,21 @@ async function loadStatistics() {
     const statisticsSpinner = document.getElementById('statistics-spinner');
     const statisticsWrapper = document.getElementById('statistics-table-wrapper');
 
+    // Cancel any pending request
+    if (statisticsAbortController) {
+        statisticsAbortController.abort();
+    }
+    
+    // Create new abort controller and store reference
+    const abortController = new AbortController();
+    statisticsAbortController = abortController;
+    
+    // Store timeout ID for cleanup
+    let timeoutId = null;
+
+    // Clear error message and hide error element
     errorEl.style.display = 'none';
+    errorEl.textContent = '';
     statisticsList.innerHTML = '';
 
     // Show spinner and prevent scrollbars
@@ -1749,31 +1767,104 @@ async function loadStatistics() {
     }
 
     try {
-        const response = await fetch('/api/statistics');
+        // Add timeout (60 seconds should be enough for most cases)
+        // Use stored reference to avoid null access
+        timeoutId = setTimeout(() => {
+            if (abortController && !abortController.signal.aborted) {
+                abortController.abort();
+            }
+        }, 60000);
+
+        const response = await fetch('/api/statistics', {
+            signal: abortController.signal
+        });
+        
+        // Clear timeout immediately after response
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+
+        // If fetch completed successfully, it wasn't aborted
+        // Aborted requests throw AbortError which is caught in the catch block
+        // No need to check abortController.signal.aborted - if we got here, fetch succeeded
+
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.error || 'Failed to load statistics');
+            throw new Error(data.error || `Failed to load statistics (${response.status})`);
         }
 
         if (!data.containers || data.containers.length === 0) {
             statisticsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No containers found</td></tr>';
         } else {
+            // Use DocumentFragment for efficient batch DOM operations
+            const fragment = document.createDocumentFragment();
             data.containers.forEach(container => {
                 const row = createStatisticsRow(container);
-                statisticsList.appendChild(row);
+                fragment.appendChild(row);
             });
+            // Single DOM operation - much faster than appending one by one
+            statisticsList.appendChild(fragment);
         }
 
+        // Hide spinner after DOM is updated - use double requestAnimationFrame to ensure rendering completes
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (statisticsSpinner) statisticsSpinner.style.display = 'none';
+                if (statisticsWrapper) {
+                    statisticsWrapper.style.overflow = '';
+                    statisticsWrapper.classList.remove('loading-grid');
+                }
+            });
+        });
+
     } catch (error) {
-        errorEl.textContent = `Error: ${error.message}`;
-        errorEl.style.display = 'block';
+        // Ignore errors if this request was cancelled (new request started)
+        if (statisticsAbortController !== abortController) {
+            // This request was cancelled, ignore the error
+            return;
+        }
+        
+        // Clear timeout if still active
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+        
+        // Handle abort/timeout specifically
+        if (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('cancelled')) {
+            // Only show error if this is still the current request
+            if (statisticsAbortController === abortController) {
+                errorEl.textContent = 'Request timed out. The statistics page may take a while with many containers. Please try again.';
+                errorEl.style.display = 'block';
+            }
+        } else {
+            // Handle other errors - only show if this is still the current request
+            if (statisticsAbortController === abortController) {
+                const errorMessage = error.message || error.toString() || 'Unknown error occurred';
+                errorEl.textContent = `Error: ${errorMessage}`;
+                errorEl.style.display = 'block';
+            }
+        }
+        
+        // Hide spinner on error (only if this is still the current request)
+        if (statisticsAbortController === abortController) {
+            if (statisticsSpinner) statisticsSpinner.style.display = 'none';
+            if (statisticsWrapper) {
+                statisticsWrapper.style.overflow = '';
+                statisticsWrapper.classList.remove('loading-grid');
+            }
+        }
     } finally {
-        // Hide spinner and restore overflow
-        if (statisticsSpinner) statisticsSpinner.style.display = 'none';
-        if (statisticsWrapper) {
-            statisticsWrapper.style.overflow = '';
-            statisticsWrapper.classList.remove('loading-grid');
+        // Clear timeout if still active (safety net)
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+        
+        // Only clear global reference if it's still our controller (not a new one)
+        if (statisticsAbortController === abortController) {
+            statisticsAbortController = null;
         }
     }
 }
@@ -2110,15 +2201,13 @@ function createBackupRow(backup) {
         ? '<span style="color: #f59e0b; font-weight: 500;"><i class="ph ph-clock-clockwise" style="margin-right: 4px;"></i>Scheduled</span>'
         : '<span style="color: var(--text-secondary);"><i class="ph ph-hand" style="margin-right: 4px;"></i>Manual</span>';
 
-    // Build actions column
+    // Build actions column (only restore button, download/delete handled by bulk actions)
     const actionsHtml = `
         <div class="btn-group" style="display: flex; gap: 4px; flex-wrap: nowrap;">
-            <a href="/api/download/${backup.filename}" class="btn btn-success btn-sm" title="Download backup"><i class="ph ph-download-simple"></i> Download</a>
             ${backupType === 'container'
             ? `<button class="btn btn-primary btn-sm" onclick="showRestoreModal('${escapeHtml(backup.filename)}')" title="Restore container backup"><i class="ph ph-upload-simple"></i> Restore</button>`
             : `<button class="btn btn-primary btn-sm" onclick="restoreNetworkBackup('${escapeHtml(backup.filename)}')" title="Restore network backup"><i class="ph ph-upload-simple"></i> Restore</button>`
         }
-            <button class="btn btn-danger btn-sm" onclick="deleteBackup('${escapeHtml(backup.filename)}')" title="Delete backup"><i class="ph ph-trash"></i> Delete</button>
         </div>
     `;
 
@@ -2142,6 +2231,9 @@ function createBackupRow(backup) {
     tr.setAttribute('data-created', createdDate.toLowerCase());
 
     tr.innerHTML = `
+        <td class="checkbox-cell" onclick="event.stopPropagation();">
+            <input type="checkbox" class="backup-checkbox" data-backup-filename="${escapeHtml(backup.filename)}" onclick="event.stopPropagation(); handleBackupCheckboxClick(this);">
+        </td>
         <td>
             <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(backup.filename)}</div>
         </td>
@@ -2168,6 +2260,9 @@ function createBackupRow(backup) {
         </td>
     `;
 
+    // Add click handler to toggle checkbox when row is clicked
+    tr.onclick = (event) => toggleBackupSelection(event, tr);
+
     return tr;
 }
 
@@ -2192,6 +2287,8 @@ function filterBackups() {
         rows.forEach(row => {
             row.style.display = '';
         });
+        updateBackupButtonStates();
+        updateSelectAllBackupCheckbox();
         return;
     }
 
@@ -2225,9 +2322,13 @@ function filterBackups() {
     if (visibleCount === 0 && rows.length > 0) {
         const tr = document.createElement('tr');
         tr.setAttribute('data-no-results', 'true');
-        tr.innerHTML = '<td colspan="8" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups match your search</td>';
+        tr.innerHTML = '<td colspan="9" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups match your search</td>';
         backupsList.appendChild(tr);
     }
+
+    // Update button states and select all checkbox after filtering
+    updateBackupButtonStates();
+    updateSelectAllBackupCheckbox();
 }
 
 // Sort backups
@@ -2313,7 +2414,7 @@ function renderBackups(backups) {
     backupsList.innerHTML = '';
 
     if (backups.length === 0) {
-        backupsList.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups found</td></tr>';
+        backupsList.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups found</td></tr>';
     } else {
         backups.forEach(backup => {
             const row = createBackupRow(backup);
@@ -2325,6 +2426,86 @@ function renderBackups(backups) {
     const searchInput = document.getElementById('backup-search-input');
     if (searchInput && searchInput.value.trim()) {
         filterBackups();
+    }
+
+    // Update button states after rendering
+    updateBackupButtonStates();
+}
+
+// Backup selection management functions
+function getSelectedBackups() {
+    const selectedCheckboxes = document.querySelectorAll('.backup-checkbox:checked');
+    return Array.from(selectedCheckboxes).map(cb => cb.dataset.backupFilename);
+}
+
+function handleBackupCheckboxClick(checkbox) {
+    updateBackupButtonStates();
+    updateSelectAllBackupCheckbox();
+}
+
+function toggleBackupSelection(event, row) {
+    // Don't toggle if clicking on a button or link
+    if (event.target.closest('button') || event.target.closest('a')) {
+        return;
+    }
+    const checkbox = row.querySelector('.backup-checkbox');
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        handleBackupCheckboxClick(checkbox);
+    }
+}
+
+function toggleSelectAllBackups(source) {
+    // Only select visible backups (respects filtering)
+    const allRows = document.querySelectorAll('.backup-row');
+    const visibleRows = Array.from(allRows).filter(row => row.style.display !== 'none');
+    const visibleCheckboxes = visibleRows
+        .map(row => row.querySelector('.backup-checkbox'))
+        .filter(cb => cb !== null);
+
+    visibleCheckboxes.forEach(cb => cb.checked = source.checked);
+    updateBackupButtonStates();
+}
+
+function updateSelectAllBackupCheckbox() {
+    const selectAllCheckbox = document.getElementById('select-all-backups');
+    if (!selectAllCheckbox) return;
+
+    const allRows = document.querySelectorAll('.backup-row');
+    const visibleRows = Array.from(allRows).filter(row => row.style.display !== 'none');
+    const visibleCheckboxes = visibleRows
+        .map(row => row.querySelector('.backup-checkbox'))
+        .filter(cb => cb !== null);
+
+    if (visibleCheckboxes.length === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+        return;
+    }
+
+    const checkedCount = visibleCheckboxes.filter(cb => cb.checked).length;
+    if (checkedCount === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    } else if (checkedCount === visibleCheckboxes.length) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+    } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+function updateBackupButtonStates() {
+    const selectedBackups = getSelectedBackups();
+    const downloadBtn = document.getElementById('download-backups-btn');
+    const deleteBtn = document.getElementById('delete-backups-btn');
+
+    if (downloadBtn) {
+        downloadBtn.disabled = selectedBackups.length === 0;
+    }
+    if (deleteBtn) {
+        deleteBtn.disabled = selectedBackups.length === 0;
     }
 }
 
@@ -2644,6 +2825,46 @@ function renderStacks(stacks) {
     }
 }
 
+// Global cancellation flag and current XHR for uploads
+let uploadCancelled = false;
+let currentUploadXHR = null;
+
+// Cancel upload function
+function cancelUploadAll() {
+    uploadCancelled = true;
+    if (currentUploadXHR) {
+        currentUploadXHR.abort();
+        currentUploadXHR = null;
+    }
+    
+    // Mark all unprocessed files as cancelled immediately
+    const listEl = document.getElementById('upload-progress-list');
+    if (listEl) {
+        const allItems = listEl.querySelectorAll('[id^="upload-item-"]');
+        allItems.forEach((itemEl) => {
+            const statusBadge = itemEl.querySelector('.status-badge');
+            if (statusBadge) {
+                const currentStatus = statusBadge.textContent.trim();
+                // Mark files that are still waiting or uploading as cancelled
+                if (currentStatus === 'Waiting...' || currentStatus.startsWith('Uploading...')) {
+                    statusBadge.textContent = 'Cancelled';
+                    statusBadge.className = 'status-badge skipped';
+                    itemEl.style.borderColor = 'var(--warning)';
+                }
+            }
+        });
+    }
+    
+    const statusEl = document.getElementById('upload-progress-status');
+    if (statusEl) {
+        statusEl.innerHTML = '❌ Upload cancelled by user';
+    }
+    const cancelBtn = document.getElementById('upload-progress-cancel-btn');
+    const closeBtn = document.getElementById('upload-progress-close-btn');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (closeBtn) closeBtn.style.display = 'block';
+}
+
 // Upload backup (handles both .tar.gz container backups and .json network backups)
 async function uploadBackup(event) {
     const files = event.target.files;
@@ -2655,9 +2876,15 @@ async function uploadBackup(event) {
     const statusEl = document.getElementById('upload-progress-status');
     const listEl = document.getElementById('upload-progress-list');
     const closeBtn = document.getElementById('upload-progress-close-btn');
+    const cancelBtn = document.getElementById('upload-progress-cancel-btn');
+
+    // Reset cancellation flag
+    uploadCancelled = false;
+    currentUploadXHR = null;
 
     modal.style.display = 'block';
     closeBtn.style.display = 'none';
+    cancelBtn.style.display = 'block';
     statusEl.innerHTML = `Starting upload for ${files.length} file(s)...`;
 
     // Create initial list items for each file
@@ -2677,14 +2904,35 @@ async function uploadBackup(event) {
     const jsonFilesToRestore = []; // Track JSON files that need restore prompt
 
     for (let i = 0; i < files.length; i++) {
+        // Check for cancellation
+        if (uploadCancelled) {
+            // Mark remaining files as cancelled
+            for (let j = i; j < files.length; j++) {
+                const cancelledItemEl = document.getElementById(`upload-item-${j}`);
+                if (cancelledItemEl) {
+                    const cancelledBadge = cancelledItemEl.querySelector('.status-badge');
+                    if (cancelledBadge) {
+                        cancelledBadge.textContent = 'Cancelled';
+                        cancelledBadge.className = 'status-badge skipped';
+                    }
+                    cancelledItemEl.style.borderColor = 'var(--warning)';
+                }
+            }
+            break;
+        }
+
         const file = files[i];
         const itemEl = document.getElementById(`upload-item-${i}`);
         const statusBadge = itemEl.querySelector('.status-badge');
 
+        // Update status with file info
+        const fileSize = file.size;
         statusEl.innerHTML = `Uploading file ${i + 1} of ${files.length}: <strong>${escapeHtml(file.name)}</strong>`;
         statusBadge.textContent = 'Uploading...';
         statusBadge.className = 'status-badge uploading';
         itemEl.style.borderColor = 'var(--secondary)';
+        // Scroll the active upload into view
+        itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         // Validate file type
         if (!file.name.endsWith('.tar.gz') && !file.name.endsWith('.json')) {
@@ -2726,29 +2974,164 @@ async function uploadBackup(event) {
         }
 
         try {
-            const response = await fetch('/api/upload-backup', {
-                method: 'POST',
-                body: formData
+            // Use XMLHttpRequest for upload progress tracking
+            const uploadPromise = new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                
+                // Store XHR for cancellation
+                currentUploadXHR = xhr;
+                
+                // Track upload progress
+                let uploadedBytes = 0;
+                const startTime = Date.now();
+                let lastUpdateTime = startTime;
+                let lastUploadedBytes = 0;
+                let currentSpeed = 0;
+                
+                // Update progress function
+                const updateProgress = () => {
+                    // Check for cancellation
+                    if (uploadCancelled) {
+                        xhr.abort();
+                        return;
+                    }
+                    
+                    const elapsed = (Date.now() - startTime) / 1000; // seconds
+                    const recentElapsed = (Date.now() - lastUpdateTime) / 1000;
+                    
+                    // Calculate speed based on recent progress
+                    if (recentElapsed > 0.1) { // Update speed every ~100ms
+                        currentSpeed = (uploadedBytes - lastUploadedBytes) / recentElapsed;
+                        lastUpdateTime = Date.now();
+                        lastUploadedBytes = uploadedBytes;
+                    }
+                    
+                    // Calculate average speed
+                    const avgSpeed = elapsed > 0 ? uploadedBytes / elapsed : 0;
+                    const speed = currentSpeed || avgSpeed;
+                    
+                    // Calculate percentage
+                    const percent = fileSize > 0 ? ((uploadedBytes / fileSize) * 100).toFixed(1) : 0;
+                    
+                    // Update status bar (no progress/speed since it's shown on each file item)
+                    statusEl.innerHTML = `Uploading file ${i + 1} of ${files.length}: <strong>${escapeHtml(file.name)}</strong>`;
+                    
+                    // Update file item badge
+                    statusBadge.textContent = `Uploading... ${percent}% - ${formatSpeed(speed)}`;
+                };
+                
+                // Upload progress event
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (e.lengthComputable) {
+                        uploadedBytes = e.loaded;
+                        updateProgress();
+                    }
+                });
+                
+                // Handle completion
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            const totalTime = (Date.now() - startTime) / 1000;
+                            const finalSpeed = totalTime > 0 ? uploadedBytes / totalTime : 0;
+                            
+                            resolve({
+                                ok: true,
+                                status: xhr.status,
+                                data: data,
+                                finalSpeed: finalSpeed
+                            });
+                        } catch (jsonError) {
+                            reject(new Error(`Failed to parse response: ${jsonError.message}`));
+                        }
+                    } else {
+                        // Handle error responses
+                        let errorMessage = `Upload failed with status ${xhr.status}`;
+                        try {
+                            const errorData = JSON.parse(xhr.responseText);
+                            errorMessage = errorData.error || errorMessage;
+                            
+                            // Handle CSRF errors - refresh page to get new token
+                            if (errorData.csrf_error) {
+                                console.error('CSRF token error - refreshing page');
+                                location.reload();
+                                return;
+                            }
+                        } catch (e) {
+                            // Not JSON, use default message
+                        }
+                        
+                        if (xhr.status === 429) {
+                            errorMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+                        }
+                        reject(new Error(errorMessage));
+                    }
+                });
+                
+                // Handle errors
+                xhr.addEventListener('error', () => {
+                    currentUploadXHR = null;
+                    if (uploadCancelled) {
+                        reject(new Error('Upload cancelled'));
+                    } else {
+                        reject(new Error('Network error during upload'));
+                    }
+                });
+                
+                xhr.addEventListener('abort', () => {
+                    currentUploadXHR = null;
+                    reject(new Error('Upload cancelled'));
+                });
+                
+                // Start upload
+                xhr.open('POST', '/api/upload-backup');
+                
+                // Add CSRF token header
+                const csrfToken = getCsrfToken();
+                if (csrfToken) {
+                    xhr.setRequestHeader('X-CSRFToken', csrfToken);
+                }
+                
+                xhr.send(formData);
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || `Upload failed`);
+            
+            // Clear XHR reference when promise resolves/rejects
+            uploadPromise.finally(() => {
+                currentUploadXHR = null;
+            });
+            
+            const result = await uploadPromise;
+            
+            if (!result.ok) {
+                if (result.status === 429) {
+                    throw new Error('Rate limit exceeded. Please wait a moment and try again.');
+                }
+                throw new Error(result.data?.error || `Upload failed`);
             }
+            
             successCount++;
-            statusBadge.textContent = 'Success';
+            statusBadge.textContent = `Success (${formatSpeed(result.finalSpeed)} avg)`;
             statusBadge.className = 'status-badge success';
             itemEl.style.borderColor = 'var(--accent)';
 
             // Track JSON files for restore prompt
             if (file.name.endsWith('.json')) {
                 jsonFilesToRestore.push({
-                    filename: data.filename || file.name,
+                    filename: result.data.filename || file.name,
                     networkName: networkName
                 });
             }
         } catch (error) {
+            // Check if error is due to cancellation
+            if (uploadCancelled || error.message === 'Upload cancelled' || error.message === 'Upload aborted') {
+                statusBadge.textContent = 'Cancelled';
+                statusBadge.className = 'status-badge skipped';
+                itemEl.style.borderColor = 'var(--warning)';
+                // Break out of loop if cancelled
+                break;
+            }
+            
             errorCount++;
             statusBadge.textContent = `Error: ${error.message}`;
             statusBadge.className = 'status-badge error';
@@ -2756,17 +3139,28 @@ async function uploadBackup(event) {
         }
     }
 
-    statusEl.innerHTML = `✅ Upload complete. ${successCount} succeeded, ${errorCount} failed.`;
+    // Final status
+    if (uploadCancelled) {
+        statusEl.innerHTML = `⏸️ Upload cancelled. ${successCount} succeeded, ${errorCount} failed.`;
+    } else {
+        statusEl.innerHTML = `✅ Upload complete. ${successCount} succeeded, ${errorCount} failed.`;
+    }
+    
+    if (cancelBtn) cancelBtn.style.display = 'none';
     closeBtn.style.display = 'block';
     event.target.value = ''; // Reset file input
-    loadBackups();
+    currentUploadXHR = null;
+    
+    // Only reload backups and prompt for restore if not cancelled
+    if (!uploadCancelled) {
+        loadBackups();
+        
+        // Prompt to restore network backups if any were uploaded
+        if (jsonFilesToRestore.length > 0) {
+            for (const jsonFile of jsonFilesToRestore) {
+                const networkName = jsonFile.networkName || 'unknown';
 
-    // Prompt to restore network backups if any were uploaded
-    if (jsonFilesToRestore.length > 0) {
-        for (const jsonFile of jsonFilesToRestore) {
-            const networkName = jsonFile.networkName || 'unknown';
-
-            showConfirmationModal(`Network backup uploaded. Restore network "${networkName}"?`, async () => {
+                showConfirmationModal(`Network backup uploaded. Restore network "${networkName}"?`, async () => {
                 const restoreResponse = await fetch('/api/network/restore', {
                     method: 'POST',
                     headers: {
@@ -2789,9 +3183,10 @@ async function uploadBackup(event) {
                     console.log(`Network restored: ${restoreData.network_name}`);
                 }
 
-                loadNetworks();
-                loadBackups(); // Refresh backup grid after restore too
-            });
+                    loadNetworks();
+                    loadBackups(); // Refresh backup grid after restore too
+                });
+            }
         }
     }
 }
@@ -3075,6 +3470,9 @@ window.onclick = function (event) {
     }
     if (event.target === document.getElementById('download-all-modal')) {
         closeDownloadAllModal();
+    }
+    if (event.target === document.getElementById('delete-all-modal')) {
+        closeDeleteAllModal();
     }
     if (event.target === document.getElementById('upload-progress-modal')) {
         closeUploadProgressModal();
@@ -3930,40 +4328,102 @@ async function deleteBackup(filename) {
     });
 }
 
-// Download all backups
+// Download selected backups - wrapper with confirmation
 async function downloadAllBackups() {
-    console.log('downloadAllBackups called');
+    const selectedBackups = getSelectedBackups();
+    
+    if (selectedBackups.length === 0) {
+        showNotification('Please select at least one backup to download.', 'warning');
+        return;
+    }
+
+    // Show confirmation
+    const warningMessage = `Download ${selectedBackups.length} selected backup file(s)?\n\nDo you want to proceed?`;
+    
+    showConfirmationModal(warningMessage, () => {
+        // User confirmed, proceed with download
+        downloadAllBackupsInternal(selectedBackups);
+    });
+}
+
+// Helper function to format bytes/speed
+function formatSpeed(bytesPerSecond) {
+    if (bytesPerSecond >= 1048576) { // >= 1 MB/s
+        return (bytesPerSecond / 1048576).toFixed(2) + ' MB/s';
+    } else if (bytesPerSecond >= 1024) { // >= 1 KB/s
+        return (bytesPerSecond / 1024).toFixed(2) + ' KB/s';
+    } else {
+        return bytesPerSecond.toFixed(0) + ' B/s';
+    }
+}
+
+// Helper function to format file size
+function formatFileSize(bytes) {
+    if (bytes >= 1073741824) { // >= 1 GB
+        return (bytes / 1073741824).toFixed(2) + ' GB';
+    } else if (bytes >= 1048576) { // >= 1 MB
+        return (bytes / 1048576).toFixed(2) + ' MB';
+    } else if (bytes >= 1024) { // >= 1 KB
+        return (bytes / 1024).toFixed(2) + ' KB';
+    } else {
+        return bytes + ' B';
+    }
+}
+
+// Global cancellation flag for downloads
+let downloadCancelled = false;
+let currentDownloadAbortController = null;
+
+// Cancel download function
+function cancelDownloadAll() {
+    downloadCancelled = true;
+    if (currentDownloadAbortController) {
+        currentDownloadAbortController.abort();
+        currentDownloadAbortController = null;
+    }
+    const statusEl = document.getElementById('download-all-status');
+    if (statusEl) {
+        statusEl.innerHTML = '❌ Download cancelled by user';
+    }
+    const cancelBtn = document.getElementById('download-all-cancel-btn');
+    const closeBtn = document.getElementById('download-all-close-btn');
+    if (cancelBtn) cancelBtn.style.display = 'none';
+    if (closeBtn) closeBtn.style.display = 'block';
+}
+
+// Download selected backups - internal function that performs the actual download
+async function downloadAllBackupsInternal(selectedFiles) {
+    console.log('downloadAllBackupsInternal called');
     const modal = document.getElementById('download-all-modal');
     const statusEl = document.getElementById('download-all-status');
     const listEl = document.getElementById('download-all-list');
     const closeBtn = document.getElementById('download-all-close-btn');
+    const cancelBtn = document.getElementById('download-all-cancel-btn');
 
-    if (!modal || !statusEl || !listEl || !closeBtn) {
-        console.error('Modal elements not found:', { modal, statusEl, listEl, closeBtn });
+    if (!modal || !statusEl || !listEl || !closeBtn || !cancelBtn) {
+        console.error('Modal elements not found:', { modal, statusEl, listEl, closeBtn, cancelBtn });
         console.error('Error: Modal elements not found. Please refresh the page.');
         return;
     }
 
+    // Reset cancellation flag
+    downloadCancelled = false;
+    currentDownloadAbortController = null;
+
     modal.style.display = 'block';
     closeBtn.style.display = 'none';
+    cancelBtn.style.display = 'block';
     statusEl.innerHTML = 'Preparing...';
     listEl.innerHTML = '<div style="text-align: center; color: var(--text-light);">Loading files...</div>';
 
     try {
-        // Step 1: Prepare and get file list
-        const prepareResponse = await fetch('/api/backups/download-all-prepare', {
-            method: 'POST'
-        });
+        // Use selected files directly instead of fetching all
+        const files = selectedFiles;
+        const total = files.length;
 
-        if (!prepareResponse.ok) {
-            const data = await prepareResponse.json();
-            throw new Error(data.error || 'Failed to prepare download');
+        if (!files || files.length === 0) {
+            throw new Error('No files to download');
         }
-
-        const prepareData = await prepareResponse.json();
-        const sessionId = prepareData.session_id;
-        const files = prepareData.files;
-        const total = prepareData.total;
 
         // Display file list
         listEl.innerHTML = files.map((filename, index) => {
@@ -3979,135 +4439,237 @@ async function downloadAllBackups() {
             `;
         }).join('');
 
-        statusEl.innerHTML = `Archiving ${total} file(s)...`;
+        statusEl.innerHTML = `Downloading ${total} file(s) sequentially...`;
 
-        // Step 2: Start archive creation
-        const createResponse = await fetch(`/api/backups/download-all-create/${sessionId}`, {
-            method: 'POST'
-        });
+        // Step 2: Download files sequentially, one at a time
+        let completed = 0;
+        let failed = 0;
 
-        if (!createResponse.ok) {
-            const data = await createResponse.json();
-            throw new Error(data.error || 'Failed to create archive');
+        for (let i = 0; i < files.length; i++) {
+            // Check for cancellation
+            if (downloadCancelled) {
+                // Mark remaining files as cancelled
+                for (let j = i; j < files.length; j++) {
+                    const cancelledFileEl = document.getElementById(`download-file-${j}`);
+                    if (cancelledFileEl) {
+                        cancelledFileEl.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: var(--text-primary);">${escapeHtml(files[j])}</strong>
+                                    <span style="color: var(--warning); font-size: 0.9em; margin-left: 10px;">⏸️ Cancelled</span>
+                                </div>
+                            </div>
+                        `;
+                        cancelledFileEl.style.borderLeftColor = 'var(--warning)';
+                    }
+                }
+                break;
+            }
+
+            const filename = files[i];
+            const fileEl = document.getElementById(`download-file-${i}`);
+            
+            // Update status to downloading
+            if (fileEl) {
+                fileEl.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                            <span style="color: var(--secondary); font-size: 0.9em; margin-left: 10px;">⬇️ Downloading...</span>
+                        </div>
+                    </div>
+                `;
+                fileEl.style.borderLeftColor = 'var(--secondary)';
+                // Scroll the active download into view
+                fileEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            statusEl.innerHTML = `Downloading ${i + 1} / ${total}: ${escapeHtml(filename)}`;
+
+            try {
+                // Download file using fetch to get full control with real-time speed tracking
+                const downloadUrl = `/api/download/${encodeURIComponent(filename)}`;
+                
+                // Create abort controller for this download
+                currentDownloadAbortController = new AbortController();
+                const response = await fetch(downloadUrl, {
+                    signal: currentDownloadAbortController.signal
+                });
+                if (!response.ok) {
+                    throw new Error(`Download failed: ${response.statusText}`);
+                }
+                
+                // Get content length if available
+                const contentLength = response.headers.get('content-length');
+                const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
+                
+                // Track download progress
+                let downloadedBytes = 0;
+                const startTime = Date.now();
+                let lastUpdateTime = startTime;
+                let lastDownloadedBytes = 0;
+                let currentSpeed = 0;
+                
+                // Update UI function
+                const updateProgress = () => {
+                    const elapsed = (Date.now() - startTime) / 1000; // seconds
+                    const recentElapsed = (Date.now() - lastUpdateTime) / 1000;
+                    
+                    // Calculate speed based on recent progress (last second)
+                    if (recentElapsed > 0.1) { // Update speed every ~100ms
+                        currentSpeed = (downloadedBytes - lastDownloadedBytes) / recentElapsed;
+                        lastUpdateTime = Date.now();
+                        lastDownloadedBytes = downloadedBytes;
+                    }
+                    
+                    // Calculate average speed
+                    const avgSpeed = elapsed > 0 ? downloadedBytes / elapsed : 0;
+                    
+                    // Build status text
+                    let statusText = `Downloading ${i + 1} / ${total}: ${escapeHtml(filename)}`;
+                    if (totalBytes) {
+                        const percent = ((downloadedBytes / totalBytes) * 100).toFixed(1);
+                        statusText += ` (${percent}% - ${formatFileSize(downloadedBytes)} / ${formatFileSize(totalBytes)})`;
+                    } else {
+                        statusText += ` (${formatFileSize(downloadedBytes)})`;
+                    }
+                    statusText += ` - ${formatSpeed(currentSpeed || avgSpeed)}`;
+                    statusEl.innerHTML = statusText;
+                    
+                    // Update file element
+                    if (fileEl) {
+                        let progressText = '⬇️ Downloading...';
+                        if (totalBytes) {
+                            const percent = ((downloadedBytes / totalBytes) * 100).toFixed(0);
+                            progressText += ` ${percent}%`;
+                        }
+                        progressText += ` - ${formatSpeed(currentSpeed || avgSpeed)}`;
+                        
+                        fileEl.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                                    <span style="color: var(--secondary); font-size: 0.9em; margin-left: 10px;">${progressText}</span>
+                                </div>
+                            </div>
+                        `;
+                    }
+                };
+                
+                // Read the stream chunk by chunk to track progress
+                const reader = response.body.getReader();
+                const chunks = [];
+                
+                try {
+                    while (true) {
+                        // Check for cancellation
+                        if (downloadCancelled) {
+                            reader.cancel();
+                            throw new Error('Download cancelled');
+                        }
+                        
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        chunks.push(value);
+                        downloadedBytes += value.length;
+                        
+                        // Update UI every chunk
+                        updateProgress();
+                    }
+                } catch (readError) {
+                    // If cancelled, don't process the blob
+                    if (downloadCancelled || readError.name === 'AbortError') {
+                        throw new Error('Download cancelled');
+                    }
+                    throw readError;
+                }
+                
+                // Combine chunks into blob
+                const blob = new Blob(chunks);
+                
+                // Final speed calculation
+                const totalTime = (Date.now() - startTime) / 1000;
+                const finalSpeed = totalTime > 0 ? downloadedBytes / totalTime : 0;
+                
+                // Now trigger the browser download with the blob
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = blobUrl;
+                a.setAttribute('download', filename);
+                document.body.appendChild(a);
+                a.click();
+                
+                // Clean up: remove element and revoke blob URL after a short delay
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(blobUrl);
+                }, 100);
+
+                // Mark as completed
+                completed++;
+                if (fileEl) {
+                    fileEl.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                                <span style="color: var(--accent); font-size: 0.9em; margin-left: 10px;">✅ Downloaded (${formatSpeed(finalSpeed)} avg)</span>
+                            </div>
+                        </div>
+                    `;
+                    fileEl.style.borderLeftColor = 'var(--accent)';
+                }
+
+                // No fixed delay needed - fetch() ensures file is complete before triggering download
+                // Chrome can process blob downloads sequentially without being overwhelmed
+
+            } catch (error) {
+                // Check if error is due to cancellation
+                if (downloadCancelled || error.name === 'AbortError' || error.message === 'Download cancelled') {
+                    if (fileEl) {
+                        fileEl.innerHTML = `
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                                    <span style="color: var(--warning); font-size: 0.9em; margin-left: 10px;">⏸️ Cancelled</span>
+                                </div>
+                            </div>
+                        `;
+                        fileEl.style.borderLeftColor = 'var(--warning)';
+                    }
+                    // Break out of loop if cancelled
+                    break;
+                }
+                
+                console.error(`Error downloading ${filename}:`, error);
+                failed++;
+                if (fileEl) {
+                    fileEl.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                                <span style="color: var(--danger); font-size: 0.9em; margin-left: 10px;">❌ Failed</span>
+                            </div>
+                        </div>
+                    `;
+                    fileEl.style.borderLeftColor = 'var(--danger)';
+                }
+            }
         }
 
-        // Flag to prevent multiple downloads
-        let downloadTriggered = false;
-
-        // Step 3: Poll for progress
-        const progressInterval = setInterval(async () => {
-            try {
-                const progressResponse = await fetch(`/api/backups/download-all-progress/${sessionId}`);
-                if (!progressResponse.ok) {
-                    clearInterval(progressInterval);
-                    return;
-                }
-
-                let progress;
-                try {
-                    progress = await progressResponse.json();
-                } catch (jsonError) {
-                    console.error('Failed to parse progress JSON:', jsonError);
-                    clearInterval(progressInterval);
-                    return;
-                }
-
-                // Update status
-                if (progress.status === 'archiving') {
-                    statusEl.innerHTML = `Archiving: ${progress.completed} / ${progress.total} files`;
-
-                    // Update current file
-                    if (progress.current_file) {
-                        const fileIndex = files.indexOf(progress.current_file);
-                        if (fileIndex >= 0) {
-                            const fileEl = document.getElementById(`download-file-${fileIndex}`);
-                            if (fileEl) {
-                                fileEl.innerHTML = `
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <strong style="color: var(--text-primary);">${escapeHtml(progress.current_file)}</strong>
-                                            <span style="color: var(--secondary); font-size: 0.9em; margin-left: 10px;">⏳ Archiving...</span>
-                                        </div>
-                                    </div>
-                                `;
-                                fileEl.style.borderLeftColor = 'var(--secondary)';
-                            }
-                        }
-                    }
-
-                    // Update completed files
-                    for (let i = 0; i < progress.completed; i++) {
-                        const fileEl = document.getElementById(`download-file-${i}`);
-                        if (fileEl && files[i] !== progress.current_file) {
-                            fileEl.innerHTML = `
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <strong style="color: var(--text-primary);">${escapeHtml(files[i])}</strong>
-                                        <span style="color: var(--accent); font-size: 0.9em; margin-left: 10px;">✅ Added</span>
-                                    </div>
-                                </div>
-                            `;
-                            fileEl.style.borderLeftColor = 'var(--accent)';
-                        }
-                    }
-                } else if (progress.status === 'complete') {
-                    // Clear interval first to prevent race conditions
-                    clearInterval(progressInterval);
-
-                    // Prevent multiple downloads
-                    if (downloadTriggered) {
-                        return;
-                    }
-                    downloadTriggered = true;
-
-                    // Update all files as completed
-                    files.forEach((filename, index) => {
-                        const fileEl = document.getElementById(`download-file-${index}`);
-                        if (fileEl) {
-                            fileEl.innerHTML = `
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
-                                        <span style="color: var(--accent); font-size: 0.9em; margin-left: 10px;">✅ Added</span>
-                                    </div>
-                                </div>
-                            `;
-                            fileEl.style.borderLeftColor = 'var(--accent)';
-                        }
-                    });
-
-                    statusEl.innerHTML = '✅ Archive file created! Starting download...';
-
-                    // Step 4: Download the file
-                    const downloadUrl = `/api/backups/download-all/${sessionId}`;
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = downloadUrl;
-                    a.setAttribute('download', progress.archive_filename || 'all_backups.tar.gz');
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-
-                    statusEl.innerHTML = '✅ Download complete!';
-                    closeBtn.style.display = 'block';
-                } else if (progress.status === 'error') {
-                    clearInterval(progressInterval);
-                    throw new Error('Failed to create archive file');
-                }
-            } catch (error) {
-                clearInterval(progressInterval);
-                console.error('Progress polling error:', error);
-            }
-        }, 200); // Poll every 200ms
-
-        // Timeout after 30 minutes (for large archives)
-        setTimeout(() => {
-            clearInterval(progressInterval);
-            if (!downloadTriggered) {
-                statusEl.innerHTML = '❌ Archive creation timed out (30 minutes). Please try again with fewer files.';
-                closeBtn.style.display = 'block';
-            }
-        }, 1800000); // 30 minutes
+        // Final status
+        if (downloadCancelled) {
+            statusEl.innerHTML = `⏸️ Download cancelled. ${completed} file(s) downloaded, ${failed} failed`;
+        } else if (failed === 0) {
+            statusEl.innerHTML = `✅ Successfully downloaded ${completed} file(s)!`;
+        } else {
+            statusEl.innerHTML = `⚠️ Completed: ${completed} file(s) downloaded, ${failed} failed`;
+        }
+        
+        cancelBtn.style.display = 'none';
+        closeBtn.style.display = 'block';
+        currentDownloadAbortController = null;
 
     } catch (error) {
         statusEl.innerHTML = `❌ Error: ${escapeHtml(error.message)}`;
@@ -4120,29 +4682,162 @@ function closeDownloadAllModal() {
     document.getElementById('download-all-modal').style.display = 'none';
 }
 
-// Delete all backups
+// Delete selected backups
 async function deleteAllBackups() {
-    showConfirmationModal('Are you sure you want to DELETE ALL BACKUPS?\n\nThis will permanently remove ALL backup files (containers and networks).\n\nThis action CANNOT be undone!', () => {
-        showConfirmationModal('Please confirm again: DELETE ALL BACKUPS?', async () => {
+    const selectedBackups = getSelectedBackups();
+    
+    if (selectedBackups.length === 0) {
+        showNotification('Please select at least one backup to delete.', 'warning');
+        return;
+    }
+
+    const confirmMessage = selectedBackups.length === 1
+        ? `Delete backup "${selectedBackups[0]}"?\n\nThis action cannot be undone.`
+        : `Delete ${selectedBackups.length} selected backups?\n\nThis will permanently remove the selected backup files.\n\nThis action CANNOT be undone!`;
+
+    showConfirmationModal(confirmMessage, async () => {
+        // User confirmed, proceed with deletion with progress modal
+        deleteAllBackupsInternal(selectedBackups);
+    });
+}
+
+// Delete selected backups - internal function that performs the actual deletion with progress
+async function deleteAllBackupsInternal(selectedBackups) {
+    const modal = document.getElementById('delete-all-modal');
+    const statusEl = document.getElementById('delete-all-status');
+    const listEl = document.getElementById('delete-all-list');
+    const closeBtn = document.getElementById('delete-all-close-btn');
+
+    if (!modal || !statusEl || !listEl || !closeBtn) {
+        console.error('Modal elements not found:', { modal, statusEl, listEl, closeBtn });
+        console.error('Error: Modal elements not found. Please refresh the page.');
+        return;
+    }
+
+    modal.style.display = 'block';
+    closeBtn.style.display = 'none';
+    statusEl.innerHTML = 'Preparing...';
+    listEl.innerHTML = '<div style="text-align: center; color: var(--text-light);">Loading files...</div>';
+
+    try {
+        const files = selectedBackups;
+        const total = files.length;
+
+        if (!files || files.length === 0) {
+            throw new Error('No files to delete');
+        }
+
+        // Display file list
+        listEl.innerHTML = files.map((filename, index) => {
+            return `
+                <div id="delete-file-${index}" style="padding: 10px; margin-bottom: 8px; background: var(--bg-card); border-radius: 4px; border-left: 4px solid var(--border); border: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                            <span style="color: var(--text-light); font-size: 0.9em; margin-left: 10px;">⏳ Waiting...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        statusEl.innerHTML = `Deleting ${total} backup file(s)...`;
+
+        // Delete files sequentially, one at a time
+        let completed = 0;
+        let failed = 0;
+
+        for (let i = 0; i < files.length; i++) {
+            const filename = files[i];
+            const fileEl = document.getElementById(`delete-file-${i}`);
+            
+            // Update status to deleting
+            if (fileEl) {
+                fileEl.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                            <span style="color: var(--secondary); font-size: 0.9em; margin-left: 10px;">🗑️ Deleting...</span>
+                        </div>
+                    </div>
+                `;
+                fileEl.style.borderLeftColor = 'var(--secondary)';
+                // Scroll the active deletion into view
+                fileEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            statusEl.innerHTML = `Deleting ${i + 1} / ${total}: ${escapeHtml(filename)}`;
 
             try {
-                const response = await fetch('/api/backups/delete-all', {
+                const response = await fetch(`/api/backup/${encodeURIComponent(filename)}`, {
                     method: 'DELETE',
                 });
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to delete all backups');
+                    throw new Error(data.error || 'Failed to delete backup');
                 }
 
-                showNotification('All backups deleted successfully', 'success');
-                loadBackups();
+                // Mark as completed
+                completed++;
+                if (fileEl) {
+                    fileEl.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                                <span style="color: var(--accent); font-size: 0.9em; margin-left: 10px;">✅ Deleted</span>
+                            </div>
+                        </div>
+                    `;
+                    fileEl.style.borderLeftColor = 'var(--accent)';
+                }
+
+                // Small delay between deletions
+                await new Promise(resolve => setTimeout(resolve, 200));
+
             } catch (error) {
-                console.error(`Error deleting all backups: ${error.message}`);
-                showNotification(`Error deleting all backups: ${error.message}`, 'error');
+                console.error(`Error deleting ${filename}:`, error);
+                failed++;
+                if (fileEl) {
+                    fileEl.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
+                                <span style="color: var(--danger); font-size: 0.9em; margin-left: 10px;">❌ Failed</span>
+                            </div>
+                        </div>
+                    `;
+                    fileEl.style.borderLeftColor = 'var(--danger)';
+                }
             }
-        });
-    });
+        }
+
+        // Final status
+        if (failed === 0) {
+            statusEl.innerHTML = `✅ Successfully deleted ${completed} backup file(s)!`;
+        } else {
+            statusEl.innerHTML = `⚠️ Completed: ${completed} backup(s) deleted, ${failed} failed`;
+        }
+        
+        closeBtn.style.display = 'block';
+
+        // Clear selection
+        document.querySelectorAll('.backup-checkbox:checked').forEach(cb => cb.checked = false);
+        updateBackupButtonStates();
+        updateSelectAllBackupCheckbox();
+        
+        // Reload backups list
+        loadBackups();
+
+    } catch (error) {
+        statusEl.innerHTML = `❌ Error: ${escapeHtml(error.message)}`;
+        listEl.innerHTML = '';
+        closeBtn.style.display = 'block';
+    }
+}
+
+function closeDeleteAllModal() {
+    document.getElementById('delete-all-modal').style.display = 'none';
 }
 
 // Logs Modal Functions
@@ -5861,6 +6556,8 @@ async function backupSelectedContainers() {
                 </div>
             `;
             itemEl.style.borderLeftColor = 'var(--secondary)';
+            // Scroll the active backup into view
+            itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
             // Update overall status *before* starting the backup for the current container
             statusEl.innerHTML = `<span>Processing container ${i + 1} of ${totalContainers}...</span>`;
@@ -5967,6 +6664,8 @@ async function backupSelectedContainers() {
                                             statusSpan.textContent = '⏳ Backing up...';
                                             statusSpan.style.color = 'var(--secondary)';
                                         }
+                                        // Scroll the active backup into view when it starts
+                                        itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                     }
                                 }
 
@@ -6537,54 +7236,6 @@ function updateSchedulerStatus() {
     }
 }
 
-async function forceBackup() {
-    const btn = document.getElementById('force-backup-btn');
-    if (!btn) return;
-
-    // Check if scheduler is enabled
-    if (!schedulerConfig || !schedulerConfig.enabled || !schedulerConfig.selected_containers || schedulerConfig.selected_containers.length === 0) {
-        showNotification('Scheduler is disabled. Please select at least one container to backup.', 'warning');
-        return;
-    }
-
-    // Disable button and show loading state
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i class="ph ph-spinner" style="animation: spin 1s linear infinite;"></i> Running...';
-
-    try {
-        const response = await fetch('/api/scheduler/test', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to trigger backup');
-        }
-
-        const containerCount = schedulerConfig.selected_containers.length;
-        showNotification(`Force backup triggered for ${containerCount} container(s). Backups are running in the background.`, 'success');
-
-        // Optionally refresh the backup list after a short delay
-        setTimeout(() => {
-            if (currentSection === 'backup-vault-section') {
-                loadBackups();
-            }
-        }, 2000);
-
-    } catch (error) {
-        console.error('Error triggering force backup:', error);
-        showNotification(`Failed to trigger backup: ${error.message}`, 'error');
-    } finally {
-        // Re-enable button
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-    }
-}
 
 // Debounce timer for auto-save
 let schedulerAutoSaveTimer = null;

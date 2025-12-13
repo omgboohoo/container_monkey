@@ -591,6 +591,7 @@ def delete_all_backups():
     return jsonify(result)
 
 @app.route('/api/upload-backup', methods=['POST'])
+@limiter.exempt  # Exempt from rate limiting - authenticated bulk operation
 def upload_backup():
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400

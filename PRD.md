@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.6**
+**Version 0.3.7**
 
 ## Overview
 
@@ -67,10 +67,21 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - Restore with port override and volume overwrite options
 - Backup download/upload (single and bulk)
 - Bulk backup operations with queue management
+- **Backup Vault Checkbox Selection**: Checkbox-based selection system for bulk operations
+  - Checkbox column with "Select All" functionality
+  - Row selection by clicking backup rows
+  - Download and Delete buttons work with selected backups only
+  - Buttons disabled by default, enabled when backups are selected
+  - Individual Download/Delete buttons removed from rows (Restore button kept)
 - **Backup Type Tracking**: Backups tagged as Manual or Scheduled in backup vault
 - **Storage Location Tracking**: Backup vault shows storage location (Local or S3) for each backup
 - **Backup Vault Search Filter**: Real-time search filter to quickly find backups by filename, type, backup type, storage location, server name, or creation date
 - **Sortable Backup Columns**: All backup vault columns are sortable (Filename, Type, Backup Type, Storage, Server, Size, Created) with visual sort indicators
+- **Sequential Bulk Downloads**: Bulk download downloads files sequentially one at a time (not as single archive)
+  - Real-time progress tracking with speed indicators for each file
+  - Progress modal with auto-scroll to active download
+  - Cancel functionality to stop downloads in progress
+  - Better for large vaults on cloud servers
 - **Multi-Server Backup Identification**: Server name tracking for shared S3 vaults
   - Customizable server name setting displayed in top bar
   - Server name included in every backup as metadata
@@ -102,7 +113,6 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - Real-time system clock display on scheduler page
   - Scheduler enabled when one or more containers are selected
   - Works seamlessly with both local and S3 storage
-  - Force Backup button: Trigger scheduled backups immediately, runs in background
 
 ### Volume Management
 - Volume listing and exploration
@@ -121,11 +131,6 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - Network deletion (automatically disabled when networks have containers)
 - View Containers button filters container view to show containers using selected network
 
-### Network Management
-- Network listing
-- Network backup/restore
-- Network deletion
-
 ### Stack Management
 - Stack listing (Docker Swarm stacks and Compose-based stacks)
 - Stack deletion
@@ -138,8 +143,13 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - Shows CPU %, RAM usage, Network I/O, and Block I/O for each container
   - Status badges (running/stopped) matching container viewer styling
   - Auto-refreshes when visiting the page
-  - Manual refresh button for on-demand updates
-  - Stats polling for running containers (5-second intervals)
+  - Request timeout protection: 60-second timeout prevents indefinite waiting
+  - Request cancellation: Prevents duplicate requests by canceling previous requests
+  - Race condition protection: Uses local abort controller reference to prevent null access errors
+  - Proper timeout cleanup: Timeout cleared in multiple places to prevent race conditions
+  - Accurate timeout detection: Only shows timeout errors for actual timeouts, not successful requests
+  - Enhanced error handling: Clear error messages for timeout, network, and abort scenarios
+  - Prevents stuck spinner: Loading spinner always hidden even if request fails
 
 ### Backup Audit Log
 - View audit logs for all backup-related operations
@@ -176,10 +186,10 @@ POST   /api/restore-backup                      # Restore backup (downloads from
 DELETE /api/backup/<filename>                   # Delete backup (from S3 or local)
 GET    /api/download/<filename>                 # Download backup file (from S3 or local)
 POST   /api/upload-backup                       # Upload backup file (to S3 or local) - accepts both .tar.gz container backups and .json network backups
-POST   /api/backups/download-all-prepare        # Prepare bulk download (includes S3 backups)
+POST   /api/backups/download-all-prepare        # Prepare bulk download session (includes S3 backups)
 GET    /api/backups/download-all-progress/<id>  # Get bulk download progress
-POST   /api/backups/download-all-create/<id>    # Create bulk archive (downloads S3 backups to temp)
-GET    /api/backups/download-all/<id>           # Download bulk archive
+POST   /api/backups/download-all-create/<id>    # Create download session (downloads S3 backups to temp if needed)
+GET    /api/backups/download-all/<id>           # Download individual file from bulk download (sequential downloads, not archive)
 DELETE /api/backups/delete-all                  # Delete all backups (from S3 and local)
 GET    /api/backup-progress/<progress_id>       # Get backup progress (exempt from rate limiting)
 GET    /api/backup/status                       # Get backup status (includes queue size)
@@ -259,6 +269,7 @@ DELETE /api/audit-logs/clear                    # Clear all audit logs
 
 ### UI Settings Endpoints
 ```
+GET    /api/ui/settings                         # Get all UI settings
 GET    /api/ui/settings/<key>                   # Get UI setting value (e.g., server_name)
 POST   /api/ui/settings/<key>                   # Set UI setting value (e.g., server_name)
 ```

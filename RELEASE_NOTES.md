@@ -1,5 +1,83 @@
 # Release Notes
 
+## Version 0.3.7
+
+### New Features
+- **Backup Vault Checkbox Selection**: Added checkbox-based selection system to backup vault
+  - **Checkbox Column**: Added checkbox column header with "Select All" functionality
+  - **Row Selection**: Clicking on a backup row toggles its checkbox
+  - **Bulk Operations**: Download and Delete buttons now work with selected backups only
+  - **Button States**: Download and Delete buttons are disabled by default and enable when backups are selected
+  - **Consistent UX**: Matches the selection pattern used in other grids (containers, volumes, images, etc.)
+
+### UI Improvements
+- **Backup Vault Enhancements**:
+  - **Removed Individual Actions**: Removed individual Download and Delete buttons from each backup row (kept Restore button)
+  - **Renamed Bulk Actions**: Changed "Download All" to "Download" and "Delete All" to "Delete"
+  - **Column Width Optimization**: Created and Actions columns auto-size to smallest possible width, Filename column expands to take remaining space
+  - **Selection Management**: Added selection state management with visual feedback
+
+- **Download All Improvements**:
+  - **Sequential Downloads**: Changed from creating a single archive to downloading files sequentially, one at a time
+  - **Better for Large Vaults**: More practical for large vaults on cloud servers - no large archive file creation
+  - **Progress Tracking**: Modal list automatically scrolls to follow the active download
+  - **Fetch-Based Downloads**: Uses fetch() API with blob downloads for better control and reliability
+  - **Real-Time Speed Tracking**: Shows download speed (KB/s or MB/s) updating in real-time for each file
+  - **Progress Display**: Shows percentage, bytes downloaded, and current/average speed for each file
+  - **Cancel Functionality**: Added cancel button to stop downloads in progress
+  - **Wider Modal**: Increased download modal width by 50% (from 700px to 1050px) for better visibility
+  - **Confirmation Dialog**: Added confirmation dialog before starting downloads with count of selected files
+
+- **Delete Progress Modal**:
+  - **Visual Feedback**: Progress modal shows real-time deletion progress when deleting multiple backups
+  - **Status Tracking**: Each backup shows status (Waiting → Deleting → Deleted/Failed) with color-coded indicators
+  - **Auto-Scroll**: Modal list automatically scrolls to follow the active deletion
+  - **Progress Summary**: Final summary displays success/failure counts
+  - **Better UX**: Provides clear feedback during bulk deletion operations instead of silent background processing
+
+- **Backup Container Modal**:
+  - **Auto-Scroll**: Modal list automatically scrolls to follow the active backup being processed
+  - **Better Visibility**: Makes it easier to track progress in long lists of containers
+
+- **Upload Progress Modal**:
+  - **Auto-Scroll**: Modal list automatically scrolls to follow the active upload being processed
+  - **Real-Time Speed Tracking**: Shows upload speed (KB/s or MB/s) updating in real-time for each file
+  - **Progress Display**: Shows percentage, bytes uploaded, and current/average speed for each file
+  - **Cancel Functionality**: Added cancel button to stop uploads in progress
+  - **Wider Modal**: Increased upload modal width by 50% (from 700px to 1050px) for better visibility
+  - **Simplified Status Bar**: Removed redundant speed/progress from status bar (shown on individual file items)
+  - **Consistent UX**: Matches the auto-scroll behavior of download and delete progress modals
+
+### Bug Fixes
+- **Statistics Page Timeout Issues**: Fixed statistics page failing to display data after long waits and false timeout errors
+  - **Request Timeout**: Added 60-second timeout to prevent indefinite waiting for statistics data
+  - **Request Cancellation**: Prevents duplicate requests by canceling previous requests when page is reloaded
+  - **Race Condition Fix**: Fixed "Cannot read properties of null" error by using local abort controller reference and proper cleanup
+  - **False Timeout Detection**: Removed incorrect abort status check after successful fetch that caused false timeout errors
+  - **Proper Timeout Cleanup**: Timeout cleared in multiple places (after response, in catch block, and finally block) to prevent race conditions
+  - **Better Error Handling**: Improved error messages for timeout, network, and abort scenarios
+  - **User Feedback**: Clear error messages displayed when requests timeout instead of showing nothing
+  - **Prevents Stuck Spinner**: Ensures loading spinner is always hidden even if request fails
+- **Upload Rate Limiting**: Removed rate limiting on upload endpoint to support bulk backup uploads
+  - **Exempted from Rate Limits**: Upload endpoint now exempt from default rate limiting (50/hour limit)
+  - **Bulk Upload Support**: Allows users to upload many backups without hitting rate limit errors
+  - **Improved Error Handling**: Better error messages for upload failures, including rate limit detection
+- **Upload CSRF Token**: Fixed CSRF token handling in upload functionality
+  - **XMLHttpRequest Support**: Added CSRF token header to XMLHttpRequest uploads for proper authentication
+  - **Error Handling**: Added CSRF error detection and page refresh for token renewal
+- **Login Modal Spacing**: Fixed login modal bottom margin to match rest of modal
+  - **Consistent Padding**: Increased bottom padding from 8px to 32px to match modal-content default padding
+
+### UI Improvements
+- **Scheduler Cleanup**: Removed Force Backup button from scheduler interface
+  - **Simplified Interface**: Removed manual trigger button as scheduler runs automatically based on configuration
+  - **Automatic Operation**: Scheduler continues to work as intended without manual intervention
+
+### Version Update
+- Updated version number to 0.3.7 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.6
 
 ### New Features
@@ -1077,7 +1155,6 @@
   - Shows CPU %, RAM usage, Network I/O, and Block I/O for each container
   - Status badges match the container viewer styling
   - Auto-refreshes when visiting the page
-  - Manual refresh button for on-demand updates
   - Network I/O shows bytes received/sent (e.g., `73.8kB / 285kB`)
   - Block I/O shows bytes read/written (e.g., `0B / 438kB`)
 

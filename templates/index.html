@@ -7,7 +7,7 @@
     <title>Container Monkey - Secure Your Docker Environment</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.3">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.7">
     <!-- CSRF Token -->
     <script>
         // Make CSRF token available to JavaScript
@@ -140,7 +140,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.6</span>
+                    v0.3.7</span>
             </div>
         </aside>
 
@@ -588,10 +588,10 @@
                                 onchange="uploadBackup(event)" multiple>
                             <button class="btn btn-primary btn-sm" onclick="loadBackups()"><i
                                     class="ph ph-arrows-clockwise"></i> Refresh</button>
-                            <button class="btn btn-success btn-sm" onclick="downloadAllBackups()"><i
-                                    class="ph ph-download-simple"></i> Download All</button>
-                            <button class="btn btn-danger btn-sm" onclick="deleteAllBackups()"><i
-                                    class="ph ph-trash"></i> Delete All</button>
+                            <button id="download-backups-btn" class="btn btn-success btn-sm" onclick="downloadAllBackups()" disabled><i
+                                    class="ph ph-download-simple"></i> Download</button>
+                            <button id="delete-backups-btn" class="btn btn-danger btn-sm" onclick="deleteAllBackups()" disabled><i
+                                    class="ph ph-trash"></i> Delete</button>
                         </div>
                     </div>
                 </div>
@@ -605,6 +605,8 @@
                     <table class="table" id="backups-table">
                         <thead>
                             <tr>
+                                <th width="40"><input type="checkbox" id="select-all-backups"
+                                        onclick="toggleSelectAllBackups(this)"></th>
                                 <th class="sortable" data-sort="filename" onclick="sortBackups('filename')"
                                     style="cursor: pointer; user-select: none;">
                                     Filename <span class="sort-indicator" id="sort-backup-filename"></span>
@@ -654,11 +656,6 @@
                         </div>
                         <div id="scheduler-next-run"
                             style="font-size: 0.9em; color: var(--text-secondary); display: none; margin-right: 8px;">
-                        </div>
-                        <div class="btn-group">
-                            <button class="btn btn-primary btn-sm" onclick="forceBackup()" id="force-backup-btn">
-                                <i class="ph ph-play"></i> Force Backup
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -848,10 +845,6 @@
             <section id="statistics-section" class="content-section" style="display: none;">
                 <div class="section-header">
                     <h2><i class="ph ph-chart-line" style="margin-right: 12px;"></i>Statistics</h2>
-                    <div>
-                        <button class="btn btn-primary btn-sm" onclick="loadStatistics()"><i
-                                class="ph ph-arrows-clockwise"></i> Refresh</button>
-                    </div>
                 </div>
 
                 <div id="statistics-error" class="error" style="display: none;"></div>
@@ -1126,7 +1119,7 @@
 
     <!-- Download All Modal -->
     <div id="download-all-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content" style="max-width: 1050px;">
             <span class="close" onclick="closeDownloadAllModal()">&times;</span>
             <h2>Downloading All Backups</h2>
             <div id="download-all-progress" style="margin: 20px 0;">
@@ -1138,7 +1131,29 @@
                 </div>
             </div>
             <div class="modal-actions" style="margin-top: 20px;">
+                <button id="download-all-cancel-btn" class="btn btn-danger btn-sm" onclick="cancelDownloadAll()"
+                    style="display: none;">Cancel</button>
                 <button id="download-all-close-btn" class="btn btn-secondary btn-sm" onclick="closeDownloadAllModal()"
+                    style="display: none;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete All Modal -->
+    <div id="delete-all-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close" onclick="closeDeleteAllModal()">&times;</span>
+            <h2>Deleting Backups</h2>
+            <div id="delete-all-progress" style="margin: 20px 0;">
+                <div id="delete-all-status"
+                    style="margin-bottom: 15px; font-size: 1.1em; color: var(--text-primary);"></div>
+                <div id="delete-all-list"
+                    style="max-height: 400px; overflow-y: auto; background: var(--bg-secondary); padding: 15px; border-radius: 5px; border: 1px solid var(--border);">
+                    <div style="text-align: center; color: var(--text-light);">Preparing...</div>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button id="delete-all-close-btn" class="btn btn-secondary btn-sm" onclick="closeDeleteAllModal()"
                     style="display: none;">Close</button>
             </div>
         </div>
@@ -1146,7 +1161,7 @@
 
     <!-- Upload Progress Modal -->
     <div id="upload-progress-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-content" style="max-width: 1050px;">
             <h2>Uploading Backups</h2>
             <div id="upload-progress-content" style="margin: 20px 0;">
                 <div id="upload-progress-status"
@@ -1157,6 +1172,8 @@
                 </div>
             </div>
             <div class="modal-actions" style="margin-top: 20px;">
+                <button id="upload-progress-cancel-btn" class="btn btn-danger btn-sm" onclick="cancelUploadAll()"
+                    style="display: none;">Cancel</button>
                 <button id="upload-progress-close-btn" class="btn btn-secondary btn-sm"
                     onclick="closeUploadProgressModal()" style="display: none;">Close</button>
             </div>
