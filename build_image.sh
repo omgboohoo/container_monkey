@@ -13,7 +13,7 @@ fi
 echo "🧹 Cleaning up build artifacts..."
 
 # Container configuration
-IMAGE_NAME="container-monkey"
+IMAGE_NAME="container_monkey"
 
 # Only remove old image if clean build requested (keeps cache for faster builds)
 if [ "$CLEAN_BUILD" = true ]; then
@@ -23,7 +23,7 @@ fi
 
 # Clean up build artifacts
 echo "  - Cleaning build artifacts..."
-rm -f container-monkey.tar 2>/dev/null || true
+rm -f container_monkey.tar 2>/dev/null || true
 find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
@@ -40,17 +40,17 @@ fi
 
 echo ""
 echo "💾 Saving image to tar file..."
-sudo docker save -o container-monkey.tar "$IMAGE_NAME" 2>/dev/null || \
+sudo docker save -o container_monkey.tar "$IMAGE_NAME" 2>/dev/null || \
 echo "⚠️  Could not save image"
 
 echo ""
 echo "✅ Build complete!"
 echo ""
-echo "📦 Image saved to: container-monkey.tar"
+echo "📦 Image saved to: container_monkey.tar"
 echo ""
 echo "💡 To deploy to cloud Docker:"
-echo "   1. Transfer container-monkey.tar to your cloud server"
-echo "   2. Load the image: docker load -i container-monkey.tar"
+echo "   1. Transfer container_monkey.tar to your cloud server"
+echo "   2. Load the image: docker load -i container_monkey.tar"
 echo "   3. Run the container with appropriate volume mounts and ports"
 echo ""
 echo "💡 Tip: Build uses Docker cache for faster rebuilds."

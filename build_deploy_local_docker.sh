@@ -10,12 +10,12 @@ if [[ "$1" == "--clean" ]]; then
     echo "🧹 Clean build requested - will rebuild without cache"
 fi
 
-echo "🧹 Cleaning up old container-monkey resources..."
+echo "🧹 Cleaning up old container_monkey resources..."
 
 # Container configuration
-CONTAINER_NAME="container-monkey"
-IMAGE_NAME="container-monkey"
-VOLUME_NAME="container-monkey"
+CONTAINER_NAME="container_monkey"
+IMAGE_NAME="container_monkey"
+VOLUME_NAME="container_monkey"
 PORT_MAPPING="1066:80"
 FLASK_PORT=80
 
@@ -32,7 +32,7 @@ fi
 
 # Clean up build artifacts
 echo "  - Cleaning build artifacts..."
-rm -f container-monkey.tar 2>/dev/null || true
+rm -f container_monkey.tar 2>/dev/null || true
 find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
@@ -49,7 +49,7 @@ fi
 
 echo ""
 echo "💾 Saving image to tar file..."
-sudo docker save -o container-monkey.tar "$IMAGE_NAME" 2>/dev/null || \
+sudo docker save -o container_monkey.tar "$IMAGE_NAME" 2>/dev/null || \
 echo "⚠️  Could not save image"
 
 echo ""
@@ -78,7 +78,7 @@ sudo docker ps --filter "name=$CONTAINER_NAME" --format "table {{.Names}}\t{{.St
 echo ""
 echo "🌐 Access the web UI at: http://localhost:1066"
 echo "📋 View logs: sudo docker logs -f $CONTAINER_NAME"
-echo "📦 Image saved to: container-monkey.tar"
+echo "📦 Image saved to: container_monkey.tar"
 echo ""
 echo "💡 Tip: Build uses Docker cache for faster rebuilds."
 echo "   Use './build_deploy_local_docker.sh --clean' to force a complete rebuild without cache."

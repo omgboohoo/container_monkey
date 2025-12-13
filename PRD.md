@@ -46,7 +46,7 @@ The open-source backup and recovery solution for Docker. Protect your containers
 
 ### Infrastructure
 - **Container Runtime**: Docker Engine
-- **Volume Management**: Docker volumes (`container-monkey` volume)
+- **Volume Management**: Docker volumes (`container_monkey` volume)
 - **Socket Access**: `/var/run/docker.sock` for Docker API communication
 
 ## Key Functionality

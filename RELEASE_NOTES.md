@@ -725,7 +725,7 @@
 
 - **Fixed "In use by" display**: "In use by" text now shows for all images including the app's own image
   - Removed condition that prevented showing "In use by" for self images
-  - Users can now see which containers are using the container-monkey image
+  - Users can now see which containers are using the container_monkey image
 
 - **Improved cleanup dangling images button**: Cleanup Dangling Images button now automatically disables when there are no dangling images
   - Button state updates automatically when images are loaded

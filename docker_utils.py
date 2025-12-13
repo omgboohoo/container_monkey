@@ -29,9 +29,9 @@ if not _use_direct_api:
 
 
 # App name constants
-APP_CONTAINER_NAME = 'container-monkey'
-APP_IMAGE_NAMES = ['container-monkey', 'docker-monkey', 'docker-backup-ninja', 'backup-ninja', 'docker-backup-image']
-APP_VOLUME_NAME = 'container-monkey'
+APP_CONTAINER_NAME = 'container_monkey'
+APP_IMAGE_NAMES = ['container_monkey', 'docker-monkey', 'docker-backup-ninja', 'backup-ninja', 'docker-backup-image']
+APP_VOLUME_NAME = 'container_monkey'
 
 # Global Docker client instances (will be initialized)
 docker_client = None

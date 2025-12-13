@@ -55,10 +55,10 @@ docker pull ghcr.io/omgboohoo/container_monkey:latest
 2. **Run the container:**
 ```bash
 docker run -d \
-  --name container-monkey \
+  --name container_monkey \
   -p 1066:80 \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v container-monkey:/backups \
+  -v container_monkey:/backups \
   --restart always \
   ghcr.io/omgboohoo/container_monkey:latest
 ```
@@ -87,7 +87,7 @@ docker run -d \
   --name container_monkey \
   -p 1066:80 \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v container-monkey:/backups \
+  -v container_monkey:/backups \
   --restart always \
   container_monkey
 ```
@@ -114,7 +114,7 @@ Access the web UI at: http://your-server:1066
 ### Volume Mounts
 
 - `/var/run/docker.sock`: Docker socket (required)
-- `container-monkey:/backups`: Backup storage and database volume
+- `container_monkey:/backups`: Backup storage and database volume
 
 ## Usage
 
@@ -266,7 +266,7 @@ pip install -r requirements.txt
 python app.py
 
 # Build Docker image
-docker build -t container-monkey .
+docker build -t container_monkey .
 ```
 
 ## License
