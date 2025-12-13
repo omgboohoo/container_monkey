@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.8**
+**Version 0.3.9**
 
 ## Overview
 
@@ -138,17 +138,17 @@ The open-source backup and recovery solution for Docker. Protect your containers
 ### System Monitoring
 - Dashboard with resource overview and backup schedule next run time
 - Real-time system CPU/RAM stats in top bar
-- **Statistics Page**: Comprehensive container statistics view
+- **Statistics Page**: Comprehensive container statistics view with background caching, refresh countdown, and manual refresh button
   - All containers displayed in a grid format
-  - Shows CPU %, RAM usage, Network I/O, and Block I/O for each container
+  - Shows CPU %, RAM usage, Network I/O, Block I/O, and Last Refresh countdown for each container
   - Status badges (running/stopped) matching container viewer styling
-  - Auto-refreshes when visiting the page
-  - Request timeout protection: 60-second timeout prevents indefinite waiting
+  - Background caching for instant page load (stats refresh every 5 minutes automatically)
+  - Last Refresh column shows countdown timer (5:00 to 0:00) indicating time until next automatic refresh
+  - Countdown updates every second in real-time
+  - Manual refresh button (enabled by default, allows on-demand refresh)
+  - No automatic refresh on page visit - users see cached data immediately and can refresh manually if needed
   - Request cancellation: Prevents duplicate requests by canceling previous requests
-  - Race condition protection: Uses local abort controller reference to prevent null access errors
-  - Proper timeout cleanup: Timeout cleared in multiple places to prevent race conditions
-  - Accurate timeout detection: Only shows timeout errors for actual timeouts, not successful requests
-  - Enhanced error handling: Clear error messages for timeout, network, and abort scenarios
+  - Enhanced error handling: Clear error messages for network and abort scenarios
   - Prevents stuck spinner: Loading spinner always hidden even if request fails
 
 ### Backup Audit Log
@@ -246,7 +246,8 @@ GET    /api/network-backups                     # List network backups (from S3 
 ```
 GET    /api/dashboard-stats                     # Get dashboard statistics
 GET    /api/system-stats                        # Get system CPU/RAM stats
-GET    /api/statistics                          # Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
+GET    /api/statistics                          # Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O, Last Refresh) - returns cached stats immediately
+POST   /api/statistics/refresh                  # Trigger background refresh of statistics cache
 GET    /api/system-time                         # Get current system time
 GET    /api/check-environment                   # Check Docker environment
 POST   /api/cleanup/temp-containers             # Cleanup temporary containers

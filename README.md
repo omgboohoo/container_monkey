@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.8**
+**Version 0.3.9**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -16,7 +16,7 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - **Multi-Server Identification**: Server name tracking allows multiple Container Monkey instances sharing the same S3 bucket to identify which server created each backup
 - **Backup Audit Log**: Comprehensive audit logging for all backup operations, restores, and lifecycle management
 - **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
-- **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, and Block I/O
+- **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, Block I/O, and Last Refresh countdown (5:00 to 0:00) with background caching for instant load times and manual refresh button
 - **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled and storage location (Local/S3)
 - **Backup Vault Search**: Real-time search filter to quickly find backups by filename, type, storage, server name, or date
 - **Sortable Backup Columns**: All backup vault columns are sortable with visual indicators for easy organization
@@ -153,7 +153,7 @@ Access the web UI at: http://your-server:1066
 
 - **Dashboard**: Overview of containers, images, volumes, networks, backup schedule
 - **System Stats**: Real-time CPU and RAM utilization in top bar
-- **Statistics Page**: View all containers with detailed stats including CPU %, RAM, Network I/O, and Block I/O
+- **Statistics Page**: View all containers with detailed stats including CPU %, RAM, Network I/O, Block I/O, and refresh countdown timer
 
 ### Backup Audit Log
 

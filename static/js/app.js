@@ -4,6 +4,9 @@ let currentUsername = '';
 
 // Statistics loading abort controller
 let statisticsAbortController = null;
+let statisticsPollInterval = null;
+let statisticsRefreshTimeInterval = null; // For updating refresh time displays
+let lastStatisticsCacheTimestamp = null;
 
 // CSRF Token helper functions
 function getCsrfToken() {
@@ -520,6 +523,20 @@ let currentContainerId = null;
 let containerMetadata = new Map();
 // Section switching (sidebar navigation)
 function showSection(sectionName, navElement) {
+    // Cleanup statistics polling if leaving statistics section
+    if (statisticsPollInterval) {
+        clearInterval(statisticsPollInterval);
+        statisticsPollInterval = null;
+    }
+    if (statisticsRefreshTimeInterval) {
+        clearInterval(statisticsRefreshTimeInterval);
+        statisticsRefreshTimeInterval = null;
+    }
+    if (statisticsAbortController) {
+        statisticsAbortController.abort();
+        statisticsAbortController = null;
+    }
+    
     // Hide all sections
     document.querySelectorAll('.content-section').forEach(section => {
         section.classList.remove('active');
@@ -1735,31 +1752,36 @@ async function loadBackups() {
     }
 }
 
-// Load statistics
+// Load statistics (with caching and background refresh)
 async function loadStatistics() {
     const errorEl = document.getElementById('statistics-error');
     const statisticsList = document.getElementById('statistics-list');
     const statisticsSpinner = document.getElementById('statistics-spinner');
     const statisticsWrapper = document.getElementById('statistics-table-wrapper');
 
-    // Cancel any pending request
+    // Cancel any pending requests and polling
     if (statisticsAbortController) {
         statisticsAbortController.abort();
+    }
+    if (statisticsPollInterval) {
+        clearInterval(statisticsPollInterval);
+        statisticsPollInterval = null;
+    }
+    if (statisticsRefreshTimeInterval) {
+        clearInterval(statisticsRefreshTimeInterval);
+        statisticsRefreshTimeInterval = null;
     }
     
     // Create new abort controller and store reference
     const abortController = new AbortController();
     statisticsAbortController = abortController;
-    
-    // Store timeout ID for cleanup
-    let timeoutId = null;
 
     // Clear error message and hide error element
     errorEl.style.display = 'none';
     errorEl.textContent = '';
     statisticsList.innerHTML = '';
 
-    // Show spinner and prevent scrollbars
+    // Show spinner initially
     if (statisticsSpinner) statisticsSpinner.style.display = 'flex';
     if (statisticsWrapper) {
         statisticsWrapper.style.overflow = 'hidden';
@@ -1767,112 +1789,277 @@ async function loadStatistics() {
     }
 
     try {
-        // Add timeout (60 seconds should be enough for most cases)
-        // Use stored reference to avoid null access
-        timeoutId = setTimeout(() => {
-            if (abortController && !abortController.signal.aborted) {
-                abortController.abort();
-            }
-        }, 60000);
-
-        const response = await fetch('/api/statistics', {
+        // Load cached stats immediately (fast)
+        const cachedResponse = await fetch('/api/statistics', {
             signal: abortController.signal
         });
         
-        // Clear timeout immediately after response
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
-
-        // If fetch completed successfully, it wasn't aborted
-        // Aborted requests throw AbortError which is caught in the catch block
-        // No need to check abortController.signal.aborted - if we got here, fetch succeeded
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.error || `Failed to load statistics (${response.status})`);
-        }
-
-        if (!data.containers || data.containers.length === 0) {
-            statisticsList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No containers found</td></tr>';
-        } else {
-            // Use DocumentFragment for efficient batch DOM operations
-            const fragment = document.createDocumentFragment();
-            data.containers.forEach(container => {
-                const row = createStatisticsRow(container);
-                fragment.appendChild(row);
-            });
-            // Single DOM operation - much faster than appending one by one
-            statisticsList.appendChild(fragment);
-        }
-
-        // Hide spinner after DOM is updated - use double requestAnimationFrame to ensure rendering completes
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
+        if (cachedResponse.ok) {
+            const cachedData = await cachedResponse.json();
+            
+            // Check for error in response
+            if (cachedData.error) {
+                errorEl.textContent = `Error: ${cachedData.error}`;
+                errorEl.style.display = 'block';
                 if (statisticsSpinner) statisticsSpinner.style.display = 'none';
                 if (statisticsWrapper) {
                     statisticsWrapper.style.overflow = '';
                     statisticsWrapper.classList.remove('loading-grid');
                 }
-            });
-        });
-
-    } catch (error) {
-        // Ignore errors if this request was cancelled (new request started)
-        if (statisticsAbortController !== abortController) {
-            // This request was cancelled, ignore the error
-            return;
-        }
-        
-        // Clear timeout if still active
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            timeoutId = null;
-        }
-        
-        // Handle abort/timeout specifically
-        if (error.name === 'AbortError' || error.message.includes('timeout') || error.message.includes('cancelled')) {
-            // Only show error if this is still the current request
-            if (statisticsAbortController === abortController) {
-                errorEl.textContent = 'Request timed out. The statistics page may take a while with many containers. Please try again.';
+                return;
+            }
+            
+            // Always display data (even if empty - updateStatisticsGrid handles empty case)
+            if (cachedData.containers !== undefined) {
+                updateStatisticsGrid(cachedData.containers);
+                lastStatisticsCacheTimestamp = cachedData.cache_timestamp;
+                
+                // Start periodic refresh time updates
+                startRefreshTimeUpdates();
+                
+                // Hide spinner after cached data is displayed
+                if (statisticsSpinner) statisticsSpinner.style.display = 'none';
+                if (statisticsWrapper) {
+                    statisticsWrapper.style.overflow = '';
+                    statisticsWrapper.classList.remove('loading-grid');
+                }
+            } else {
+                // No containers field - show error
+                errorEl.textContent = 'Error: Invalid response format';
                 errorEl.style.display = 'block';
+                if (statisticsSpinner) statisticsSpinner.style.display = 'none';
+                if (statisticsWrapper) {
+                    statisticsWrapper.style.overflow = '';
+                    statisticsWrapper.classList.remove('loading-grid');
+                }
             }
         } else {
-            // Handle other errors - only show if this is still the current request
-            if (statisticsAbortController === abortController) {
-                const errorMessage = error.message || error.toString() || 'Unknown error occurred';
-                errorEl.textContent = `Error: ${errorMessage}`;
-                errorEl.style.display = 'block';
+            // Response not OK - try to get error message
+            try {
+                const errorData = await cachedResponse.json();
+                errorEl.textContent = `Error: ${errorData.error || `Failed to load statistics (${cachedResponse.status})`}`;
+            } catch (e) {
+                errorEl.textContent = `Error: Failed to load statistics (${cachedResponse.status})`;
             }
-        }
-        
-        // Hide spinner on error (only if this is still the current request)
-        if (statisticsAbortController === abortController) {
+            errorEl.style.display = 'block';
             if (statisticsSpinner) statisticsSpinner.style.display = 'none';
             if (statisticsWrapper) {
                 statisticsWrapper.style.overflow = '';
                 statisticsWrapper.classList.remove('loading-grid');
             }
+            return;
         }
-    } finally {
-        // Clear timeout if still active (safety net)
-        if (timeoutId) {
-            clearTimeout(timeoutId);
+
+    } catch (error) {
+        // Ignore errors if this request was cancelled (new request started)
+        if (statisticsAbortController !== abortController) {
+            return;
         }
         
-        // Only clear global reference if it's still our controller (not a new one)
-        if (statisticsAbortController === abortController) {
-            statisticsAbortController = null;
+        // Handle errors
+        if (error.name === 'AbortError') {
+            // Request was cancelled, ignore
+            return;
+        } else {
+            const errorMessage = error.message || error.toString() || 'Unknown error occurred';
+            errorEl.textContent = `Error: ${errorMessage}`;
+            errorEl.style.display = 'block';
+        }
+        
+        // Hide spinner on error
+        if (statisticsSpinner) statisticsSpinner.style.display = 'none';
+        if (statisticsWrapper) {
+            statisticsWrapper.style.overflow = '';
+            statisticsWrapper.classList.remove('loading-grid');
         }
     }
+}
+
+// Manual refresh function triggered by refresh button
+async function refreshStatistics() {
+    const refreshBtn = document.getElementById('statistics-refresh-btn');
+    if (!refreshBtn || refreshBtn.disabled) {
+        return;
+    }
+    
+    // Disable button
+    refreshBtn.disabled = true;
+    
+    try {
+        // Trigger background refresh
+        const response = await fetch('/api/statistics/refresh', {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to trigger refresh');
+        }
+        
+        // Start polling for updated stats
+        let pollCount = 0;
+        const maxPolls = 60; // Poll for up to 2 minutes
+        
+        const pollInterval = setInterval(async () => {
+            pollCount++;
+            
+            // Stop polling if max attempts reached
+            if (pollCount > maxPolls) {
+                clearInterval(pollInterval);
+                // Enable button even if refresh didn't complete
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                }
+                return;
+            }
+            
+            try {
+                const statsResponse = await fetch('/api/statistics');
+                
+                if (statsResponse.ok) {
+                    const data = await statsResponse.json();
+                    
+                    // Skip if there's an error in the response
+                    if (data.error) {
+                        return; // Continue polling
+                    }
+                    
+                    // Check if we have new data (different timestamp)
+                    if (data.cache_timestamp && data.cache_timestamp !== lastStatisticsCacheTimestamp) {
+                        // Update grid with fresh data
+                        if (data.containers !== undefined) {
+                            updateStatisticsGrid(data.containers, preserveRefreshTimes=true);
+                            lastStatisticsCacheTimestamp = data.cache_timestamp;
+                            
+                            // Stop polling and enable button
+                            clearInterval(pollInterval);
+                            if (refreshBtn) {
+                                refreshBtn.disabled = false;
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                // Ignore polling errors, continue polling
+            }
+        }, 2000); // Poll every 2 seconds
+        
+    } catch (error) {
+        // Re-enable button on error
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+        }
+        console.error('Error refreshing statistics:', error);
+    }
+}
+
+// Update statistics grid with container data (supports incremental updates)
+function updateStatisticsGrid(containers, preserveRefreshTimes = false) {
+    const statisticsList = document.getElementById('statistics-list');
+    if (!statisticsList) return;
+    
+    if (!containers || containers.length === 0) {
+        statisticsList.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #666;">No containers found</td></tr>';
+        return;
+    }
+    
+    if (preserveRefreshTimes) {
+        // Incremental update: update refresh times for containers that have new data
+        const existingRows = statisticsList.querySelectorAll('tr.statistics-row');
+        const containerIdToRow = {};
+        
+        // Build map of existing rows by container ID
+        existingRows.forEach(row => {
+            const containerId = row.getAttribute('data-container-id');
+            if (containerId) {
+                containerIdToRow[containerId] = row;
+            }
+        });
+        
+        // Update refresh times for containers with new data
+        containers.forEach(container => {
+            const containerId = container.id;
+            const existingRow = containerIdToRow[containerId];
+            
+            if (existingRow && container.refresh_timestamp) {
+                // Update refresh time cell
+                const refreshCell = existingRow.querySelector('td:last-child');
+                if (refreshCell) {
+                    refreshCell.dataset.refreshTimestamp = container.refresh_timestamp;
+                    refreshCell.textContent = formatRefreshTime(container.refresh_timestamp);
+                }
+            }
+        });
+    } else {
+        // Full refresh: clear and rebuild
+        statisticsList.innerHTML = '';
+        
+        // Use DocumentFragment for efficient batch DOM operations
+        const fragment = document.createDocumentFragment();
+        containers.forEach(container => {
+            const row = createStatisticsRow(container);
+            fragment.appendChild(row);
+        });
+        // Single DOM operation - much faster than appending one by one
+        statisticsList.appendChild(fragment);
+    }
+}
+
+// Format refresh timestamp as countdown from 5 minutes
+function formatRefreshTime(timestamp) {
+    if (!timestamp) return '-';
+    
+    try {
+        const refreshDate = new Date(timestamp);
+        const now = new Date();
+        const refreshIntervalMs = 5 * 60 * 1000; // 5 minutes in milliseconds
+        const nextRefreshTime = refreshDate.getTime() + refreshIntervalMs;
+        const remainingMs = nextRefreshTime - now.getTime();
+        
+        if (remainingMs <= 0) {
+            return '0:00';
+        }
+        
+        const remainingSeconds = Math.floor(remainingMs / 1000);
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    } catch (e) {
+        return '-';
+    }
+}
+
+// Start periodic updates of refresh time displays
+function startRefreshTimeUpdates() {
+    // Clear any existing interval
+    if (statisticsRefreshTimeInterval) {
+        clearInterval(statisticsRefreshTimeInterval);
+    }
+    
+    // Update refresh times every second
+    statisticsRefreshTimeInterval = setInterval(() => {
+        const statisticsList = document.getElementById('statistics-list');
+        if (!statisticsList) {
+            clearInterval(statisticsRefreshTimeInterval);
+            statisticsRefreshTimeInterval = null;
+            return;
+        }
+        
+        const rows = statisticsList.querySelectorAll('tr.statistics-row');
+        rows.forEach(row => {
+            const refreshCell = row.querySelector('td:last-child');
+            if (refreshCell && refreshCell.dataset.refreshTimestamp) {
+                refreshCell.textContent = formatRefreshTime(refreshCell.dataset.refreshTimestamp);
+            }
+        });
+    }, 1000); // Update every second
 }
 
 // Create statistics row
 function createStatisticsRow(container) {
     const tr = document.createElement('tr');
     tr.className = 'statistics-row';
+    tr.setAttribute('data-container-id', container.id);
 
     const statusClass = container.status === 'running' ? 'status-running' : 'status-stopped';
     const statusText = container.status === 'running' ? 'Running' : 'Stopped';
@@ -1905,6 +2092,9 @@ function createStatisticsRow(container) {
     // Format Block I/O display
     const blockIO = container.block_io && container.block_io !== '-' ? escapeHtml(container.block_io) : '-';
 
+    // Format refresh timestamp
+    const refreshTime = formatRefreshTime(container.refresh_timestamp);
+
     tr.innerHTML = `
         <td>
             <div style="font-weight: 500; color: #fff;">${escapeHtml(container.name)}</div>
@@ -1918,6 +2108,7 @@ function createStatisticsRow(container) {
         <td style="color: var(--text-secondary);">${ramDisplay}</td>
         <td style="color: var(--text-secondary);">${networkIO}</td>
         <td style="color: var(--text-secondary);">${blockIO}</td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;" data-refresh-timestamp="${container.refresh_timestamp || ''}">${refreshTime}</td>
     `;
 
     return tr;
@@ -2816,7 +3007,7 @@ function renderStacks(stacks) {
     stacksList.innerHTML = '';
 
     if (stacks.length === 0) {
-        stacksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-secondary);">No stacks found</td></tr>';
+        stacksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666; font-weight: normal;">No stacks found</td></tr>';
     } else {
         stacks.forEach(stack => {
             const row = createStackRow(stack);

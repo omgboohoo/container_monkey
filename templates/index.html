@@ -140,7 +140,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.8</span>
+                    v0.3.9</span>
             </div>
         </aside>
 
@@ -845,6 +845,11 @@
             <section id="statistics-section" class="content-section" style="display: none;">
                 <div class="section-header">
                     <h2><i class="ph ph-chart-line" style="margin-right: 12px;"></i>Statistics</h2>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-primary btn-sm" id="statistics-refresh-btn" onclick="refreshStatistics()">
+                            <i class="ph ph-arrows-clockwise"></i> Refresh
+                        </button>
+                    </div>
                 </div>
 
                 <div id="statistics-error" class="error" style="display: none;"></div>
@@ -864,6 +869,7 @@
                                 <th>RAM</th>
                                 <th>Network I/O</th>
                                 <th>Block I/O</th>
+                                <th>Last Refresh</th>
                             </tr>
                         </thead>
                         <tbody id="statistics-list">

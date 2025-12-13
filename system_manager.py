@@ -521,6 +521,10 @@ def get_statistics() -> Dict[str, Any]:
                 except:
                     pass
             
+            # Add refresh timestamp (current time when stats were collected)
+            from datetime import datetime
+            refresh_timestamp = datetime.now().isoformat()
+            
             container_stats_list.append({
                 'id': container_id_short,
                 'name': container_name,
@@ -534,6 +538,7 @@ def get_statistics() -> Dict[str, Any]:
                 'block_io': block_io,
                 'disk_size': container_size_str,
                 'disk_size_bytes': container_size_bytes,
+                'refresh_timestamp': refresh_timestamp,
             })
         
         # Calculate total container disk size

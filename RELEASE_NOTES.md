@@ -1,5 +1,32 @@
 # Release Notes
 
+## Version 0.3.9
+
+### Performance Improvements
+- **Statistics Page Background Caching**: Significantly improved statistics page load times
+  - **Background Refresh**: Stats are now built in a background thread every 5 minutes (starting when app first runs)
+  - **Instant Display**: When visiting the statistics page, cached stats are displayed immediately (no waiting)
+  - **Better UX**: Users see data instantly instead of waiting for slow stats generation
+  - **Non-Blocking**: Stats generation no longer blocks the UI or API requests
+  - **Incremental Updates**: Grid updates incrementally as new stats arrive, preserving existing data while refreshing
+
+### Statistics Page Enhancements
+- **Last Refresh Column**: Added "Last Refresh" column showing countdown until next automatic refresh
+  - **Countdown Display**: Shows countdown timer from 5:00 to 0:00 (MM:SS format) indicating time until next background refresh
+  - **Real-Time Updates**: Countdown updates every second to show current time remaining
+  - **Visual Feedback**: Users can see exactly when the next automatic refresh will occur
+  - **Reset on Refresh**: Countdown resets to 5:00 when stats are refreshed (automatic or manual)
+- **Refresh Button**: Added manual refresh button to statistics page
+  - **Always Available**: Button is enabled by default, allowing users to trigger refresh on demand
+  - **Manual Control**: Users control when to refresh stats instead of automatic refresh on page visit
+  - **State Management**: Button disables when refresh is triggered and re-enables when complete
+  - **Error Handling**: Button re-enables on errors to allow retry
+
+### Version Update
+- Updated version number to 0.3.9 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.8
 
 ### UI Improvements

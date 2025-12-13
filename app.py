@@ -36,6 +36,7 @@ from system_manager import (
     get_dashboard_stats, get_system_stats, get_statistics, check_environment as check_environment_helper,
     cleanup_temp_containers_helper, cleanup_dangling_images
 )
+from stats_cache_manager import StatsCacheManager
 from error_utils import safe_log_error
 
 # Initialize Flask app
@@ -137,6 +138,12 @@ if backup_manager:
     if scheduler_manager.is_enabled():
         scheduler_manager.start_scheduler()
     print("✅ Scheduler manager initialized")
+
+# Initialize stats cache manager
+stats_cache_manager = None
+if docker_api_client:
+    stats_cache_manager = StatsCacheManager(refresh_interval_seconds=300)  # 5 minutes
+    print("✅ Stats cache manager initialized")
 
 # Login required decorator
 def login_required(f):
@@ -259,11 +266,36 @@ def system_stats():
 @app.route('/api/statistics')
 @login_required
 def statistics():
+    """Get cached statistics (returns immediately)"""
+    if stats_cache_manager:
+        cached_stats = stats_cache_manager.get_cached_stats()
+        if cached_stats:
+            # Add cache timestamp
+            cache_timestamp = stats_cache_manager.get_cache_timestamp()
+            cached_stats['cache_timestamp'] = cache_timestamp.isoformat() if cache_timestamp else None
+            cached_stats['from_cache'] = True
+            return jsonify(cached_stats)
+    
+    # Fallback: if no cache available yet, generate stats (will be slow)
     result = get_statistics()
     if 'error' in result:
         status_code = 500 if result['error'] != 'Docker client not available' else 503
         return jsonify(result), status_code
+    result['from_cache'] = False
     return jsonify(result)
+
+@app.route('/api/statistics/refresh', methods=['POST'])
+@login_required
+def statistics_refresh():
+    """Trigger a background refresh of statistics"""
+    if not stats_cache_manager:
+        return jsonify({'error': 'Stats cache manager not available'}), 500
+    
+    refresh_started = stats_cache_manager.trigger_refresh()
+    if refresh_started:
+        return jsonify({'success': True, 'message': 'Stats refresh started in background'})
+    else:
+        return jsonify({'success': False, 'message': 'Stats refresh already in progress'}), 409
 
 @app.route('/api/check-environment', methods=['GET'])
 def check_environment():
