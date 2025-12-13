@@ -2036,8 +2036,11 @@ function startRefreshTimeUpdates() {
         clearInterval(statisticsRefreshTimeInterval);
     }
     
+    // Track last known cache timestamp for detecting updates
+    let lastKnownTimestamp = lastStatisticsCacheTimestamp;
+    
     // Update refresh times every second
-    statisticsRefreshTimeInterval = setInterval(() => {
+    statisticsRefreshTimeInterval = setInterval(async () => {
         const statisticsList = document.getElementById('statistics-list');
         if (!statisticsList) {
             clearInterval(statisticsRefreshTimeInterval);
@@ -2046,12 +2049,47 @@ function startRefreshTimeUpdates() {
         }
         
         const rows = statisticsList.querySelectorAll('tr.statistics-row');
+        let countdownReachedZero = false;
+        
         rows.forEach(row => {
             const refreshCell = row.querySelector('td:last-child');
             if (refreshCell && refreshCell.dataset.refreshTimestamp) {
-                refreshCell.textContent = formatRefreshTime(refreshCell.dataset.refreshTimestamp);
+                const countdown = formatRefreshTime(refreshCell.dataset.refreshTimestamp);
+                refreshCell.textContent = countdown;
+                
+                // Check if countdown has reached zero
+                if (countdown === '0:00') {
+                    countdownReachedZero = true;
+                }
             }
         });
+        
+        // If countdown reached zero, poll for updated stats
+        if (countdownReachedZero) {
+            try {
+                const response = await fetch('/api/statistics');
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Skip if there's an error in the response
+                    if (data.error) {
+                        return; // Continue, will retry on next interval
+                    }
+                    
+                    // Check if we have new data (different timestamp)
+                    if (data.cache_timestamp && data.cache_timestamp !== lastKnownTimestamp) {
+                        if (data.containers !== undefined) {
+                            // Update grid with fresh data
+                            updateStatisticsGrid(data.containers, preserveRefreshTimes=true);
+                            lastStatisticsCacheTimestamp = data.cache_timestamp;
+                            lastKnownTimestamp = data.cache_timestamp;
+                        }
+                    }
+                }
+            } catch (e) {
+                // Ignore polling errors, will retry on next interval
+            }
+        }
     }, 1000); // Update every second
 }
 
