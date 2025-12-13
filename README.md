@@ -45,7 +45,7 @@ Access the web UI at: http://localhost:1066
 
 ### Docker / Cloud Deployment
 
-#### Pull Build (Recommended)
+#### Pull Method (Recommended)
 
 1. **Pull the image from GitHub Container Registry:**
 ```bash
