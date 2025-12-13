@@ -4525,15 +4525,8 @@ async function downloadAllBackupsInternal(selectedFiles) {
                     // Calculate average speed
                     const avgSpeed = elapsed > 0 ? downloadedBytes / elapsed : 0;
                     
-                    // Build status text
+                    // Build status text (speed/size info shown in individual file items below)
                     let statusText = `Downloading ${i + 1} / ${total}: ${escapeHtml(filename)}`;
-                    if (totalBytes) {
-                        const percent = ((downloadedBytes / totalBytes) * 100).toFixed(1);
-                        statusText += ` (${percent}% - ${formatFileSize(downloadedBytes)} / ${formatFileSize(totalBytes)})`;
-                    } else {
-                        statusText += ` (${formatFileSize(downloadedBytes)})`;
-                    }
-                    statusText += ` - ${formatSpeed(currentSpeed || avgSpeed)}`;
                     statusEl.innerHTML = statusText;
                     
                     // Update file element

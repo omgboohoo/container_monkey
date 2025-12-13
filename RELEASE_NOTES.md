@@ -1,5 +1,25 @@
 # Release Notes
 
+## Version 0.3.8
+
+### UI Improvements
+- **Monkey Emoji Cube Spinner**: Replaced all loading spinners with the animated monkey emoji cube from the website
+  - **3D Rotation Animation**: Spinner now rotates in 3D space with smooth floating motion
+  - **Monkey Emoji Display**: Features the 🐵 emoji on both front and back faces of the cube
+  - **Wireframe Edges**: Includes subtle 3D wireframe edges matching the website's cube design
+  - **Consistent Branding**: Matches the visual style of the Container Monkey website
+  - **All Loading States**: Applied to all loading indicators throughout the application (containers, volumes, images, networks, backups, etc.)
+
+- **Download Modal Header**: Simplified download modal header text
+  - **Removed Redundant Info**: Removed speed and file size information from header (already shown in individual file progress items below)
+  - **Cleaner Display**: Header now only shows file count and current filename (e.g., "Downloading 2 / 2: filename.tar.gz")
+  - **Less Clutter**: Reduces visual redundancy while maintaining all necessary information in the detailed progress list
+
+### Version Update
+- Updated version number to 0.3.8 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.7
 
 ### New Features

@@ -1757,45 +1757,64 @@ select.form-control:focus option:checked {
 }
 
 .spinner {
-    width: 64px;
-    height: 64px;
-    border: 5px solid rgba(59, 130, 246, 0.15);
-    border-top-color: var(--secondary);
-    border-right-color: var(--secondary);
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
+    width: 60px;
+    height: 60px;
+    transform-style: preserve-3d;
+    animation: spinnerFloatRotate 2s infinite linear;
     position: relative;
-    box-shadow: 0 0 30px rgba(59, 130, 246, 0.4), inset 0 0 20px rgba(59, 130, 246, 0.1);
     z-index: 1;
+    background: transparent;
+    box-shadow: 
+        /* Top-right edge */
+        18px -18px 0 -16px rgba(56, 189, 248, 0.15),
+        /* Bottom-right edge */
+        18px 18px 0 -16px rgba(56, 189, 248, 0.15),
+        /* Top-left edge */
+        -18px -18px 0 -16px rgba(56, 189, 248, 0.15),
+        /* Bottom-left edge */
+        -18px 18px 0 -16px rgba(56, 189, 248, 0.15);
 }
 
-.spinner::after {
-    content: '';
-    position: absolute;
-    top: -5px;
-    left: -5px;
-    right: -5px;
-    bottom: -5px;
-    border: 5px solid transparent;
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 1.4s linear infinite reverse;
-    opacity: 0.7;
-    filter: blur(2px);
-}
-
+/* Front face - monkey emoji */
 .spinner::before {
-    content: '';
+    content: '🐵';
     position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 20px;
-    height: 20px;
-    background: var(--secondary);
-    border-radius: 50%;
-    box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
-    z-index: 2;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 45px;
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.04) 0%, rgba(56, 189, 248, 0.01) 100%);
+    border: 2px solid rgba(56, 189, 248, 0.3);
+    box-shadow: 
+        0 0 20px rgba(56, 189, 248, 0.12),
+        inset 0 0 15px rgba(56, 189, 248, 0.05);
+    transform: translateZ(18px);
+    line-height: 1;
+    border-radius: 2px;
+    text-align: center;
+    overflow: visible;
+}
+
+/* Back face - monkey emoji */
+.spinner::after {
+    content: '🐵';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 45px;
+    background: rgba(56, 189, 248, 0.015);
+    border: 2px solid rgba(56, 189, 248, 0.2);
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.1);
+    transform: translateZ(-18px);
+    line-height: 1;
+    border-radius: 2px;
+    text-align: center;
+    overflow: visible;
 }
 
 .grid-spinner-text {
@@ -1805,9 +1824,22 @@ select.form-control:focus option:checked {
     font-weight: 500;
 }
 
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+@keyframes spinnerFloatRotate {
+    0% {
+        transform: rotateY(0deg) rotateX(0deg) translateY(0px);
+    }
+    25% {
+        transform: rotateY(90deg) rotateX(10deg) translateY(-5px);
+    }
+    50% {
+        transform: rotateY(180deg) rotateX(0deg) translateY(0px);
+    }
+    75% {
+        transform: rotateY(270deg) rotateX(-10deg) translateY(-5px);
+    }
+    100% {
+        transform: rotateY(360deg) rotateX(0deg) translateY(0px);
+    }
 }
 
 /* Upload Progress Modal Styles */
