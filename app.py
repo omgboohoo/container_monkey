@@ -264,6 +264,7 @@ def system_stats():
         return jsonify({'error': 'Failed to retrieve system statistics'}), 500
 
 @app.route('/api/statistics')
+@limiter.exempt  # Exempt from rate limiting - frequently polled for countdown updates
 @login_required
 def statistics():
     """Get cached statistics (returns immediately)"""

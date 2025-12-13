@@ -1878,12 +1878,21 @@ async function loadStatistics() {
 // Manual refresh function triggered by refresh button
 async function refreshStatistics() {
     const refreshBtn = document.getElementById('statistics-refresh-btn');
+    const errorEl = document.getElementById('statistics-error');
     if (!refreshBtn || refreshBtn.disabled) {
         return;
     }
     
-    // Disable button
+    // Clear any previous errors
+    if (errorEl) {
+        errorEl.style.display = 'none';
+        errorEl.textContent = '';
+    }
+    
+    // Disable button and show loading state
     refreshBtn.disabled = true;
+    const originalHtml = refreshBtn.innerHTML;
+    refreshBtn.innerHTML = '<i class="ph ph-arrows-clockwise" style="animation: spin 1s linear infinite;"></i> Refreshing...';
     
     try {
         // Trigger background refresh
@@ -1892,7 +1901,8 @@ async function refreshStatistics() {
         });
         
         if (!response.ok) {
-            throw new Error('Failed to trigger refresh');
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to trigger refresh (${response.status})`);
         }
         
         // Start polling for updated stats
@@ -1908,6 +1918,11 @@ async function refreshStatistics() {
                 // Enable button even if refresh didn't complete
                 if (refreshBtn) {
                     refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = originalHtml;
+                }
+                if (errorEl) {
+                    errorEl.textContent = 'Refresh timed out. Stats may still be updating in the background.';
+                    errorEl.style.display = 'block';
                 }
                 return;
             }
@@ -1934,19 +1949,32 @@ async function refreshStatistics() {
                             clearInterval(pollInterval);
                             if (refreshBtn) {
                                 refreshBtn.disabled = false;
+                                refreshBtn.innerHTML = originalHtml;
                             }
                         }
                     }
+                } else if (statsResponse.status === 429) {
+                    // Rate limited - wait a bit longer before next poll
+                    // Continue polling but with longer delay
                 }
             } catch (e) {
                 // Ignore polling errors, continue polling
+                if (e.name !== 'AbortError') {
+                    // Log but continue
+                    console.warn('Polling error:', e);
+                }
             }
         }, 2000); // Poll every 2 seconds
         
     } catch (error) {
-        // Re-enable button on error
+        // Re-enable button on error and show error message
         if (refreshBtn) {
             refreshBtn.disabled = false;
+            refreshBtn.innerHTML = originalHtml;
+        }
+        if (errorEl) {
+            errorEl.textContent = `Error: ${error.message || error.toString() || 'Failed to refresh statistics'}`;
+            errorEl.style.display = 'block';
         }
         console.error('Error refreshing statistics:', error);
     }
@@ -2085,6 +2113,9 @@ function startRefreshTimeUpdates() {
                             lastKnownTimestamp = data.cache_timestamp;
                         }
                     }
+                } else if (response.status === 429) {
+                    // Rate limited - skip this check, will retry on next interval
+                    // This shouldn't happen now that endpoint is exempt, but handle gracefully
                 }
             } catch (e) {
                 // Ignore polling errors, will retry on next interval
