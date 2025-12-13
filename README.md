@@ -45,31 +45,51 @@ Access the web UI at: http://localhost:1066
 
 ### Docker / Cloud Deployment
 
-1. **Build the image and create tar file:**
+#### Pull Build (Recommended)
+
+1. **Pull the image from GitHub Container Registry:**
 ```bash
-sudo docker build -t container-monkey ./
-sudo docker save -o container-monkey.tar container-monkey
+docker pull ghcr.io/omgboohoo/container_monkey:latest
 ```
 
-2. **Upload the tar file to your server:**
+2. **Run the container:**
 ```bash
-scp container-monkey.tar user@your-server:/home/ubuntu/
-```
-
-3. **On the server, load the image:**
-```bash
-sudo docker load -i /home/ubuntu/container-monkey.tar
-```
-
-4. **Run the container:**
-```bash
-sudo docker run -d \
+docker run -d \
   --name container-monkey \
   -p 1066:80 \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v container-monkey:/backups \
   --restart always \
-  container-monkey
+  ghcr.io/omgboohoo/container_monkey:latest
+```
+
+#### Manual Build
+
+1. **Build the image and create tar file:**
+```bash
+docker build -t container_monkey ./
+docker save -o container_monkey.tar container_monkey
+```
+
+2. **Upload the tar file to your server:**
+```bash
+scp container_monkey.tar user@your-server:/home/user/
+```
+
+3. **On the server, load the image:**
+```bash
+docker load -i container_monkey.tar
+```
+
+4. **Run the container:**
+```bash
+docker run -d \
+  --name container_monkey \
+  -p 1066:80 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v container-monkey:/backups \
+  --restart always \
+  container_monkey
 ```
 
 Access the web UI at: http://your-server:1066
