@@ -311,6 +311,19 @@ def get_system_stats() -> Dict[str, Any]:
             print(f"Warning: Failed to get CPU stats: {cpu_error}")
             cpu_percent = 0
         
+        # Get CPU count
+        cpu_count = 0
+        try:
+            cpu_count = psutil.cpu_count(logical=True)
+        except Exception as cpu_count_error:
+            print(f"Warning: Failed to get CPU count: {cpu_count_error}")
+            # Fallback: try reading from /proc/cpuinfo
+            try:
+                with open('/proc/cpuinfo') as f:
+                    cpu_count = len([line for line in f if line.startswith('processor')])
+            except:
+                cpu_count = 0
+        
         # Get system memory info with error handling
         try:
             memory = psutil.virtual_memory()
@@ -323,11 +336,34 @@ def get_system_stats() -> Dict[str, Any]:
             memory_total_mb = 0
             memory_percent = 0
         
+        # Get Docker version
+        docker_version = "N/A"
+        try:
+            result = subprocess.run(
+                ['docker', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                # Extract version from output like "Docker version 24.0.7, build afdd53b"
+                version_output = result.stdout.strip()
+                # Try to extract just the version number
+                version_match = re.search(r'version\s+([\d.]+)', version_output, re.IGNORECASE)
+                if version_match:
+                    docker_version = version_match.group(1)
+                else:
+                    docker_version = version_output.replace('Docker version ', '').split(',')[0].strip()
+        except Exception as docker_version_error:
+            print(f"Warning: Failed to get Docker version: {docker_version_error}")
+        
         return {
             'cpu_percent': cpu_percent if cpu_percent is not None else 0,
+            'cpu_count': cpu_count,
             'memory_used_mb': memory_used_mb,
             'memory_total_mb': memory_total_mb,
-            'memory_percent': memory_percent
+            'memory_percent': memory_percent,
+            'docker_version': docker_version
         }
     except Exception as e:
         print(f"Error in get_system_stats: {e}")

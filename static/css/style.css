@@ -389,8 +389,11 @@ body {
 }
 
 .server-name-panel {
+    /* Keep text truly centered inside the pill */
+    position: relative;
     display: flex;
     align-items: center;
+    justify-content: center;
     padding: 8px 16px;
     background: rgba(59, 130, 246, 0.1);
     border: 1px solid rgba(59, 130, 246, 0.3);
@@ -404,12 +407,29 @@ body {
     transition: all 0.2s ease;
     white-space: nowrap;
     min-width: 180px;
-    justify-content: center;
 }
 
 .server-name-panel i {
     color: #60a5fa;
-    flex-shrink: 0;
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    width: 1em;
+    height: 1em;
+}
+
+.server-name-panel span {
+    display: block;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    text-align: center;
+    /* Reserve space so long names don't overlap the icon */
+    padding: 0 1.75em;
 }
 
 .server-name-panel:hover {
@@ -1314,6 +1334,11 @@ select.form-control:focus option:checked {
     overflow-y: auto;
 }
 
+/* Details modal - no scrollbar on outer modal */
+#details-modal {
+    overflow-y: hidden;
+}
+
 /* Center all modals vertically when shown */
 .modal[style*="display: block"] {
     display: flex !important;
@@ -1337,6 +1362,67 @@ select.form-control:focus option:checked {
     color: var(--text-primary);
     position: relative;
     box-sizing: border-box;
+}
+
+/* Details modal - scrollbar on inner content */
+#details-modal .modal-content {
+    overflow-y: visible;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+}
+
+#details-modal .close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    float: none;
+}
+
+#details-modal h2 {
+    margin-top: 0;
+    margin-right: 40px; /* Space for close button */
+}
+
+#container-details {
+    max-height: 70vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin-top: 16px;
+}
+
+/* Restore modal - scrollbar on inner content */
+#restore-modal .modal-content {
+    overflow-y: visible;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+}
+
+#restore-modal .close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    float: none;
+}
+
+#restore-modal h2 {
+    margin-top: 0;
+    margin-right: 40px; /* Space for close button */
+}
+
+#restore-content {
+    max-height: 70vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin-top: 16px;
+    flex: 1;
+    min-height: 0;
+}
+
+#restore-modal .modal-actions {
+    margin-top: 20px;
+    flex-shrink: 0;
 }
 
 /* Login modal specific - prevent unnecessary scrolling */

@@ -29,6 +29,7 @@ class VolumeManager:
             volumes_list = docker_api_client.list_volumes()
             
             volumes_in_use = {}
+            container_stacks = {}  # Map container_name to stack name
             try:
                 containers_result = subprocess.run(
                     ['docker', 'ps', '-a', '--format', '{{.ID}}\t{{.Names}}'],
@@ -44,6 +45,23 @@ class VolumeManager:
                         if len(parts) >= 2:
                             container_id = parts[0]
                             container_name = parts[1].lstrip('/')
+                            
+                            # Get stack information from container labels
+                            try:
+                                labels_result = subprocess.run(
+                                    ['docker', 'inspect', '--format', '{{json .Config.Labels}}', container_id],
+                                    capture_output=True,
+                                    text=True,
+                                    timeout=5
+                                )
+                                if labels_result.returncode == 0:
+                                    labels_data = json.loads(labels_result.stdout)
+                                    if isinstance(labels_data, dict):
+                                        stack_name = labels_data.get('com.docker.compose.project', '') or labels_data.get('com.docker.stack.namespace', '')
+                                        if stack_name:
+                                            container_stacks[container_name] = stack_name
+                            except:
+                                pass
                             
                             try:
                                 inspect_result = subprocess.run(
@@ -92,6 +110,14 @@ class VolumeManager:
                 containers_using = volumes_in_use.get(volume_name, [])
                 in_use = len(containers_using) > 0
                 
+                # Determine stack by checking containers that use this volume
+                stack_name = None
+                if containers_using:
+                    for container_name in containers_using:
+                        if container_name in container_stacks:
+                            stack_name = container_stacks[container_name]
+                            break  # Use first stack found
+                
                 vol_details = {
                     'name': volume_name,
                     'driver': vol_summary.get('Driver'),
@@ -103,6 +129,7 @@ class VolumeManager:
                     'options': vol_summary.get('Options', {}) or {},
                     'in_use': in_use,
                     'containers': containers_using,
+                    'stack': stack_name,
                 }
                 volumes_with_details.append(vol_details)
 

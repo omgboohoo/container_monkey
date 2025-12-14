@@ -1,5 +1,64 @@
 # Release Notes
 
+## Version 0.3.10
+
+### Top Bar Enhancements
+- **CPU Count Display**: Added CPU core count display to the top bar
+  - Shows the total number of CPU cores available on the system
+  - Updates automatically every 5 seconds along with other system stats
+  - Displays as "Cores: X" in the top bar statistics
+- **Docker Version Display**: Added Docker version display to the top bar
+  - Shows the installed Docker version (e.g., "24.0.7")
+  - Automatically retrieved from `docker --version` command
+  - Updates on system stats refresh
+  - Displays as "Docker: X.X.X" in the top bar statistics
+
+### Container Details Modal Enhancements
+- **Labels Section**: Added Labels section to container details modal
+  - Displays all container labels as key-value pairs
+  - Appears after Environment Variables section
+  - Shows labels like maintainer, org.label-schema.*, etc.
+- **Start Time Field**: Added Start Time to Basic Information section
+  - Shows when the container was last started
+  - Displays formatted timestamp (e.g., "14/12/2025, 10:11:23")
+  - Only shown if container has been started
+- **Full Container ID**: Added complete container ID to Basic Information
+  - Displays the full 64-character container ID hash
+  - Styled with monospace font for better readability
+  - Shows complete ID instead of shortened 12-character version
+
+### UI Improvements
+- **Modal Scrollbar Positioning**: Fixed scrollbar position on container details modal
+  - Scrollbar now appears on inner content section (#container-details) instead of outer modal edge
+  - Better visual consistency and user experience
+  - Other modals remain unchanged
+- **Modal Close Button**: Fixed close button positioning on container details modal
+  - Close button (X) now properly positioned in top right corner
+  - Matches positioning of other modals
+  - Uses absolute positioning to work correctly with flex layout
+- **Restore Modal Scrollbar**: Fixed scrollbar position on backup vault restore modal
+  - Scrollbar now appears on inner content section (#restore-content) instead of outer modal edge
+  - Matches the behavior of the container details modal for consistency
+  - Restore Container and Cancel buttons remain fixed at bottom outside scrollable area
+  - Better user experience when viewing long backup previews with many volumes or port mappings
+- **Server Name Panel Centering**: Fixed horizontal centering of server name text in top bar
+  - Server name text is now properly centered within its panel
+  - Icon positioned absolutely on the left so it doesn't affect text centering
+  - Text uses full width with center alignment for perfect visual balance
+
+### Volume Management Enhancements
+- **Stack Column in Volumes Table**: Added Stack column to volumes table
+  - Displays which Docker stack (Compose project or Swarm stack) each volume belongs to
+  - Shows "-" if volume doesn't belong to any stack
+  - Stack information determined by checking container labels of containers using each volume
+  - Column is sortable like other volume columns
+  - Positioned between Name and Driver columns for logical grouping
+
+### Version Update
+- Updated version number to 0.3.10 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.9
 
 ### Performance Improvements

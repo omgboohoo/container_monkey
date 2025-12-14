@@ -7,7 +7,7 @@
     <title>Container Monkey - Secure Your Docker Environment</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.10">
     <!-- CSRF Token -->
     <script>
         // Make CSRF token available to JavaScript
@@ -43,9 +43,19 @@
                             <span class="stat-value" id="system-cpu">--</span>
                         </div>
                         <div class="stat-item">
+                            <i class="ph ph-cpu" style="font-size: 1em;"></i>
+                            <span class="stat-label">Cores:</span>
+                            <span class="stat-value" id="system-cpu-count">--</span>
+                        </div>
+                        <div class="stat-item">
                             <i class="ph ph-memory" style="font-size: 1em;"></i>
                             <span class="stat-label">RAM:</span>
                             <span class="stat-value" id="system-ram">--</span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="ph ph-cube" style="font-size: 1em;"></i>
+                            <span class="stat-label">Docker:</span>
+                            <span class="stat-value" id="system-docker-version">--</span>
                         </div>
                         <div class="stat-item" id="current-time-item">
                             <i class="ph ph-clock" style="font-size: 1em;"></i>
@@ -55,7 +65,7 @@
                 </div>
                 <div class="top-bar-right">
                     <div id="server-name-display" class="server-name-panel" style="display: none; cursor: pointer;" onclick="showSettingsModal(); return false;" title="Click to edit server name">
-                        <i class="ph ph-server" style="margin-right: 8px; font-size: 1em;"></i>
+                        <i class="ph ph-server" style="font-size: 1em;"></i>
                         <span></span>
                     </div>
                     <div class="user-menu-container" id="user-menu-container" style="display: none;">
@@ -140,7 +150,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.9</span>
+                    v0.3.10</span>
             </div>
         </aside>
 
@@ -377,6 +387,10 @@
                                 <th class="sortable" data-sort="name" onclick="sortVolumes('name')"
                                     style="cursor: pointer; user-select: none;">
                                     Name <span class="sort-indicator" id="sort-volume-name"></span>
+                                </th>
+                                <th class="sortable" data-sort="stack" onclick="sortVolumes('stack')"
+                                    style="cursor: pointer; user-select: none;">
+                                    Stack <span class="sort-indicator" id="sort-volume-stack"></span>
                                 </th>
                                 <th class="sortable" data-sort="driver" onclick="sortVolumes('driver')"
                                     style="cursor: pointer; user-select: none;">
@@ -1034,11 +1048,10 @@
                         </p>
                     </div>
                 </div>
-
-                <div id="restore-modal-actions" class="modal-actions">
-                    <button class="btn btn-success btn-sm" onclick="submitRestore()">🚀 Restore Container</button>
-                    <button class="btn btn-secondary btn-sm" onclick="closeRestoreModal()">Cancel</button>
-                </div>
+            </div>
+            <div id="restore-modal-actions" class="modal-actions">
+                <button class="btn btn-success btn-sm" onclick="submitRestore()">🚀 Restore Container</button>
+                <button class="btn btn-secondary btn-sm" onclick="closeRestoreModal()">Cancel</button>
             </div>
             <div id="restore-progress" class="backup-progress"
                 style="display: none; text-align: center; padding: 60px 20px;">

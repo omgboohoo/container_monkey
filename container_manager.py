@@ -550,6 +550,7 @@ class ContainerManager:
                     'image_id': inspect_data.get('Image', ''),
                     'status': 'running' if state.get('Running') else 'stopped',
                     'created': inspect_data.get('Created', ''),
+                    'started': state.get('StartedAt', ''),
                     'config': {
                         'env': env,
                         'cmd': cmd,

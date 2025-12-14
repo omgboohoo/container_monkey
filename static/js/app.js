@@ -1089,9 +1089,11 @@ function formatContainerDetails(data) {
             <h3>Basic Information</h3>
             <ul>
                 <li><strong>Name:</strong> ${escapeHtml(data.name)}</li>
+                <li><strong>ID:</strong> <span style="font-family: monospace; font-size: 0.9em;">${escapeHtml(data.id)}</span></li>
                 <li><strong>Image:</strong> ${escapeHtml(data.image)}</li>
                 <li><strong>Status:</strong> ${escapeHtml(data.status)}</li>
                 <li><strong>Created:</strong> ${new Date(data.created).toLocaleString()}</li>
+                ${data.started ? `<li><strong>Start Time:</strong> ${new Date(data.started).toLocaleString()}</li>` : ''}
             </ul>
         </div>
     `;
@@ -1102,6 +1104,17 @@ function formatContainerDetails(data) {
                 <h3>Environment Variables</h3>
                 <ul>
                     ${data.config.env.map(env => `<li>${escapeHtml(env)}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    }
+
+    if (data.config.labels && Object.keys(data.config.labels).length > 0) {
+        html += `
+            <div class="details-section">
+                <h3>Labels</h3>
+                <ul>
+                    ${Object.entries(data.config.labels).map(([key, value]) => `<li><strong>${escapeHtml(key)}</strong> ${escapeHtml(value)}</li>`).join('')}
                 </ul>
             </div>
         `;
@@ -2802,6 +2815,10 @@ function sortVolumesData(volumes, column, direction) {
                 aVal = (a.name || '').toLowerCase();
                 bVal = (b.name || '').toLowerCase();
                 break;
+            case 'stack':
+                aVal = (a.stack || '-').toLowerCase();
+                bVal = (b.stack || '-').toLowerCase();
+                break;
             case 'driver':
                 aVal = (a.driver || '').toLowerCase();
                 bVal = (b.driver || '').toLowerCase();
@@ -2845,7 +2862,7 @@ function renderVolumes(volumes) {
     volumesList.innerHTML = '';
 
     if (volumes.length === 0) {
-        volumesList.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 40px; color: #666;">No volumes found</td></tr>';
+        volumesList.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #666;">No volumes found</td></tr>';
     } else {
         volumes.forEach(volume => {
             const row = createVolumeRow(volume);
@@ -3571,6 +3588,8 @@ function closeRestoreModal() {
     // Reset modal state for next open
     const restoreLoading = document.getElementById('restore-loading');
     const restoreOptions = document.getElementById('restore-options');
+    const restoreContent = document.getElementById('restore-content');
+    const restoreProgress = document.getElementById('restore-progress');
     const modalActions = document.getElementById('restore-modal-actions');
     restoreLoading.style.display = 'none';
     restoreLoading.className = 'backup-progress'; // Restore original class
@@ -3578,6 +3597,8 @@ function closeRestoreModal() {
     restoreLoading.style.padding = '60px 20px';
     restoreLoading.innerHTML = '<div class="spinner" style="margin: 0 auto;"></div><p style="margin-top: 20px;">Loading backup preview...</p>'; // Restore original content
     restoreOptions.style.display = 'none';
+    if (restoreContent) restoreContent.style.display = 'block'; // Reset to visible for next open
+    if (restoreProgress) restoreProgress.style.display = 'none'; // Hide progress
     if (modalActions) modalActions.style.display = 'flex'; // Reset to visible for next open
 }
 
@@ -3600,8 +3621,9 @@ async function submitRestore() {
         }
     });
 
-    // Hide options, show progress
+    // Hide options and buttons, show progress
     document.getElementById('restore-content').style.display = 'none';
+    document.getElementById('restore-modal-actions').style.display = 'none';
     const restoreProgressEl = document.getElementById('restore-progress');
     restoreProgressEl.style.display = 'block';
 
@@ -5229,6 +5251,9 @@ function createVolumeRow(volume) {
             ${volume.in_use && !volume.is_self && volume.containers && volume.containers.length > 0 ? `<div style="font-size: 0.8em; color: #999; margin-top: 4px;"><em>In use by ${volume.containers.map(c => `<a href="#" onclick="event.stopPropagation(); viewContainerByName('${escapeHtml(c)}'); return false;" style="color: var(--secondary); text-decoration: underline; cursor: pointer;">${escapeHtml(c)}</a>`).join(', ')}</em></div>` : ''}
         </td>
         <td>
+            <div style="color: var(--text-secondary);">${volume.stack ? escapeHtml(volume.stack) : '-'}</div>
+        </td>
+        <td>
             <div style="color: var(--text-secondary);">${escapeHtml(volume.driver)}</div>
         </td>
         <td>
@@ -6518,17 +6543,25 @@ async function updateSystemStats() {
         // Update cache
         systemStatsCache = {
             cpu_percent: data.cpu_percent || 0,
+            cpu_count: data.cpu_count || 0,
             memory_used_mb: data.memory_used_mb || 0,
             memory_total_mb: data.memory_total_mb || 0,
             memory_percent: data.memory_percent || 0,
+            docker_version: data.docker_version || 'N/A',
             timestamp: Date.now()
         };
 
         const cpuEl = document.getElementById('system-cpu');
+        const cpuCountEl = document.getElementById('system-cpu-count');
         const ramEl = document.getElementById('system-ram');
+        const dockerVersionEl = document.getElementById('system-docker-version');
 
         if (cpuEl) {
             cpuEl.textContent = `${data.cpu_percent || 0}%`;
+        }
+
+        if (cpuCountEl) {
+            cpuCountEl.textContent = data.cpu_count || 0;
         }
 
         if (ramEl) {
@@ -6536,6 +6569,10 @@ async function updateSystemStats() {
             const memTotal = data.memory_total_mb || 0;
             const memPercent = data.memory_percent || 0;
             ramEl.textContent = `${Math.round(memUsed)} MB / ${Math.round(memTotal)} MB (${memPercent.toFixed(1)}%)`;
+        }
+
+        if (dockerVersionEl) {
+            dockerVersionEl.textContent = data.docker_version || 'N/A';
         }
 
     } catch (error) {
@@ -6569,10 +6606,16 @@ function applyCachedSystemStats() {
     if (!systemStatsCache) return;
 
     const cpuEl = document.getElementById('system-cpu');
+    const cpuCountEl = document.getElementById('system-cpu-count');
     const ramEl = document.getElementById('system-ram');
+    const dockerVersionEl = document.getElementById('system-docker-version');
 
     if (cpuEl) {
         cpuEl.textContent = `${systemStatsCache.cpu_percent}%`;
+    }
+
+    if (cpuCountEl) {
+        cpuCountEl.textContent = systemStatsCache.cpu_count || 0;
     }
 
     if (ramEl) {
@@ -6580,6 +6623,10 @@ function applyCachedSystemStats() {
         const memTotal = systemStatsCache.memory_total_mb || 0;
         const memPercent = systemStatsCache.memory_percent || 0;
         ramEl.textContent = `${Math.round(memUsed)} MB / ${Math.round(memTotal)} MB (${memPercent.toFixed(1)}%)`;
+    }
+
+    if (dockerVersionEl) {
+        dockerVersionEl.textContent = systemStatsCache.docker_version || 'N/A';
     }
 }
 
