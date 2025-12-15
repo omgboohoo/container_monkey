@@ -577,12 +577,12 @@ body {
 
 .section-header h2 {
     color: var(--text-primary);
-    font-size: 2em;
+    font-size: 0.95em;
     font-weight: 700;
     letter-spacing: -0.01em;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 6px;
 }
 
 /* Ensure icons in section headers are vertically centered */
@@ -595,14 +595,14 @@ body {
 }
 
 .btn {
-    padding: 12px 26px;
+    padding: 10px 20px;
     border: 1px solid transparent;
     border-radius: 8px;
     cursor: pointer;
     font-size: 0.95em;
     font-weight: 700;
     letter-spacing: 0.08em;
-    text-transform: uppercase;
+    text-transform: capitalize;
     transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease;
     text-decoration: none;
     display: inline-flex;
@@ -610,7 +610,7 @@ body {
     justify-content: center;
     gap: 8px;
     box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
-    min-height: 44px;
+    min-height: 38px;
     white-space: nowrap;
     position: relative;
     overflow: hidden;
@@ -630,9 +630,9 @@ body {
 
 /* Button Size Variants */
 .btn-sm {
-    padding: 8px 18px;
+    padding: 6px 14px;
     font-size: 0.8em;
-    min-height: 36px;
+    min-height: 32px;
     letter-spacing: 0.05em;
 }
 
@@ -1256,11 +1256,11 @@ select.form-control:focus option:checked {
 
 .container-status {
     display: inline-block;
-    padding: 4px 10px;
+    padding: 2px 8px;
     border-radius: 20px;
-    font-size: 0.75em;
+    font-size: 0.8em;
     font-weight: 600;
-    text-transform: uppercase;
+    text-transform: lowercase;
     letter-spacing: 0.05em;
 }
 
@@ -1861,7 +1861,7 @@ select.form-control:focus option:checked {
     }
     
     .section-header h2 {
-        font-size: 1.5em;
+        font-size: 0.95em;
     }
 }
 
@@ -2092,7 +2092,7 @@ select.form-control:focus option:checked {
 }
 
 .status-badge {
-    padding: 3px 8px;
+    padding: 2px 6px;
     border-radius: 12px;
     font-size: 0.8em;
     font-weight: 600;
@@ -2138,6 +2138,36 @@ select.form-control:focus option:checked {
     word-break: break-word; /* Allow long filenames to wrap */
     overflow-wrap: break-word; /* Additional wrapping support */
     max-width: 100%; /* Prevent overflow */
+}
+
+/* Hide icons in confirmation modal buttons */
+#confirmation-modal .btn i,
+#confirmation-modal .btn .ph {
+    display: none;
+}
+
+/* Hide icons in delete container modal buttons */
+#delete-container-modal .btn i,
+#delete-container-modal .btn .ph {
+    display: none;
+}
+
+/* Hide icons in restore modal buttons */
+#restore-modal .btn i,
+#restore-modal .btn .ph {
+    display: none;
+}
+
+/* Hide icons in environment check modal buttons */
+#env-check-modal .btn i,
+#env-check-modal .btn .ph {
+    display: none;
+}
+
+/* Hide icons in default credentials modal buttons */
+#default-credentials-modal .btn i,
+#default-credentials-modal .btn .ph {
+    display: none;
 }
 
 #confirmation-message {

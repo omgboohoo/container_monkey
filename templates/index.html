@@ -7,7 +7,7 @@
     <title>Container Monkey - Secure Your Docker Environment</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.11">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.12">
     <!-- CSRF Token -->
     <script>
         // Make CSRF token available to JavaScript
@@ -154,7 +154,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.11</span>
+                    v0.3.12</span>
             </div>
         </aside>
 
@@ -169,7 +169,7 @@
             <!-- Dashboard Section -->
             <section id="dashboard-section" class="content-section active">
                 <div class="section-header">
-                    <h2><i class="ph ph-chart-bar" style="margin-right: 12px;"></i>Dashboard</h2>
+                    <h2><i class="ph ph-chart-bar" style="margin-right: 6px;"></i>Dashboard</h2>
                 </div>
                 <div class="panel-container">
                     <!-- Environment Info Panel -->
@@ -298,7 +298,7 @@
             <!-- Containers Section -->
             <section id="containers-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-cube" style="margin-right: 12px;"></i>Containers</h2>
+                    <h2><i class="ph ph-cube" style="margin-right: 6px;"></i>Containers</h2>
                     <div>
                         <div class="btn-group">
                             <button class="btn btn-success btn-sm bulk-btn" onclick="startSelectedContainers()"
@@ -372,7 +372,7 @@
             <!-- Volumes Section -->
             <section id="volumes-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-database" style="margin-right: 12px;"></i>Volumes</h2>
+                    <h2><i class="ph ph-database" style="margin-right: 6px;"></i>Volumes</h2>
                     <div>
                         <button class="btn btn-danger btn-sm" id="delete-selected-volumes-btn"
                             onclick="deleteSelectedVolumes()" disabled><i class="ph ph-trash"></i> Remove</button>
@@ -429,7 +429,7 @@
             <!-- Images Section -->
             <section id="images-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-list-dashes" style="margin-right: 12px;"></i>Images</h2>
+                    <h2><i class="ph ph-list-dashes" style="margin-right: 6px;"></i>Images</h2>
                     <div>
                         <button class="btn btn-danger btn-sm" id="delete-selected-images-btn"
                             onclick="deleteSelectedImages()" disabled><i class="ph ph-trash"></i> Remove</button>
@@ -481,7 +481,7 @@
             <section id="networks-section" class="content-section" style="display: none;">
                 <div class="section-header">
                     <h2><i class="ph ph-tree-structure"
-                            style="transform: rotate(90deg); display: inline-block; margin-right: 12px;"></i>Networks
+                            style="transform: rotate(90deg); display: inline-block; margin-right: 6px;"></i>Networks
                     </h2>
                     <div>
                         <button class="btn btn-primary btn-sm" onclick="loadNetworks()"><i
@@ -531,7 +531,7 @@
             <!-- Stacks Section -->
             <section id="stacks-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-stack" style="margin-right: 12px;"></i>Stacks</h2>
+                    <h2><i class="ph ph-stack" style="margin-right: 6px;"></i>Stacks</h2>
                     <div>
                         <button class="btn btn-primary btn-sm" onclick="loadStacks()"><i
                                 class="ph ph-arrows-clockwise"></i> Refresh</button>
@@ -580,7 +580,7 @@
             <!-- Backups Section -->
             <section id="backups-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-shield-check" style="margin-right: 12px;"></i>Backup Vault</h2>
+                    <h2><i class="ph ph-shield-check" style="margin-right: 6px;"></i>Backup Vault</h2>
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                         <!-- Search Filter -->
                         <div style="position: relative; min-width: 250px; flex: 1; max-width: 400px;">
@@ -669,7 +669,7 @@
             <!-- Backup Scheduler Section -->
             <section id="backup-scheduler-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-clock-clockwise" style="margin-right: 12px;"></i>Backup Scheduler</h2>
+                    <h2><i class="ph ph-clock-clockwise" style="margin-right: 6px;"></i>Backup Scheduler</h2>
                     <div style="display: flex; gap: 8px; align-items: center;">
                         <div id="scheduler-status-header" style="display: flex; align-items: center; gap: 8px; margin-right: 8px;">
                             <span id="scheduler-status-icon" style="font-size: 1.2em;">⏸️</span>
@@ -790,7 +790,7 @@
             <!-- Audit Log Section -->
             <section id="audit-log-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-file-text" style="margin-right: 12px;"></i>Backup Audit Log</h2>
+                    <h2><i class="ph ph-file-text" style="margin-right: 6px;"></i>Backup Audit Log</h2>
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                         <!-- Search Filter -->
                         <div style="position: relative; min-width: 250px; flex: 1; max-width: 400px;">
@@ -865,7 +865,7 @@
 
             <section id="statistics-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-chart-line" style="margin-right: 12px;"></i>Statistics</h2>
+                    <h2><i class="ph ph-chart-line" style="margin-right: 6px;"></i>Statistics</h2>
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                         <button class="btn btn-primary btn-sm" id="statistics-refresh-btn" onclick="refreshStatistics()">
                             <i class="ph ph-arrows-clockwise"></i> Refresh
@@ -903,7 +903,7 @@
             <!-- Events Section -->
             <section id="events-section" class="content-section" style="display: none;">
                 <div class="section-header">
-                    <h2><i class="ph ph-bell" style="margin-right: 12px;"></i>Events</h2>
+                    <h2><i class="ph ph-bell" style="margin-right: 6px;"></i>Events</h2>
                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                         <!-- Search Filter -->
                         <div style="position: relative; min-width: 250px; flex: 1; max-width: 400px;">
@@ -1131,7 +1131,7 @@
                 </div>
             </div>
             <div id="restore-modal-actions" class="modal-actions">
-                <button class="btn btn-success btn-sm" onclick="submitRestore()">🚀 Restore Container</button>
+                <button class="btn btn-success btn-sm" onclick="submitRestore()">Restore Container</button>
                 <button class="btn btn-secondary btn-sm" onclick="closeRestoreModal()">Cancel</button>
             </div>
             <div id="restore-progress" class="backup-progress"
@@ -1188,7 +1188,7 @@
             <h2>System Environment Check</h2>
             <div id="env-check-results"></div>
             <div class="modal-actions" style="margin-top: 20px;">
-                <button class="btn btn-primary btn-sm" onclick="checkEnvironment()">🔄 Re-run Checks</button>
+                <button class="btn btn-primary btn-sm" onclick="checkEnvironment()">Re-run Checks</button>
                 <button class="btn btn-secondary btn-sm" onclick="closeEnvCheckModal()">Close</button>
             </div>
         </div>
@@ -1300,7 +1300,6 @@
                     <span>Container Monkey</span>
                 </h1>
             </div>
-            <h2 style="margin-top: 0; text-align: center;">Login</h2>
             <div id="login-error" class="error" style="display: none; margin-bottom: 20px;"></div>
             <form id="login-form" onsubmit="handleLogin(event); return false;" style="overflow: hidden;">
                 <div style="margin-bottom: 20px; overflow: hidden;">
@@ -1351,7 +1350,6 @@
             <div class="modal-actions modal-actions--column" style="justify-content: center;">
                 <button type="button" class="btn btn-primary btn-sm"
                     onclick="closeDefaultCredentialsModal(); showChangePasswordModal();">
-                    <i class="ph ph-key"></i>
                     Change Password Now
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="closeDefaultCredentialsModal()">

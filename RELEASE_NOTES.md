@@ -1,5 +1,30 @@
 # Release Notes
 
+## Version 0.3.12
+
+### UI Improvements
+- **Responsive Design Enhancements**: Improved UI for smaller displays
+  - Section titles now match menu item size (0.95em) for better consistency
+  - Reduced gap between section titles and icons by 50% (from 12px to 6px)
+  - Made buttons more compact across the app (reduced padding and min-height)
+- **Status Column Styling**: Updated status pills for better readability
+  - Status text now uses smaller font size (0.8em) with lowercase text
+  - Reduced padding on status pills for more compact display
+- **Button Text Styling**: Changed button text from all caps to title case
+  - Buttons now use capitalize text-transform instead of uppercase
+  - More readable and professional appearance
+- **Modal Button Cleanup**: Removed icons from all modal buttons
+  - Confirmation dialogs no longer show icons on buttons
+  - Delete container modal buttons are icon-free
+  - Restore modal, environment check modal, and security warning modal buttons updated
+  - Cleaner, more consistent modal interface
+- **Login Modal**: Removed redundant "Login" heading text
+
+### Version Update
+- Updated version number to 0.3.12 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.11
 
 ### Container Management Enhancements

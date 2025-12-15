@@ -4208,8 +4208,8 @@ async function showDeleteOptions(containerId, containerName) {
         ? `Remove ${selectedIds.length} Containers`
         : `Remove Container: ${escapeHtml(containerName)}`;
     const buttonText = isMultiple
-        ? `🗑️ Remove ${selectedIds.length} Containers`
-        : `🗑️ Remove Container`;
+        ? `Remove ${selectedIds.length} Containers`
+        : `Remove Container`;
 
     // Build volumes checkboxes
     let volumesHtml = '';
