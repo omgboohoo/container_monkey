@@ -7,7 +7,7 @@
     <title>Container Monkey - Secure Your Docker Environment</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.10">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.11">
     <!-- CSRF Token -->
     <script>
         // Make CSRF token available to JavaScript
@@ -136,6 +136,10 @@
                     <span class="nav-icon"><i class="ph ph-chart-line"></i></span>
                     <span class="nav-text">Statistics</span>
                 </a>
+                <a href="#" class="nav-item" onclick="showSection('events', this); return false;">
+                    <span class="nav-icon"><i class="ph ph-bell"></i></span>
+                    <span class="nav-text">Events</span>
+                </a>
             </nav>
             <div class="sidebar-footer">
                 <a href="https://ko-fi.com/containermonkey" target="_blank" rel="noopener noreferrer"
@@ -150,7 +154,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.10</span>
+                    v0.3.11</span>
             </div>
         </aside>
 
@@ -300,15 +304,19 @@
                             <button class="btn btn-success btn-sm bulk-btn" onclick="startSelectedContainers()"
                                 disabled><i class="ph ph-play"></i> Start</button>
                             <button class="btn btn-secondary btn-sm bulk-btn" onclick="stopSelectedContainers()"
-                                disabled><i class="ph ph-pause"></i> Stop</button>
+                                disabled><i class="ph ph-square"></i> Stop</button>
                             <button class="btn btn-danger btn-sm bulk-btn" onclick="killSelectedContainers()"
                                 disabled><i class="ph ph-x-circle"></i> Kill</button>
                             <button class="btn btn-primary btn-sm bulk-btn" onclick="restartSelectedContainers()"
                                 disabled><i class="ph ph-arrows-clockwise"></i> Restart</button>
+                            <button class="btn btn-warning btn-sm bulk-btn" onclick="pauseSelectedContainers()"
+                                disabled><i class="ph ph-pause"></i> Pause</button>
+                            <button class="btn btn-warning btn-sm bulk-btn" onclick="resumeSelectedContainers()"
+                                disabled><i class="ph ph-play"></i> Resume</button>
                             <button class="btn btn-warning btn-sm bulk-btn" onclick="backupSelectedContainers()"
                                 disabled><i class="ph ph-floppy-disk"></i> Backup</button>
                             <button class="btn btn-danger btn-sm bulk-btn" onclick="deleteSelectedContainers()"
-                                disabled><i class="ph ph-trash"></i> Delete</button>
+                                disabled><i class="ph ph-trash"></i> Remove</button>
                             <button class="btn btn-success btn-sm" id="backup-all-btn"
                                 onclick="backupAllContainers()"><i class="ph ph-floppy-disk"></i> Backup All</button>
                             <button class="btn btn-secondary btn-sm" id="clear-filter-btn" onclick="clearStackFilter()"
@@ -367,7 +375,7 @@
                     <h2><i class="ph ph-database" style="margin-right: 12px;"></i>Volumes</h2>
                     <div>
                         <button class="btn btn-danger btn-sm" id="delete-selected-volumes-btn"
-                            onclick="deleteSelectedVolumes()" disabled><i class="ph ph-trash"></i> Delete</button>
+                            onclick="deleteSelectedVolumes()" disabled><i class="ph ph-trash"></i> Remove</button>
                         <button class="btn btn-primary btn-sm" onclick="loadVolumes()"><i
                                 class="ph ph-arrows-clockwise"></i> Refresh</button>
                     </div>
@@ -424,7 +432,7 @@
                     <h2><i class="ph ph-list-dashes" style="margin-right: 12px;"></i>Images</h2>
                     <div>
                         <button class="btn btn-danger btn-sm" id="delete-selected-images-btn"
-                            onclick="deleteSelectedImages()" disabled><i class="ph ph-trash"></i> Delete</button>
+                            onclick="deleteSelectedImages()" disabled><i class="ph ph-trash"></i> Remove</button>
                         <button class="btn btn-warning btn-sm" id="cleanup-dangling-images-btn"
                             onclick="cleanupDanglingImages()"><i class="ph ph-broom"></i> Cleanup Dangling
                             Images</button>
@@ -604,7 +612,7 @@
                             <button id="download-backups-btn" class="btn btn-success btn-sm" onclick="downloadAllBackups()" disabled><i
                                     class="ph ph-download-simple"></i> Download</button>
                             <button id="delete-backups-btn" class="btn btn-danger btn-sm" onclick="deleteAllBackups()" disabled><i
-                                    class="ph ph-trash"></i> Delete</button>
+                                    class="ph ph-trash"></i> Remove</button>
                         </div>
                     </div>
                 </div>
@@ -892,6 +900,79 @@
                 </div>
             </section>
 
+            <!-- Events Section -->
+            <section id="events-section" class="content-section" style="display: none;">
+                <div class="section-header">
+                    <h2><i class="ph ph-bell" style="margin-right: 12px;"></i>Events</h2>
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <!-- Search Filter -->
+                        <div style="position: relative; min-width: 250px; flex: 1; max-width: 400px;">
+                            <i class="ph ph-magnifying-glass"
+                                style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 1.1em;"></i>
+                            <input type="text" id="events-search" placeholder="Search events..."
+                                style="width: 100%; height: 36px; padding: 8px 12px 8px 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95em; box-sizing: border-box;"
+                                oninput="filterEvents()">
+                        </div>
+                        <select id="events-filter-type"
+                            style="height: 36px; padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95em; appearance: none; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23cbd5e1' d='M6 9L1 4h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 12px center; cursor: pointer; box-sizing: border-box;"
+                            onchange="updateEventsActionFilter(); filterEvents();">
+                            <option value="">All Types</option>
+                            <option value="container">Container</option>
+                            <option value="image">Image</option>
+                            <option value="volume">Volume</option>
+                            <option value="network">Network</option>
+                            <option value="plugin">Plugin</option>
+                            <option value="service">Service</option>
+                            <option value="node">Node</option>
+                            <option value="secret">Secret</option>
+                            <option value="config">Config</option>
+                        </select>
+                        <select id="events-filter-action"
+                            style="height: 36px; padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95em; appearance: none; background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23cbd5e1' d='M6 9L1 4h10z'/%3E%3C/svg%3E\"); background-repeat: no-repeat; background-position: right 12px center; cursor: pointer; box-sizing: border-box;"
+                            onchange="filterEvents()">
+                            <option value="">All Actions</option>
+                            <!-- Options will be dynamically populated based on selected type -->
+                        </select>
+                        <button class="btn btn-primary btn-sm" onclick="loadEvents()">
+                            <i class="ph ph-arrows-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div id="events-error" class="error" style="display: none;"></div>
+                <div class="table-responsive" id="events-table-wrapper">
+                    <div id="events-spinner" class="spinner-container grid-offset" style="display: none;">
+                        <div class="spinner"></div>
+                        <div class="grid-spinner-text">Loading Events...</div>
+                    </div>
+                    <table class="table" id="events-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="time" onclick="sortEvents('time')"
+                                    style="cursor: pointer; user-select: none;">
+                                    Time <span class="sort-indicator" id="sort-events-time"></span>
+                                </th>
+                                <th class="sortable" data-sort="type" onclick="sortEvents('type')"
+                                    style="cursor: pointer; user-select: none;">
+                                    Type <span class="sort-indicator" id="sort-events-type"></span>
+                                </th>
+                                <th class="sortable" data-sort="action" onclick="sortEvents('action')"
+                                    style="cursor: pointer; user-select: none;">
+                                    Action <span class="sort-indicator" id="sort-events-action"></span>
+                                </th>
+                                <th class="sortable" data-sort="name" onclick="sortEvents('name')"
+                                    style="cursor: pointer; user-select: none;">
+                                    Name <span class="sort-indicator" id="sort-events-name"></span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="events-list">
+                            <!-- Rows will be injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -1092,7 +1173,7 @@
         </div>
     </div>
 
-    <!-- Delete container modal -->
+    <!-- Remove container modal -->
     <div id="delete-container-modal" class="modal">
         <div class="modal-content" style="max-width: 600px;">
             <span class="close" onclick="closeDeleteContainerModal()">&times;</span>
@@ -1157,11 +1238,11 @@
         </div>
     </div>
 
-    <!-- Delete All Modal -->
+    <!-- Remove All Modal -->
     <div id="delete-all-modal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <span class="close" onclick="closeDeleteAllModal()">&times;</span>
-            <h2>Deleting Backups</h2>
+            <h2>Removing Backups</h2>
             <div id="delete-all-progress" style="margin: 20px 0;">
                 <div id="delete-all-status"
                     style="margin-bottom: 15px; font-size: 1.1em; color: var(--text-primary);"></div>
@@ -1267,7 +1348,7 @@
                     <li>Your Docker environment could be compromised</li>
                 </ul>
             </div>
-            <div class="modal-actions" style="justify-content: center;">
+            <div class="modal-actions modal-actions--column" style="justify-content: center;">
                 <button type="button" class="btn btn-primary btn-sm"
                     onclick="closeDefaultCredentialsModal(); showChangePasswordModal();">
                     <i class="ph ph-key"></i>

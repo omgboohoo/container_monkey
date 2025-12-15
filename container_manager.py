@@ -123,8 +123,15 @@ class ContainerManager:
                                         })
                     
                     status_text = container.get('Status', 'unknown')
-                    is_running = status_text.lower().startswith('up') or 'running' in status_text.lower()
-                    status_display = 'running' if is_running else 'stopped'
+                    status_lower = status_text.lower()
+                    is_paused = 'paused' in status_lower
+                    is_running = (status_lower.startswith('up') or 'running' in status_lower) and not is_paused
+                    if is_paused:
+                        status_display = 'paused'
+                    elif is_running:
+                        status_display = 'running'
+                    else:
+                        status_display = 'stopped'
                     
                     if 'stack_info' not in locals():
                         stack_info = None
@@ -237,8 +244,15 @@ class ContainerManager:
                         pass
                     
                     status_text = parts[3] if len(parts) > 3 else 'unknown'
-                    is_running = status_text.lower().startswith('up') or 'running' in status_text.lower()
-                    status_display = 'running' if is_running else 'stopped'
+                    status_lower = status_text.lower()
+                    is_paused = 'paused' in status_lower
+                    is_running = (status_lower.startswith('up') or 'running' in status_lower) and not is_paused
+                    if is_paused:
+                        status_display = 'paused'
+                    elif is_running:
+                        status_display = 'running'
+                    else:
+                        status_display = 'stopped'
                     
                     associated_volumes = []
                     image_info = {}
@@ -421,6 +435,42 @@ class ContainerManager:
                 if result.returncode != 0:
                     return {'error': result.stderr}
                 return {'success': True, 'message': 'Container restarted'}
+            except Exception as e:
+                return {'error': str(e)}
+        return {'error': 'Docker client not available'}
+    
+    def pause_container(self, container_id: str) -> Dict[str, Any]:
+        """Pause a container"""
+        docker_api_client = docker_utils.docker_api_client
+        if docker_api_client:
+            try:
+                result = subprocess.run(
+                    ['docker', 'pause', container_id],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode != 0:
+                    return {'error': result.stderr}
+                return {'success': True, 'message': 'Container paused'}
+            except Exception as e:
+                return {'error': str(e)}
+        return {'error': 'Docker client not available'}
+    
+    def resume_container(self, container_id: str) -> Dict[str, Any]:
+        """Resume (unpause) a container"""
+        docker_api_client = docker_utils.docker_api_client
+        if docker_api_client:
+            try:
+                result = subprocess.run(
+                    ['docker', 'unpause', container_id],
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if result.returncode != 0:
+                    return {'error': result.stderr}
+                return {'success': True, 'message': 'Container resumed'}
             except Exception as e:
                 return {'error': str(e)}
         return {'error': 'Docker client not available'}

@@ -1184,6 +1184,40 @@ select.form-control:focus option:checked {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Backup search input hover/focus */
+#backup-search-input {
+    transition: all 0.2s ease;
+}
+
+#backup-search-input:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-tertiary);
+}
+
+#backup-search-input:focus {
+    outline: none;
+    border-color: var(--secondary);
+    background: var(--bg-tertiary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Events search input hover/focus */
+#events-search {
+    transition: all 0.2s ease;
+}
+
+#events-search:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-tertiary);
+}
+
+#events-search:focus {
+    outline: none;
+    border-color: var(--secondary);
+    background: var(--bg-tertiary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .container-name {
     font-size: 1.25em;
     font-weight: 700;
@@ -1246,6 +1280,12 @@ select.form-control:focus option:checked {
     background: rgba(148, 163, 184, 0.2);
     color: var(--text-light);
     border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.status-paused {
+    background: rgba(255, 152, 0, 0.2);
+    color: #ff9800;
+    border: 1px solid rgba(255, 152, 0, 0.3);
 }
 
 .networks-list,
@@ -1650,6 +1690,19 @@ select.form-control:focus option:checked {
     gap: 12px;
     justify-content: flex-end;
     flex-wrap: wrap;
+}
+
+.modal-actions.modal-actions--column {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.modal-actions.modal-actions--column .btn {
+    width: 100%;
+}
+
+.modal-actions.modal-actions--column .btn + .btn {
+    margin-left: 0;
 }
 
 .backup-progress {

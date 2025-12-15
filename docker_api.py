@@ -1,6 +1,6 @@
 """
 Direct Docker API client using HTTP requests to Unix socket
-This bypasses docker-py library issues and works like Portainer
+This bypasses docker-py library issues and uses direct HTTP requests
 """
 import json
 import os
@@ -156,6 +156,110 @@ class DockerAPIClient:
     def list_networks(self) -> List[Dict]:
         """List networks"""
         return self._make_request('GET', '/networks')
+    
+    def get_events(self, since: Optional[int] = None, until: Optional[int] = None) -> List[Dict]:
+        """Get Docker events
+        
+        Args:
+            since: Unix timestamp to get events since (default: last 24 hours)
+            until: Unix timestamp to get events until (default: now)
+        
+        Returns:
+            List of event dictionaries
+        """
+        import time
+        
+        # Build query parameters
+        params = []
+        if since is None:
+            # Default to last 24 hours
+            since = int(time.time()) - (24 * 60 * 60)
+        params.append(f'since={since}')
+        
+        # Always set until to prevent infinite streaming
+        if until is None:
+            until = int(time.time())
+        params.append(f'until={until}')
+        
+        path = '/events'
+        if params:
+            path += '?' + '&'.join(params)
+        
+        # Events API returns newline-delimited JSON stream
+        # We need to handle this differently
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            # Set socket timeout to prevent hanging (5 seconds)
+            sock.settimeout(5.0)
+            sock.connect(self.socket_path)
+            
+            # Build HTTP request
+            request_line = f'GET {path} HTTP/1.1\r\n'
+            headers = [
+                'Host: localhost',
+                'Connection: close',
+            ]
+            
+            request = request_line + '\r\n'.join(headers) + '\r\n\r\n'
+            sock.sendall(request.encode())
+            
+            # Read response with timeout
+            response = b''
+            max_size = 1024 * 1024  # 1MB limit
+            try:
+                while len(response) < max_size:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    response += chunk
+            except socket.timeout:
+                # Timeout is OK - we got what we could
+                pass
+            
+            # Parse HTTP response
+            header_end = response.find(b'\r\n\r\n')
+            if header_end == -1:
+                raise Exception("Invalid HTTP response")
+            
+            headers_text = response[:header_end].decode('utf-8', errors='ignore')
+            body = response[header_end + 4:]
+            
+            # Check for chunked transfer encoding
+            if 'Transfer-Encoding: chunked' in headers_text:
+                body = self._parse_chunked_body(body)
+            
+            # Parse status line
+            status_line = headers_text.split('\r\n')[0]
+            status_parts = status_line.split(' ', 2)
+            status_code = int(status_parts[1])
+            
+            if status_code >= 400:
+                error_msg = body.decode('utf-8', errors='ignore')
+                raise Exception(f"Docker API error {status_code}: {error_msg}")
+            
+            # Parse newline-delimited JSON
+            events = []
+            if body:
+                body_str = body.decode('utf-8', errors='ignore')
+                for line in body_str.strip().split('\n'):
+                    if line.strip():
+                        try:
+                            event = json.loads(line)
+                            events.append(event)
+                        except json.JSONDecodeError:
+                            # Skip invalid JSON lines
+                            continue
+            
+            return events
+            
+        except socket.timeout:
+            # If we got a timeout but have some data, return what we have
+            return []
+        finally:
+            try:
+                sock.close()
+            except:
+                pass
     
     def inspect_container(self, container_id: str) -> Dict:
         """Inspect a container"""

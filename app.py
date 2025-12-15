@@ -25,6 +25,7 @@ from network_manager import NetworkManager
 from image_manager import ImageManager
 from stack_manager import StackManager
 from backup_manager import BackupManager
+from events_manager import EventsManager
 from backup_file_manager import BackupFileManager
 from restore_manager import RestoreManager
 from scheduler_manager import SchedulerManager
@@ -93,6 +94,7 @@ volume_manager = VolumeManager()
 network_manager = NetworkManager(app.config['BACKUP_DIR'], storage_settings_manager=storage_settings_manager)
 image_manager = ImageManager()
 stack_manager = StackManager()
+events_manager = EventsManager()
 backup_file_manager = BackupFileManager(app.config['BACKUP_DIR'], audit_log_manager=audit_log_manager, storage_settings_manager=storage_settings_manager, ui_settings_manager=ui_settings_manager)
 
 # Initialize backup manager
@@ -354,6 +356,20 @@ def restart_container(container_id):
         return jsonify(result), 500
     return jsonify(result)
 
+@app.route('/api/container/<container_id>/pause', methods=['POST'])
+def pause_container(container_id):
+    result = container_manager.pause_container(container_id)
+    if 'error' in result:
+        return jsonify(result), 500
+    return jsonify(result)
+
+@app.route('/api/container/<container_id>/resume', methods=['POST'])
+def resume_container(container_id):
+    result = container_manager.resume_container(container_id)
+    if 'error' in result:
+        return jsonify(result), 500
+    return jsonify(result)
+
 @app.route('/api/container/<container_id>/delete', methods=['DELETE'])
 def delete_container(container_id):
     delete_volumes = request.args.get('delete_volumes', 'false').lower() == 'true'
@@ -505,6 +521,21 @@ def list_network_backups():
         return jsonify(result), 500
     return jsonify(result)
 
+# Events routes
+@app.route('/api/events')
+@login_required
+def list_events():
+    """Get Docker events"""
+    try:
+        since = request.args.get('since', type=int)
+        until = request.args.get('until', type=int)
+        result = events_manager.list_events(since=since, until=until)
+        if 'error' in result:
+            status_code = 500 if result['error'] != 'Docker client not available' else 503
+            return jsonify(result), status_code
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Image routes
 @app.route('/api/images')

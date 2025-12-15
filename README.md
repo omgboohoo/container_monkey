@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.10**
+**Version 0.3.11**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -16,10 +16,11 @@ The open-source backup and recovery solution for Docker. Protect your containers
 
 ### Docker Management
 
-- **Container Operations**: Start, stop, restart, and manage containers with bulk operations support
+- **Container Operations**: Start, stop, pause, resume, restart, kill, and manage containers with bulk operations support
 - **Volume Management**: Explore, download, and manage Docker volumes through an intuitive web interface
 - **Image Management**: View and clean up Docker images, including automatic dangling image detection
 - **Network Management**: Backup and restore Docker networks with full configuration preservation
+- **Events Monitoring**: View and filter Docker events (containers, images, volumes, networks) with search and type/action filtering
 
 ### Operations & Monitoring
 
@@ -121,13 +122,15 @@ Access the web UI at: http://your-server:1066
 ### Container Operations
 
 1. **View Containers**: Navigate to the Containers section
-2. **Start/Stop/Kill/Restart**: Use quick action buttons or bulk operations
+2. **Start/Stop/Pause/Resume/Kill/Restart**: Use quick action buttons or bulk operations
    - **Start**: Start stopped containers
    - **Stop**: Gracefully stop containers (SIGTERM with default timeout)
+   - **Pause**: Pause running containers (freeze process state)
+   - **Resume**: Resume paused containers (unfreeze process state)
    - **Kill**: Immediately terminate containers (SIGKILL)
    - **Restart**: Gracefully stop then restart containers
 3. **Backup**: Click backup button to create a full container backup
-4. **Delete**: Delete containers with options to remove associated volumes/images
+4. **Remove**: Remove containers with options to remove associated volumes/images
 5. **View Logs**: Click logs icon to view real-time container logs
 6. **Exec Console**: Click console icon for interactive terminal access
 
@@ -147,22 +150,28 @@ Access the web UI at: http://your-server:1066
 1. **Explore Volumes**: Browse volume contents through the web UI
 2. **Download Files**: Download individual files from volumes
 3. **View Files**: View file contents directly in the browser
-4. **Delete**: Remove volumes
+4. **Remove**: Remove volumes
 
 ### System Monitoring
 
 - **Dashboard**: Overview of containers, images, volumes, networks, backup schedule
 - **System Stats**: Real-time CPU and RAM utilization in top bar
 - **Statistics Page**: View all containers with detailed stats including CPU %, RAM, Network I/O, Block I/O, and refresh countdown timer
+- **Events Page**: Monitor Docker events in real-time with filtering and search capabilities
+  - View Docker events for containers, images, volumes, and networks
+  - Filter by event type (container, image, volume, network) and action (start, stop, create, destroy, etc.)
+  - Search events by name, type, action, or timestamp
+  - Color-coded events (green for start/create, red for stop/kill, yellow for destroy/remove)
+  - Shows events from the last 24 hours by default
 
 ### Backup Audit Log
 
 1. **View Audit Logs**: Navigate to Backup Audit Log section to view all backup-related operations
-2. **Filter Operations**: Filter by operation type (Manual Backups, Scheduled Backups, Restores, Lifecycle Cleanup, Backup Deletion)
+2. **Filter Operations**: Filter by operation type (Manual Backups, Scheduled Backups, Restores, Lifecycle Cleanup, Backup Removal)
 3. **Filter Status**: Filter by status (Started, Completed, Error)
 4. **Statistics**: View total logs, last 24 hours, and last 7 days activity
-5. **Clear Logs**: Clear all audit logs with confirmation prompt (permanently deletes all log entries)
-6. **Comprehensive Tracking**: All backup operations, restores, cleanup, and deletions are automatically logged with timestamps and details
+5. **Clear Logs**: Clear all audit logs with confirmation prompt (permanently removes all log entries)
+6. **Comprehensive Tracking**: All backup operations, restores, cleanup, and removals are automatically logged with timestamps and details
 
 ## API Endpoints
 
@@ -180,7 +189,9 @@ The application provides a RESTful API. Key endpoints include:
 - `POST /api/container/<id>/stop` - Stop container gracefully (SIGTERM)
 - `POST /api/container/<id>/kill` - Kill container immediately (SIGKILL)
 - `POST /api/container/<id>/restart` - Restart container
-- `DELETE /api/container/<id>/delete` - Delete container
+- `POST /api/container/<id>/pause` - Pause container
+- `POST /api/container/<id>/resume` - Resume (unpause) container
+- `DELETE /api/container/<id>/delete` - Remove container
 - `GET /api/container/<id>/details` - Get container details
 - `GET /api/container/<id>/logs` - Get container logs
 - `GET /api/container/<id>/stats` - Get container stats
@@ -192,8 +203,8 @@ The application provides a RESTful API. Key endpoints include:
 - `GET /api/backups` - List all backups (from S3 and local)
 - `GET /api/backup/<filename>/preview` - Preview backup contents
 - `POST /api/restore-backup` - Restore backup
-- `DELETE /api/backup/<filename>` - Delete backup (from S3 or local)
-- `DELETE /api/backups/delete-all` - Delete all backups
+- `DELETE /api/backup/<filename>` - Remove backup (from S3 or local)
+- `DELETE /api/backups/delete-all` - Remove all backups
 - `GET /api/download/<filename>` - Download backup file (from S3 or local)
 - `POST /api/upload-backup` - Upload backup file (to S3 or local)
 - `POST /api/backups/download-all-prepare` - Prepare bulk download session
@@ -219,24 +230,27 @@ The application provides a RESTful API. Key endpoints include:
 - `GET /api/volume/<name>/explore` - Explore volume contents
 - `GET /api/volume/<name>/file` - Get volume file contents
 - `GET /api/volume/<name>/download` - Download volume file
-- `DELETE /api/volume/<name>/delete` - Delete volume
-- `POST /api/volumes/delete` - Delete multiple volumes
+- `DELETE /api/volume/<name>/delete` - Remove volume
+- `POST /api/volumes/delete` - Remove multiple volumes
 
 ### Images
 - `GET /api/images` - List all images
-- `DELETE /api/image/<id>/delete` - Delete image
+- `DELETE /api/image/<id>/delete` - Remove image
 - `POST /api/cleanup/dangling-images` - Cleanup dangling images
 
 ### Networks
 - `GET /api/networks` - List all networks
 - `POST /api/network/<id>/backup` - Backup network (uploads to S3 if enabled)
 - `POST /api/network/restore` - Restore network backup (downloads from S3 if needed)
-- `DELETE /api/network/<id>/delete` - Delete network
+- `DELETE /api/network/<id>/delete` - Remove network
 - `GET /api/network-backups` - List network backups (from S3 and local)
 
 ### Stacks
 - `GET /api/stacks` - List all Docker stacks
-- `DELETE /api/stack/<name>/delete` - Delete stack
+- `DELETE /api/stack/<name>/delete` - Remove stack
+
+### Events
+- `GET /api/events` - Get Docker events (supports `?since=<timestamp>` and `?until=<timestamp>` query parameters)
 
 ### System & Monitoring
 - `GET /api/dashboard-stats` - Get dashboard statistics
@@ -250,7 +264,7 @@ The application provides a RESTful API. Key endpoints include:
 ### Audit Logs
 - `GET /api/audit-logs` - Get audit logs with optional filtering (operation_type, status, container_id, date range)
 - `GET /api/audit-logs/statistics` - Get audit log statistics
-- `DELETE /api/audit-logs/clear` - Clear all audit logs
+- `DELETE /api/audit-logs/clear` - Clear all audit logs (removes all log entries)
 
 ### UI Settings
 - `GET /api/ui/settings` - Get all UI settings
@@ -276,6 +290,7 @@ The application has been refactored into a modular architecture with separate ma
   - `image_manager.py` - Image management
   - `network_manager.py` - Network management (S3 and local backups)
   - `stack_manager.py` - Docker stack management
+  - `events_manager.py` - Docker events management and filtering
   - `system_manager.py` - System monitoring and stats
   - `scheduler_manager.py` - Scheduled backup management
   - `audit_log_manager.py` - Audit logging for backup operations

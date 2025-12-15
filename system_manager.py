@@ -486,9 +486,12 @@ def get_statistics() -> Dict[str, Any]:
             network_io = '-'
             block_io = '-'
             status_text = container.get('Status', 'unknown')
-            is_running = status_text.lower().startswith('up') or 'running' in status_text.lower()
+            status_lower = status_text.lower()
+            is_paused = 'paused' in status_lower
+            is_running = (status_lower.startswith('up') or 'running' in status_lower) and not is_paused
             
-            if is_running:
+            # Get stats for both running and paused containers (paused containers still use RAM)
+            if is_running or is_paused:
                 try:
                     result = subprocess.run(
                         ['docker', 'stats', '--no-stream', '--format', '{{.CPUPerc}}\t{{.MemUsage}}\t{{.MemPerc}}\t{{.NetIO}}\t{{.BlockIO}}', container_id_short],
@@ -561,11 +564,20 @@ def get_statistics() -> Dict[str, Any]:
             from datetime import datetime
             refresh_timestamp = datetime.now().isoformat()
             
+            # Determine status display
+            if is_paused:
+                status_display = 'paused'
+            elif is_running:
+                status_display = 'running'
+            else:
+                status_display = 'stopped'
+            
             container_stats_list.append({
                 'id': container_id_short,
                 'name': container_name,
                 'image': container.get('Image', 'unknown'),
-                'status': 'running' if is_running else 'stopped',
+                'status': status_display,
+                'status_text': status_text,
                 'cpu_percent': round(cpu_percent, 2),
                 'memory_percent': round(memory_percent, 2),
                 'memory_used_mb': round(memory_used_mb, 2),

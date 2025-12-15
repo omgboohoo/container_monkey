@@ -1,5 +1,58 @@
 # Release Notes
 
+## Version 0.3.11
+
+### Container Management Enhancements
+- **Pause/Resume Functionality**: Added pause and resume operations for containers
+  - New Pause button to pause running containers
+  - New Resume button to resume paused containers
+  - Pause button only enabled when running containers are selected
+  - Resume button only enabled when paused containers are selected
+  - API endpoints: `/api/container/<container_id>/pause` and `/api/container/<container_id>/resume`
+- **Enhanced Button State Logic**: Improved container action button states
+  - Start button: Only enabled when stopped containers are selected
+  - Stop button: Only enabled when running containers are selected
+  - Kill button: Only enabled when running containers are selected (disabled if stopped containers selected)
+  - Restart button: Enabled when any containers are selected
+  - Pause button: Only enabled when running containers are selected
+  - Resume button: Only enabled when paused containers are selected
+  - Remove button: Enabled when any containers are selected
+- **Paused Container Status Display**: Added visual indicator for paused containers
+  - Paused containers display with orange status pill
+  - Status text shows "PAUSED" for paused containers
+  - Container status detection updated to recognize paused state from Docker API
+
+### Code Cleanup
+- **Code Comments**: Cleaned up and updated code comments
+  - Updated comments in `docker_api.py` and `docker_utils.py`
+  - Updated comments in `static/js/app.js`
+
+### Events Page
+- **New Events Menu Item**: Added Events page to left sidebar navigation
+  - Accessible via new "Events" menu item with bell icon
+  - Displays Docker events from the last 24 hours by default
+  - Shows event time, type, action, and name in a sortable table
+- **Event Filtering**: Added comprehensive filtering capabilities
+  - Search field to filter events by name, type, action, or timestamp
+  - Type filter dropdown (Container, Image, Volume, Network, Plugin, Service, Node, Secret, Config)
+  - Action filter dropdown that dynamically updates based on selected type
+  - Prevents invalid combinations (e.g., can't "start" a volume)
+  - All filters work together with AND logic
+- **Event Display**: Enhanced event visualization
+  - Color-coded actions (green for start/create, red for stop/kill, yellow for destroy)
+  - Sortable columns (Time, Type, Action, Name)
+  - Newest events shown first by default
+  - Real-time filtering as you type
+- **Performance Optimizations**: Efficient event fetching
+  - Uses Docker Events API with time-based filtering
+  - Response size limits and timeouts to prevent performance issues
+  - Efficient parsing of newline-delimited JSON stream
+- **UI Consistency**: Matches existing application design patterns
+  - Consistent styling with other sections (search field, filters, table)
+  - Proper focus states and hover effects on search input
+
+---
+
 ## Version 0.3.10
 
 ### Top Bar Enhancements
@@ -112,14 +165,14 @@
 - **Backup Vault Checkbox Selection**: Added checkbox-based selection system to backup vault
   - **Checkbox Column**: Added checkbox column header with "Select All" functionality
   - **Row Selection**: Clicking on a backup row toggles its checkbox
-  - **Bulk Operations**: Download and Delete buttons now work with selected backups only
-  - **Button States**: Download and Delete buttons are disabled by default and enable when backups are selected
+  - **Bulk Operations**: Download and Remove buttons now work with selected backups only
+  - **Button States**: Download and Remove buttons are disabled by default and enable when backups are selected
   - **Consistent UX**: Matches the selection pattern used in other grids (containers, volumes, images, etc.)
 
 ### UI Improvements
 - **Backup Vault Enhancements**:
-  - **Removed Individual Actions**: Removed individual Download and Delete buttons from each backup row (kept Restore button)
-  - **Renamed Bulk Actions**: Changed "Download All" to "Download" and "Delete All" to "Delete"
+  - **Removed Individual Actions**: Removed individual Download and Remove buttons from each backup row (kept Restore button)
+  - **Renamed Bulk Actions**: Changed "Download All" to "Download" and "Delete All" to "Remove"
   - **Column Width Optimization**: Created and Actions columns auto-size to smallest possible width, Filename column expands to take remaining space
   - **Selection Management**: Added selection state management with visual feedback
 
@@ -134,12 +187,12 @@
   - **Wider Modal**: Increased download modal width by 50% (from 700px to 1050px) for better visibility
   - **Confirmation Dialog**: Added confirmation dialog before starting downloads with count of selected files
 
-- **Delete Progress Modal**:
-  - **Visual Feedback**: Progress modal shows real-time deletion progress when deleting multiple backups
-  - **Status Tracking**: Each backup shows status (Waiting → Deleting → Deleted/Failed) with color-coded indicators
-  - **Auto-Scroll**: Modal list automatically scrolls to follow the active deletion
+- **Remove Progress Modal**:
+  - **Visual Feedback**: Progress modal shows real-time removal progress when removing multiple backups
+  - **Status Tracking**: Each backup shows status (Waiting → Removing → Removed/Failed) with color-coded indicators
+  - **Auto-Scroll**: Modal list automatically scrolls to follow the active removal
   - **Progress Summary**: Final summary displays success/failure counts
-  - **Better UX**: Provides clear feedback during bulk deletion operations instead of silent background processing
+  - **Better UX**: Provides clear feedback during bulk removal operations instead of silent background processing
 
 - **Backup Container Modal**:
   - **Auto-Scroll**: Modal list automatically scrolls to follow the active backup being processed
@@ -152,7 +205,7 @@
   - **Cancel Functionality**: Added cancel button to stop uploads in progress
   - **Wider Modal**: Increased upload modal width by 50% (from 700px to 1050px) for better visibility
   - **Simplified Status Bar**: Removed redundant speed/progress from status bar (shown on individual file items)
-  - **Consistent UX**: Matches the auto-scroll behavior of download and delete progress modals
+  - **Consistent UX**: Matches the auto-scroll behavior of download and remove progress modals
 
 ### Bug Fixes
 - **Statistics Page Timeout Issues**: Fixed statistics page failing to display data after long waits and false timeout errors
@@ -202,7 +255,7 @@
   - **Backup Vault Server Column**: New "Server" column in backup vault displays origin server name
   - **Shared S3 Vault Support**: Enables multiple Container Monkey instances sharing the same S3 bucket to identify which server created each backup
   - **Performance Optimized**: Server name read from lightweight JSON files instead of opening tar archives
-  - **Automatic Cleanup**: Companion JSON files automatically deleted when backups are deleted
+  - **Automatic Cleanup**: Companion JSON files automatically removed when backups are removed
   - **Backward Compatible**: Old backups without server name metadata display "Unknown Server"
   - **S3 Integration**: Companion JSON files uploaded/downloaded with backups in S3 storage
   - **Upload Support**: Uploaded backups automatically get companion JSON files with server name from metadata or current server settings
@@ -607,7 +660,7 @@
 - **Storage Settings Management**:
   - New `storage_settings` table in database for storing storage configuration
   - `StorageSettingsManager` module for managing storage settings with encryption
-  - `S3StorageManager` module for S3 operations (upload, download, list, delete, test)
+  - `S3StorageManager` module for S3 operations (upload, download, list, remove, test)
   - `encryption_utils` module for encrypting/decrypting S3 credentials
   - Settings persist across app restarts and populate modal when switching back to S3
 
@@ -647,14 +700,14 @@
 - Added `storage_settings_manager.py` module for storage settings management
 - Added `encryption_utils.py` module for credential encryption
 - Updated `backup_manager.py` to upload backups to S3 when enabled
-- Updated `backup_file_manager.py` to list/download/delete from S3 when enabled
+- Updated `backup_file_manager.py` to list/download/remove from S3 when enabled
 - Updated `restore_manager.py` to handle S3 backups via temp file downloads
 - Updated `network_manager.py` to support S3 storage for network backups
 - Added storage settings API endpoints: `/api/storage/settings` (GET/POST), `/api/storage/test-s3`
 - Added `storage_settings` table to database schema
 - Temp directory (`/backups/temp/`) for S3 downloads during restore operations
 - Automatic cleanup of temp files after restore and on startup
-- **Delete All** functionality now deletes backups from both S3 and local storage
+- **Remove All** functionality now removes backups from both S3 and local storage
 - **Download All** functionality now includes S3 backups in archive (downloads from S3 to temp location)
 - Network backups now upload to S3 when S3 storage is enabled
 - Network backup restore downloads from S3 when needed
@@ -669,7 +722,7 @@
 
 ### Bug Fixes
 - **Fixed S3 modal prepopulation**: S3 configuration modal now properly populates all fields (including secret key) when switching back to S3
-- **Fixed delete all with S3**: Delete All button now correctly deletes backups from S3 storage
+- **Fixed remove all with S3**: Remove All button now correctly removes backups from S3 storage
 - **Fixed download all with S3**: Download All now includes S3 backups in archive (downloads from S3 to temp location before archiving)
 - **Fixed network backups S3 support**: Network backups now properly upload to and restore from S3 when enabled
 - **Fixed S3 credentials preservation**: S3 credentials are now preserved when switching from S3 to local storage
@@ -785,7 +838,7 @@
   - Filterable table with operation type and status filters
   - Statistics cards showing total logs, last 24 hours, and last 7 days activity
   - Pagination support with "Load More" button
-  - Clear Logs button with confirmation modal to permanently delete all audit logs
+  - Clear Logs button with confirmation modal to permanently remove all audit logs
   - Clean, organized display of all backup-related activities
 
 - **Database storage**: Audit logs stored in SQLite database (`audit_log.db`) in config directory
@@ -844,9 +897,9 @@
   - Container count reflects total containers using each network regardless of state
   - More accurate representation of network dependencies
 
-- **Improved network delete protection**: Delete button automatically disabled/ghosted when networks have containers
-  - Delete button shows disabled state (opacity 0.5, cursor not-allowed) when container count > 0
-  - Prevents accidental deletion of networks in use
+- **Improved network remove protection**: Remove button automatically disabled/ghosted when networks have containers
+  - Remove button shows disabled state (opacity 0.5, cursor not-allowed) when container count > 0
+  - Prevents accidental removal of networks in use
   - Tooltip shows container count when button is disabled
 
 - **View Containers button**: Added "View Containers" button for networks with containers
@@ -894,7 +947,7 @@
   - Updated `loadImages()` to detect dangling images and enable/disable cleanup button accordingly
   - Added safety check in `cleanupDanglingImages()` to prevent execution when button is disabled
   - Updated `createNetworkRow()` to use container count for all containers (running and stopped)
-  - Modified delete button styling to show disabled state when containers > 0
+  - Modified remove button styling to show disabled state when containers > 0
   - Added "View Containers" button that appears when container count > 0
   - Improved `viewNetworkContainers()` function to ensure containers are loaded before filtering
   - Updated `loadDashboardStats()` to format and display scheduler next run date/time with clock icon
@@ -1107,8 +1160,8 @@
 - **Frontend Updates**: Added Kill button between Stop and Restart buttons in container management interface
 
 ### Bug Fixes
-- **Fixed scheduler error when deleting scheduled containers**: Resolved issue where deleting a container that was part of scheduled tasks caused "Error loading containers" on scheduler page
-  - Added automatic removal of deleted containers from scheduler's selected containers list
+- **Fixed scheduler error when removing scheduled containers**: Resolved issue where removing a container that was part of scheduled tasks caused "Error loading containers" on scheduler page
+  - Added automatic removal of removed containers from scheduler's selected containers list
   - Added validation when loading scheduler config to filter out non-existent containers
   - Scheduler automatically stops if no containers remain after cleanup
   - Prevents errors when viewing scheduler page after container deletion
@@ -1125,7 +1178,7 @@
   - Automatic cleanup of invalid container IDs from scheduler configuration
 - Updated `app.py`:
   - Added kill route for kill endpoint
-  - Delete container endpoint now calls scheduler cleanup to remove deleted containers from scheduled tasks
+  - Remove container endpoint now calls scheduler cleanup to remove containers from scheduled tasks
   - Scheduler config endpoint validates containers when loading
 - Added `killContainer()` and `killSelectedContainers()` functions in frontend JavaScript
 
@@ -1188,7 +1241,7 @@
 
 ### Backup Management Improvements
 - **Backup Type Tracking**: Backup vault now shows whether backups are Manual or Scheduled
-  - Manual backups: Never auto-deleted, preserved indefinitely
+  - Manual backups: Never auto-removed, preserved indefinitely
   - Scheduled backups: Automatically cleaned up based on lifecycle setting
   - Backup type displayed in vault grid with visual indicators
   - Scheduled backups prefixed with `scheduled_` in filename

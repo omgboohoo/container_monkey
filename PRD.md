@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.10**
+**Version 0.3.12**
 
 ## Overview
 
@@ -23,6 +23,7 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - `image_manager.py` - Image management and cleanup
   - `network_manager.py` - Network backup and restore (S3 and local backups)
   - `stack_manager.py` - Docker stack management
+  - `events_manager.py` - Docker events management, filtering, and formatting
   - `system_manager.py` - System monitoring and statistics
   - `scheduler_manager.py` - Scheduled backup management and lifecycle cleanup
   - `audit_log_manager.py` - Audit logging for backup operations
@@ -73,8 +74,8 @@ The open-source backup and recovery solution for Docker. Protect your containers
 ## Key Functionality
 
 ### Container Management
-- List, start, stop (graceful), kill (immediate), restart, delete containers
-- Bulk operations on multiple containers
+- List, start, stop (graceful), pause, resume, kill (immediate), restart, remove containers
+- Bulk operations on multiple containers with intelligent button state management
 - Container logs streaming
 - Interactive exec console
 - Container details inspection
@@ -91,9 +92,9 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - **Backup Vault Checkbox Selection**: Checkbox-based selection system for bulk operations
   - Checkbox column with "Select All" functionality
   - Row selection by clicking backup rows
-  - Download and Delete buttons work with selected backups only
+  - Download and Remove buttons work with selected backups only
   - Buttons disabled by default, enabled when backups are selected
-  - Individual Download/Delete buttons removed from rows (Restore button kept)
+  - Individual Download/Remove buttons removed from rows (Restore button kept)
 - **Backup Type Tracking**: Backups tagged as Manual or Scheduled in backup vault
 - **Storage Location Tracking**: Backup vault shows storage location (Local or S3) for each backup
 - **Backup Vault Search Filter**: Real-time search filter to quickly find backups by filename, type, backup type, storage location, server name, or creation date
@@ -110,7 +111,7 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - Backup vault displays server name column showing origin server for each backup
   - Enables multiple Container Monkey instances sharing the same S3 bucket to identify backup origins
   - Performance optimized: reads lightweight JSON files instead of opening tar archives
-  - Companion JSON files automatically deleted when backups are deleted
+  - Companion JSON files automatically removed when backups are removed
   - Backward compatible with backups created before server name tracking
 - **S3 Storage Support**: Optional cloud storage for backups
   - Toggle between local and S3 storage from backup vault interface
@@ -139,22 +140,34 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - Volume listing and exploration
 - File browsing within volumes
 - File download/view
-- Volume deletion (single and bulk)
+- Volume removal (single and bulk)
 
 ### Image Management
 - Image listing with size information
-- Image deletion
+- Image removal
 - Dangling image cleanup (button automatically disables when no dangling images exist)
 
 ### Network Management
 - Network listing with container counts (includes all containers: running and stopped)
 - Network backup and restore
-- Network deletion (automatically disabled when networks have containers)
+- Network removal (automatically disabled when networks have containers)
 - View Containers button filters container view to show containers using selected network
 
 ### Stack Management
 - Stack listing (Docker Swarm stacks and Compose-based stacks)
-- Stack deletion
+- Stack removal
+
+### Events Management
+- Docker events viewing and filtering
+- Events from last 24 hours displayed by default
+- Search functionality to filter events by name, type, action, or timestamp
+- Type filter dropdown (Container, Image, Volume, Network, Plugin, Service, Node, Secret, Config)
+- Action filter dropdown that dynamically updates based on selected type
+- Prevents invalid action/type combinations (e.g., can't "start" a volume)
+- Sortable columns (Time, Type, Action, Name)
+- Color-coded actions for visual distinction (green for start/create, red for stop/kill, yellow for destroy)
+- Real-time filtering as you type
+- Efficient event fetching with time-based filtering and response size limits
 
 ### System Monitoring
 - Dashboard with resource overview and backup schedule next run time
@@ -179,11 +192,11 @@ The open-source backup and recovery solution for Docker. Protect your containers
 
 ### Backup Audit Log
 - View audit logs for all backup-related operations
-- Filter by operation type (Manual Backups, Scheduled Backups, Restores, Lifecycle Cleanup, Backup Deletion)
+- Filter by operation type (Manual Backups, Scheduled Backups, Restores, Lifecycle Cleanup, Backup Removal)
 - Filter by status (Started, Completed, Error)
 - View statistics: total logs, last 24 hours, and last 7 days activity
-- Clear all audit logs with confirmation prompt (permanently deletes all log entries)
-- Comprehensive tracking: All backup operations, restores, cleanup, and deletions are automatically logged with timestamps and details
+- Clear all audit logs with confirmation prompt (permanently removes all log entries)
+- Comprehensive tracking: All backup operations, restores, cleanup, and removals are automatically logged with timestamps and details
 
 ## API Endpoints
 
@@ -194,7 +207,9 @@ POST   /api/container/<id>/start                # Start container
 POST   /api/container/<id>/stop                 # Stop container gracefully (SIGTERM)
 POST   /api/container/<id>/kill                 # Kill container immediately (SIGKILL)
 POST   /api/container/<id>/restart              # Restart container
-DELETE /api/container/<id>/delete               # Delete container
+POST   /api/container/<id>/pause                # Pause container
+POST   /api/container/<id>/resume               # Resume (unpause) container
+DELETE /api/container/<id>/delete               # Remove container
 GET    /api/container/<id>/details              # Get container details
 GET    /api/container/<id>/logs                 # Get container logs
 GET    /api/container/<id>/stats                # Get container stats
@@ -209,14 +224,14 @@ POST   /api/backup/<container_id>               # Create container backup
 GET    /api/backups                             # List all backups (from S3 and local)
 GET    /api/backup/<filename>/preview            # Preview backup contents
 POST   /api/restore-backup                      # Restore backup (downloads from S3 if needed)
-DELETE /api/backup/<filename>                   # Delete backup (from S3 or local)
+DELETE /api/backup/<filename>                   # Remove backup (from S3 or local)
 GET    /api/download/<filename>                 # Download backup file (from S3 or local)
 POST   /api/upload-backup                       # Upload backup file (to S3 or local) - accepts both .tar.gz container backups and .json network backups
 POST   /api/backups/download-all-prepare        # Prepare bulk download session (includes S3 backups)
 GET    /api/backups/download-all-progress/<id>  # Get bulk download progress
 POST   /api/backups/download-all-create/<id>    # Create download session (downloads S3 backups to temp if needed)
 GET    /api/backups/download-all/<id>           # Download individual file from bulk download (sequential downloads, not archive)
-DELETE /api/backups/delete-all                  # Delete all backups (from S3 and local)
+DELETE /api/backups/delete-all                  # Remove all backups (from S3 and local)
 GET    /api/backup-progress/<progress_id>       # Get backup progress (exempt from rate limiting)
 GET    /api/backup/status                       # Get backup status (includes queue size)
 ```
@@ -242,21 +257,21 @@ GET    /api/volumes                             # List all volumes
 GET    /api/volume/<name>/explore               # Explore volume contents
 GET    /api/volume/<name>/file                  # Get volume file contents
 GET    /api/volume/<name>/download              # Download volume file
-DELETE /api/volume/<name>/delete                # Delete volume
-POST   /api/volumes/delete                     # Delete multiple volumes
+DELETE /api/volume/<name>/delete                # Remove volume
+POST   /api/volumes/delete                     # Remove multiple volumes
 ```
 
 ### Image Endpoints
 ```
 GET    /api/images                              # List all images
-DELETE /api/image/<id>/delete                   # Delete image
+DELETE /api/image/<id>/delete                   # Remove image
 POST   /api/cleanup/dangling-images             # Cleanup dangling images
 ```
 
 ### Stack Endpoints
 ```
 GET    /api/stacks                              # List all Docker stacks
-DELETE /api/stack/<name>/delete                  # Delete stack
+DELETE /api/stack/<name>/delete                  # Remove stack
 ```
 
 ### Network Endpoints
@@ -264,8 +279,15 @@ DELETE /api/stack/<name>/delete                  # Delete stack
 GET    /api/networks                            # List all networks
 POST   /api/network/<id>/backup                 # Backup network (uploads to S3 if enabled)
 POST   /api/network/restore                     # Restore network backup (downloads from S3 if needed)
-DELETE /api/network/<id>/delete                 # Delete network
+DELETE /api/network/<id>/delete                 # Remove network
 GET    /api/network-backups                     # List network backups (from S3 and local)
+```
+
+### Events Endpoints
+```
+GET    /api/events                               # Get Docker events
+                                                      # Query params: ?since=<unix_timestamp> (default: last 24 hours)
+                                                      # Query params: ?until=<unix_timestamp> (default: now)
 ```
 
 ### System Endpoints
@@ -339,7 +361,7 @@ GET    /console/<container_id>                  # Container console page
 #### audit_logs table
 - `id` INTEGER PRIMARY KEY AUTOINCREMENT
 - `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-- `operation_type` TEXT NOT NULL (Manual Backup, Scheduled Backup, Restore, Lifecycle Cleanup, Backup Deletion)
+- `operation_type` TEXT NOT NULL (Manual Backup, Scheduled Backup, Restore, Lifecycle Cleanup, Backup Removal)
 - `container_id` TEXT
 - `container_name` TEXT
 - `backup_filename` TEXT
@@ -380,7 +402,7 @@ GET    /console/<container_id>                  # Container console page
 
 ## Key Technical Decisions
 
-1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`, `scheduler_manager.py`, `audit_log_manager.py`, `storage_settings_manager.py`, `ui_settings_manager.py`, `s3_storage_manager.py`, `database_manager.py`, `stats_cache_manager.py`, `encryption_utils.py`, `error_utils.py`) for better maintainability and separation of concerns
+1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `events_manager.py`, `system_manager.py`, `scheduler_manager.py`, `audit_log_manager.py`, `storage_settings_manager.py`, `ui_settings_manager.py`, `s3_storage_manager.py`, `database_manager.py`, `stats_cache_manager.py`, `encryption_utils.py`, `error_utils.py`) for better maintainability and separation of concerns
 2. **Direct Docker Socket API**: Uses direct HTTP requests to Docker socket (`docker_api.py`) for better reliability than docker-py library
 3. **Modular Backup System**: Backup functionality separated into `backup_manager.py` and `backup_file_manager.py` modules for maintainability
 4. **Sequential Backup Queue**: Queue processor ensures backups complete fully (including tar.gz writing) before starting next

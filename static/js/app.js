@@ -598,6 +598,8 @@ function showSection(sectionName, navElement) {
         // Load config first - it will call loadSchedulerContainers() after config loads
         loadSchedulerConfig();
         loadStatistics();
+    } else if (sectionName === 'events') {
+        loadEvents();
     }
 }
 
@@ -791,7 +793,11 @@ async function loadContainers() {
 // Create container row
 function createContainerCard(container) {
     const tr = document.createElement('tr');
-    tr.className = `container-row ${container.status.toLowerCase()}`;
+    const statusLower = container.status.toLowerCase();
+    const statusTextLower = (container.status_text || '').toLowerCase();
+    const isPaused = statusLower === 'paused' || statusTextLower.includes('paused');
+    const rowStatusClass = isPaused ? 'paused' : statusLower;
+    tr.className = `container-row ${rowStatusClass}`;
     // Store network names as data attribute for filtering
     const networkNames = container.networks && Array.isArray(container.networks) ? container.networks.join(',') : '';
     tr.setAttribute('data-networks', networkNames);
@@ -803,12 +809,12 @@ function createContainerCard(container) {
         tr.style.pointerEvents = 'auto';
     }
 
-    // Normalize status for display
-    const statusLower = container.status.toLowerCase();
-    const statusClass = statusLower === 'running' ? 'status-running' :
+    // Normalize status for display (statusLower, statusTextLower, and isPaused already declared above)
+    const statusClass = isPaused ? 'status-paused' :
+        statusLower === 'running' ? 'status-running' :
         statusLower === 'stopped' ? 'status-stopped' :
             'status-exited';
-    const isRunning = statusLower === 'running';
+    const isRunning = statusLower === 'running' && !isPaused;
 
     // Use status_text if available for more detail
     const statusDisplay = container.status_text || container.status.toUpperCase();
@@ -1022,9 +1028,70 @@ function updateButtonStates(containers) {
     const hasSelection = selectedCheckboxes.length > 0;
     const hasEligibleContainers = nonSelfCheckboxes.length > 0;
 
-    // Handle buttons that depend on selection (Start, Stop, Backup Selected, etc.)
+    // Check status of selected containers
+    let hasPausedContainers = false;
+    let hasStoppedContainers = false;  // Stopped, Created, or Exited
+    let hasRunningContainers = false;   // Running, Healthy, Unhealthy, or Starting
+    
+    if (hasSelection) {
+        selectedCheckboxes.forEach(checkbox => {
+            const row = checkbox.closest('tr');
+            if (row) {
+                const rowClass = row.className || '';
+                const statusText = row.querySelector('.container-status')?.textContent?.toLowerCase() || '';
+                
+                // Check for paused state
+                if (rowClass.includes('paused') || statusText.includes('paused')) {
+                    hasPausedContainers = true;
+                }
+                // Check for stopped states (stopped, created, exited)
+                else if (rowClass.includes('stopped') || rowClass.includes('exited') || 
+                         statusText.includes('stopped') || statusText.includes('created') || 
+                         statusText.includes('exited')) {
+                    hasStoppedContainers = true;
+                }
+                // Check for running states (running, healthy, unhealthy, starting)
+                else if (rowClass.includes('running') || statusText.includes('running') || 
+                         statusText.includes('healthy') || statusText.includes('unhealthy') ||
+                         statusText.includes('starting')) {
+                    hasRunningContainers = true;
+                }
+            }
+        });
+    }
+
+    // Handle buttons that depend on selection and status
     bulkActionButtons.forEach(btn => {
-        const isDisabled = !hasSelection;
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        let isDisabled = !hasSelection;
+        
+        // Start button: disabled if no selection OR if no stopped containers selected
+        if (onclickAttr.includes('startSelectedContainers')) {
+            isDisabled = !hasSelection || !hasStoppedContainers;
+        }
+        // Stop button: disabled if no selection OR if no running containers selected
+        else if (onclickAttr.includes('stopSelectedContainers')) {
+            isDisabled = !hasSelection || !hasRunningContainers;
+        }
+        // Kill button: disabled if no selection OR if stopped containers are selected
+        else if (onclickAttr.includes('killSelectedContainers')) {
+            isDisabled = !hasSelection || hasStoppedContainers;
+        }
+        // Restart button: disabled only if no selection (works on any container)
+        else if (onclickAttr.includes('restartSelectedContainers')) {
+            isDisabled = !hasSelection;
+        }
+        // Pause button: disabled if no selection OR if no running containers selected
+        else if (onclickAttr.includes('pauseSelectedContainers')) {
+            isDisabled = !hasSelection || !hasRunningContainers;
+        }
+        // Resume button: disabled if no selection OR if no paused containers selected
+        else if (onclickAttr.includes('resumeSelectedContainers')) {
+            isDisabled = !hasSelection || !hasPausedContainers;
+        }
+        // Backup and Remove buttons: disabled only if no selection
+        // (they work on both running and stopped containers)
+        
         btn.disabled = isDisabled;
         btn.style.opacity = isDisabled ? '0.5' : '1';
         btn.style.cursor = isDisabled ? 'not-allowed' : 'pointer';
@@ -1703,6 +1770,24 @@ let allNetworks = [];
 let currentNetworkSortColumn = null;
 let currentNetworkSortDirection = 'asc';
 
+// Events data
+let allEvents = [];
+let currentEventsSortColumn = null;
+let currentEventsSortDirection = 'desc'; // Default to newest first
+
+// Event type to actions mapping
+const eventTypeActions = {
+    'container': ['create', 'start', 'stop', 'kill', 'die', 'destroy', 'remove', 'attach', 'detach', 'pause', 'unpause', 'restart', 'update', 'rename', 'resize', 'exec_create', 'exec_start', 'exec_die'],
+    'image': ['pull', 'push', 'tag', 'untag', 'delete', 'remove', 'import', 'load', 'save'],
+    'volume': ['create', 'destroy', 'remove', 'mount', 'unmount'],
+    'network': ['create', 'destroy', 'remove', 'connect', 'disconnect'],
+    'plugin': ['enable', 'disable', 'install', 'remove', 'upgrade'],
+    'service': ['create', 'update', 'remove'],
+    'node': ['create', 'update', 'remove'],
+    'secret': ['create', 'update', 'remove'],
+    'config': ['create', 'update', 'remove']
+};
+
 let allStacks = [];
 let currentStackSortColumn = null;
 let currentStackSortDirection = 'asc';
@@ -2143,12 +2228,18 @@ function createStatisticsRow(container) {
     tr.className = 'statistics-row';
     tr.setAttribute('data-container-id', container.id);
 
-    const statusClass = container.status === 'running' ? 'status-running' : 'status-stopped';
-    const statusText = container.status === 'running' ? 'Running' : 'Stopped';
+    const statusLower = (container.status || '').toLowerCase();
+    const statusTextLower = (container.status_text || '').toLowerCase();
+    const isPaused = statusLower === 'paused' || statusTextLower.includes('paused');
+    const statusClass = isPaused ? 'status-paused' :
+        statusLower === 'running' ? 'status-running' : 'status-stopped';
+    const statusText = isPaused ? 'Paused' :
+        statusLower === 'running' ? 'Running' : 'Stopped';
 
     // Format RAM display
+    // Show RAM for both running and paused containers (paused containers still use RAM)
     let ramDisplay = '-';
-    if (container.status === 'running' && container.memory_used_mb > 0) {
+    if ((container.status === 'running' || container.status === 'paused') && container.memory_used_mb > 0) {
         const usedMB = container.memory_used_mb.toFixed(1);
         const totalMB = container.memory_total_mb > 0 ? container.memory_total_mb.toFixed(1) : '';
         const percent = container.memory_percent > 0 ? container.memory_percent.toFixed(1) : '';
@@ -2163,6 +2254,7 @@ function createStatisticsRow(container) {
     }
 
     // Format CPU display
+    // Only show CPU for running containers (paused containers have 0% CPU)
     let cpuDisplay = '-';
     if (container.status === 'running' && container.cpu_percent > 0) {
         cpuDisplay = `${container.cpu_percent.toFixed(2)}%`;
@@ -2366,7 +2458,7 @@ function createAuditLogRow(log) {
         'backup_scheduled': 'Scheduled Backup',
         'restore': 'Restore',
         'cleanup': 'Lifecycle Cleanup',
-        'delete_backup': 'Delete Backup'
+        'delete_backup': 'Remove Backup'
     };
     const operationLabel = operationLabels[log.operation_type] || log.operation_type;
 
@@ -2388,7 +2480,7 @@ function createAuditLogRow(log) {
     if (log.details) {
         const details = [];
         if (log.details.deleted_count !== undefined) {
-            details.push(`Deleted: ${log.details.deleted_count}`);
+            details.push(`Removed: ${log.details.deleted_count}`);
         }
         if (log.details.lifecycle !== undefined) {
             details.push(`Lifecycle: ${log.details.lifecycle}`);
@@ -2474,7 +2566,7 @@ function createBackupRow(backup) {
         ? '<span style="color: #f59e0b; font-weight: 500;"><i class="ph ph-clock-clockwise" style="margin-right: 4px;"></i>Scheduled</span>'
         : '<span style="color: var(--text-secondary);"><i class="ph ph-hand" style="margin-right: 4px;"></i>Manual</span>';
 
-    // Build actions column (only restore button, download/delete handled by bulk actions)
+    // Build actions column (only restore button, download/remove handled by bulk actions)
     const actionsHtml = `
         <div class="btn-group" style="display: flex; gap: 4px; flex-wrap: nowrap;">
             ${backupType === 'container'
@@ -4002,7 +4094,43 @@ async function killContainer(containerId) {
     }
 }
 
-// Show delete options modal
+async function pauseContainer(containerId) {
+    try {
+        const response = await fetch(`/api/container/${containerId}/pause`, {
+            method: 'POST',
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to pause container');
+        }
+        return true;
+    } catch (error) {
+        console.error(`Error pausing container: ${error.message}`);
+        showNotification(`Error pausing container: ${error.message}`, 'error');
+        return false;
+    }
+}
+
+async function resumeContainer(containerId) {
+    try {
+        const response = await fetch(`/api/container/${containerId}/resume`, {
+            method: 'POST',
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to resume container');
+        }
+        return true;
+    } catch (error) {
+        console.error(`Error resuming container: ${error.message}`);
+        showNotification(`Error resuming container: ${error.message}`, 'error');
+        return false;
+    }
+}
+
+// Show remove options modal
 async function showDeleteOptions(containerId, containerName) {
     currentContainerId = containerId;
 
@@ -4015,7 +4143,7 @@ async function showDeleteOptions(containerId, containerName) {
 
     // Show loading state
     modalContent.innerHTML = `
-        <h3 style="color: #f1f5f9;">${isMultiple ? `Delete ${selectedIds.length} Containers` : `Delete Container: ${escapeHtml(containerName)}`}</h3>
+        <h3 style="color: #f1f5f9;">${isMultiple ? `Remove ${selectedIds.length} Containers` : `Remove Container: ${escapeHtml(containerName)}`}</h3>
         <div style="text-align: center; padding: 40px;">
             <div class="spinner"></div>
             <p style="margin-top: 15px; color: var(--text-secondary);">Loading container details...</p>
@@ -4063,7 +4191,7 @@ async function showDeleteOptions(containerId, containerName) {
     const volumesList = Array.from(allVolumes).sort();
     const imagesList = Array.from(allImages).sort();
 
-    // Build info about what will be deleted
+    // Build info about what will be removed
     let infoHtml = '';
     if (selectedIds.length > 0) {
         infoHtml = '<div style="margin: 15px 0; padding: 15px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; color: var(--text-secondary);">';
@@ -4077,18 +4205,18 @@ async function showDeleteOptions(containerId, containerName) {
     }
 
     const titleText = isMultiple
-        ? `Delete ${selectedIds.length} Containers`
-        : `Delete Container: ${escapeHtml(containerName)}`;
+        ? `Remove ${selectedIds.length} Containers`
+        : `Remove Container: ${escapeHtml(containerName)}`;
     const buttonText = isMultiple
-        ? `🗑️ Delete ${selectedIds.length} Containers`
-        : `🗑️ Delete Container`;
+        ? `🗑️ Remove ${selectedIds.length} Containers`
+        : `🗑️ Remove Container`;
 
     // Build volumes checkboxes
     let volumesHtml = '';
     if (hasVolumes) {
         volumesHtml = `
             <div style="margin-bottom: 15px;">
-                <p style="color: var(--text-primary); margin-bottom: 10px; font-weight: 600;">Select volumes to delete:</p>
+                <p style="color: var(--text-primary); margin-bottom: 10px; font-weight: 600;">Select volumes to remove:</p>
                 <div style="max-height: 200px; overflow-y: auto; padding: 10px; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border);">
                     ${volumesList.map((volume, index) => `
                         <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer;">
@@ -4097,11 +4225,11 @@ async function showDeleteOptions(containerId, containerName) {
                         </label>
                     `).join('')}
                 </div>
-                <p style="color: var(--warning); font-size: 0.85em; margin-top: 8px; margin-bottom: 0;">⚠️ Selected volumes will be permanently deleted!</p>
+                <p style="color: var(--warning); font-size: 0.85em; margin-top: 8px; margin-bottom: 0;">⚠️ Selected volumes will be permanently removed!</p>
             </div>
         `;
     } else {
-        volumesHtml = '<p style="color: var(--text-secondary); margin-bottom: 15px;">No volumes to delete</p>';
+        volumesHtml = '<p style="color: var(--text-secondary); margin-bottom: 15px;">No volumes to remove</p>';
     }
 
     // Build images checkboxes
@@ -4109,7 +4237,7 @@ async function showDeleteOptions(containerId, containerName) {
     if (hasImage) {
         imagesHtml = `
             <div>
-                <p style="color: var(--text-primary); margin-bottom: 10px; font-weight: 600;">Select images to delete:</p>
+                <p style="color: var(--text-primary); margin-bottom: 10px; font-weight: 600;">Select images to remove:</p>
                 <div style="max-height: 200px; overflow-y: auto; padding: 10px; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border);">
                     ${imagesList.map((image, index) => `
                         <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; cursor: pointer;">
@@ -4118,18 +4246,18 @@ async function showDeleteOptions(containerId, containerName) {
                         </label>
                     `).join('')}
                 </div>
-                <p style="color: var(--warning); font-size: 0.85em; margin-top: 8px; margin-bottom: 0;">⚠️ Selected images will be permanently deleted!</p>
+                <p style="color: var(--warning); font-size: 0.85em; margin-top: 8px; margin-bottom: 0;">⚠️ Selected images will be permanently removed!</p>
             </div>
         `;
     } else {
-        imagesHtml = '<p style="color: var(--text-secondary);">No images to delete</p>';
+        imagesHtml = '<p style="color: var(--text-secondary);">No images to remove</p>';
     }
 
     modalContent.innerHTML = `
         <h3 style="color: #f1f5f9;">${titleText}</h3>
         ${infoHtml}
         <div style="margin: 20px 0; padding: 15px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;">
-            <p style="color: var(--text-primary); margin-bottom: 15px; font-weight: 600;">Additional options ${isMultiple ? '(select which volumes/images to delete)' : ''}:</p>
+            <p style="color: var(--text-primary); margin-bottom: 15px; font-weight: 600;">Additional options ${isMultiple ? '(select which volumes/images to remove)' : ''}:</p>
             ${volumesHtml}
             ${imagesHtml}
         </div>
@@ -4142,7 +4270,7 @@ async function showDeleteOptions(containerId, containerName) {
     `;
 }
 
-// Close delete container modal
+// Close remove container modal
 function closeDeleteContainerModal() {
     document.getElementById('delete-container-modal').style.display = 'none';
 }
@@ -4433,7 +4561,7 @@ function closeAttachConsoleModal() {
     window.removeEventListener('resize', handleResize);
 }
 
-// Delete container with options from checkboxes
+// Remove container with options from checkboxes
 async function deleteContainerWithOptions(containerId, containerName) {
     // Get selected volumes and images from individual checkboxes
     const selectedVolumes = new Set();
@@ -4453,8 +4581,8 @@ async function deleteContainerWithOptions(containerId, containerName) {
 
     // Build confirmation message
     let confirmMessage = isMultiple
-        ? `Delete ${selectedIds.length} selected containers?`
-        : `Delete container "${containerName}"?`;
+        ? `Remove ${selectedIds.length} selected containers?`
+        : `Remove container "${containerName}"?`;
     const warnings = [];
 
     if (selectedVolumes.size > 0) {
@@ -4465,7 +4593,7 @@ async function deleteContainerWithOptions(containerId, containerName) {
     }
 
     if (warnings.length > 0) {
-        confirmMessage += `\n\n⚠️  WARNING: This will also permanently delete:\n${warnings.join('\n')}`;
+        confirmMessage += `\n\n⚠️  WARNING: This will also permanently remove:\n${warnings.join('\n')}`;
     } else {
         confirmMessage += `\n\nThis will stop and remove the container(s) only. Volumes and images will be kept.`;
     }
@@ -4478,7 +4606,7 @@ async function deleteContainerWithOptions(containerId, containerName) {
             let totalDeletedVolumes = [];
             let totalDeletedImages = new Set();
 
-            // First, delete all selected containers (without volumes/images)
+            // First, remove all selected containers (without volumes/images)
             for (const id of selectedIds) {
                 try {
                     const response = await fetch(`/api/container/${id}/delete`, {
@@ -4487,14 +4615,14 @@ async function deleteContainerWithOptions(containerId, containerName) {
                     const data = await response.json();
 
                     if (!response.ok) {
-                        throw new Error(data.error || `Failed to delete container ${id}`);
+                        throw new Error(data.error || `Failed to remove container ${id}`);
                     }
                 } catch (error) {
-                    console.error(`Error deleting container ${id}: ${error.message}`);
+                    console.error(`Error removing container ${id}: ${error.message}`);
                 }
             }
 
-            // Then delete selected volumes individually
+            // Then remove selected volumes individually
             if (selectedVolumes.size > 0) {
                 try {
                     const volumesToDelete = Array.from(selectedVolumes);
@@ -4511,11 +4639,11 @@ async function deleteContainerWithOptions(containerId, containerName) {
                         totalDeletedVolumes.push(...volumesToDelete.slice(0, data.deleted_count));
                     }
                 } catch (err) {
-                    console.error('Error deleting volumes:', err);
+                    console.error('Error removing volumes:', err);
                 }
             }
 
-            // Finally, delete selected images individually
+            // Finally, remove selected images individually
             if (selectedImages.size > 0) {
                 try {
                     // Get all images to find IDs
@@ -4552,12 +4680,12 @@ async function deleteContainerWithOptions(containerId, containerName) {
                                     }
                                 }
                             } catch (err) {
-                                console.log(`Image deletion failed for ${imageName} (non-critical):`, err);
+                                console.log(`Image removal failed for ${imageName} (non-critical):`, err);
                             }
                         }
                     }
                 } catch (err) {
-                    console.error('Error deleting images:', err);
+                    console.error('Error removing images:', err);
                 }
             }
 
@@ -4565,13 +4693,13 @@ async function deleteContainerWithOptions(containerId, containerName) {
             window.selectedContainerIdsForDelete = null; // Clear stored IDs
 
             let successMessage = isMultiple
-                ? `${selectedIds.length} containers deleted`
-                : 'Container deleted';
+                ? `${selectedIds.length} containers removed`
+                : 'Container removed';
             if (totalDeletedVolumes.length > 0) {
-                successMessage += ` | Deleted ${totalDeletedVolumes.length} volume(s): ${totalDeletedVolumes.join(', ')}`;
+                successMessage += ` | Removed ${totalDeletedVolumes.length} volume(s): ${totalDeletedVolumes.join(', ')}`;
             }
             if (totalDeletedImages.size > 0) {
-                successMessage += ` | Deleted ${totalDeletedImages.size} image(s)`;
+                successMessage += ` | Removed ${totalDeletedImages.size} image(s)`;
             }
 
             showNotification(successMessage, 'success');
@@ -4589,7 +4717,7 @@ async function deleteContainerWithOptions(containerId, containerName) {
 
 
 async function deleteBackup(filename) {
-    showConfirmationModal(`Delete backup "${filename}"?\n\nThis action cannot be undone.`, async () => {
+    showConfirmationModal(`Remove backup "${filename}"?\n\nThis action cannot be undone.`, async () => {
 
         try {
             const response = await fetch(`/api/backup/${filename}`, {
@@ -4598,14 +4726,14 @@ async function deleteBackup(filename) {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to delete backup');
+                throw new Error(data.error || 'Failed to remove backup');
             }
 
-            showNotification('Backup deleted successfully', 'success');
+            showNotification('Backup removed successfully', 'success');
             loadBackups();
         } catch (error) {
-            console.error(`Error deleting backup: ${error.message}`);
-            showNotification(`Error deleting backup: ${error.message}`, 'error');
+            console.error(`Error removing backup: ${error.message}`);
+            showNotification(`Error removing backup: ${error.message}`, 'error');
         }
     });
 }
@@ -4957,18 +5085,18 @@ function closeDownloadAllModal() {
     document.getElementById('download-all-modal').style.display = 'none';
 }
 
-// Delete selected backups
+// Remove selected backups
 async function deleteAllBackups() {
     const selectedBackups = getSelectedBackups();
     
     if (selectedBackups.length === 0) {
-        showNotification('Please select at least one backup to delete.', 'warning');
+        showNotification('Please select at least one backup to remove.', 'warning');
         return;
     }
 
     const confirmMessage = selectedBackups.length === 1
-        ? `Delete backup "${selectedBackups[0]}"?\n\nThis action cannot be undone.`
-        : `Delete ${selectedBackups.length} selected backups?\n\nThis will permanently remove the selected backup files.\n\nThis action CANNOT be undone!`;
+        ? `Remove backup "${selectedBackups[0]}"?\n\nThis action cannot be undone.`
+        : `Remove ${selectedBackups.length} selected backups?\n\nThis will permanently remove the selected backup files.\n\nThis action CANNOT be undone!`;
 
     showConfirmationModal(confirmMessage, async () => {
         // User confirmed, proceed with deletion with progress modal
@@ -4976,7 +5104,7 @@ async function deleteAllBackups() {
     });
 }
 
-// Delete selected backups - internal function that performs the actual deletion with progress
+// Remove selected backups - internal function that performs the actual removal with progress
 async function deleteAllBackupsInternal(selectedBackups) {
     const modal = document.getElementById('delete-all-modal');
     const statusEl = document.getElementById('delete-all-status');
@@ -4999,7 +5127,7 @@ async function deleteAllBackupsInternal(selectedBackups) {
         const total = files.length;
 
         if (!files || files.length === 0) {
-            throw new Error('No files to delete');
+            throw new Error('No files to remove');
         }
 
         // Display file list
@@ -5016,9 +5144,9 @@ async function deleteAllBackupsInternal(selectedBackups) {
             `;
         }).join('');
 
-        statusEl.innerHTML = `Deleting ${total} backup file(s)...`;
+        statusEl.innerHTML = `Removing ${total} backup file(s)...`;
 
-        // Delete files sequentially, one at a time
+        // Remove files sequentially, one at a time
         let completed = 0;
         let failed = 0;
 
@@ -5032,7 +5160,7 @@ async function deleteAllBackupsInternal(selectedBackups) {
                     <div style="display: flex; justify-content: space-between; align-items: center;">
                         <div>
                             <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
-                            <span style="color: var(--secondary); font-size: 0.9em; margin-left: 10px;">🗑️ Deleting...</span>
+                            <span style="color: var(--secondary); font-size: 0.9em; margin-left: 10px;">🗑️ Removing...</span>
                         </div>
                     </div>
                 `;
@@ -5041,7 +5169,7 @@ async function deleteAllBackupsInternal(selectedBackups) {
                 fileEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
 
-            statusEl.innerHTML = `Deleting ${i + 1} / ${total}: ${escapeHtml(filename)}`;
+            statusEl.innerHTML = `Removing ${i + 1} / ${total}: ${escapeHtml(filename)}`;
 
             try {
                 const response = await fetch(`/api/backup/${encodeURIComponent(filename)}`, {
@@ -5050,7 +5178,7 @@ async function deleteAllBackupsInternal(selectedBackups) {
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to delete backup');
+                    throw new Error(data.error || 'Failed to remove backup');
                 }
 
                 // Mark as completed
@@ -5060,7 +5188,7 @@ async function deleteAllBackupsInternal(selectedBackups) {
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <strong style="color: var(--text-primary);">${escapeHtml(filename)}</strong>
-                                <span style="color: var(--accent); font-size: 0.9em; margin-left: 10px;">✅ Deleted</span>
+                                <span style="color: var(--accent); font-size: 0.9em; margin-left: 10px;">✅ Removed</span>
                             </div>
                         </div>
                     `;
@@ -5071,7 +5199,7 @@ async function deleteAllBackupsInternal(selectedBackups) {
                 await new Promise(resolve => setTimeout(resolve, 200));
 
             } catch (error) {
-                console.error(`Error deleting ${filename}:`, error);
+                console.error(`Error removing ${filename}:`, error);
                 failed++;
                 if (fileEl) {
                     fileEl.innerHTML = `
@@ -5089,9 +5217,9 @@ async function deleteAllBackupsInternal(selectedBackups) {
 
         // Final status
         if (failed === 0) {
-            statusEl.innerHTML = `✅ Successfully deleted ${completed} backup file(s)!`;
+            statusEl.innerHTML = `✅ Successfully removed ${completed} backup file(s)!`;
         } else {
-            statusEl.innerHTML = `⚠️ Completed: ${completed} backup(s) deleted, ${failed} failed`;
+            statusEl.innerHTML = `⚠️ Completed: ${completed} backup(s) removed, ${failed} failed`;
         }
         
         closeBtn.style.display = 'block';
@@ -5430,7 +5558,7 @@ function closeVolumeFileModal() {
 }
 
 async function deleteVolume(volumeName) {
-    showConfirmationModal(`Delete volume "${volumeName}"?\n\nThis will permanently remove the volume and all its data. This action cannot be undone.`, async () => {
+    showConfirmationModal(`Remove volume "${volumeName}"?\n\nThis will permanently remove the volume and all its data. This action cannot be undone.`, async () => {
 
         try {
             const response = await fetch(`/api/volume/${volumeName}/delete`, {
@@ -5442,7 +5570,7 @@ async function deleteVolume(volumeName) {
                 // Check if volume is in use
                 if (data.in_use) {
                     showAlertModal(
-                        `Cannot delete volume "${volumeName}"\n\n${data.message || 'This volume is currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using this volume before attempting to delete it.'}`,
+                        `Cannot remove volume "${volumeName}"\n\n${data.message || 'This volume is currently in use by one or more containers and cannot be removed.\n\nPlease stop and remove the containers using this volume before attempting to remove it.'}`,
                         'Volume In Use'
                     );
                     return;
@@ -5457,12 +5585,12 @@ async function deleteVolume(volumeName) {
             // Check error message for "in use" pattern as fallback
             if (error.message.toLowerCase().includes('in use') || error.message.toLowerCase().includes('is being used')) {
                 showAlertModal(
-                    `Cannot delete volume "${volumeName}"\n\nThis volume is currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using this volume before attempting to delete it.`,
+                    `Cannot remove volume "${volumeName}"\n\nThis volume is currently in use by one or more containers and cannot be removed.\n\nPlease stop and remove the containers using this volume before attempting to remove it.`,
                     'Volume In Use'
                 );
             } else {
                 showAlertModal(
-                    `Failed to delete volume "${volumeName}"\n\n${error.message}`,
+                    `Failed to remove volume "${volumeName}"\n\n${error.message}`,
                     'Error'
                 );
             }
@@ -5509,7 +5637,7 @@ async function deleteSelectedVolumes() {
         return;
     }
 
-    showConfirmationModal(`Are you sure you want to delete ${volumeNames.length} selected volumes? This action cannot be undone.`, async () => {
+    showConfirmationModal(`Are you sure you want to remove ${volumeNames.length} selected volumes? This action cannot be undone.`, async () => {
 
         try {
             const response = await fetch('/api/volumes/delete', {
@@ -5522,7 +5650,7 @@ async function deleteSelectedVolumes() {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to delete volumes');
+                throw new Error(data.error || 'Failed to remove volumes');
             }
 
             console.log(data.message);
@@ -5531,7 +5659,7 @@ async function deleteSelectedVolumes() {
             if (data.in_use_volumes && data.in_use_volumes.length > 0) {
                 const inUseList = data.in_use_volumes.join(', ');
                 showAlertModal(
-                    `Cannot delete ${data.in_use_volumes.length} volume(s): ${inUseList}\n\nThese volumes are currently in use by one or more containers and cannot be deleted.\n\nPlease stop and remove the containers using these volumes before attempting to delete them.`,
+                    `Cannot remove ${data.in_use_volumes.length} volume(s): ${inUseList}\n\nThese volumes are currently in use by one or more containers and cannot be removed.\n\nPlease stop and remove the containers using these volumes before attempting to remove them.`,
                     'Volumes In Use'
                 );
             }
@@ -5541,19 +5669,19 @@ async function deleteSelectedVolumes() {
                 const otherErrors = data.errors.filter(e => !e.includes('is in use'));
 
                 if (otherErrors.length > 0) {
-                    console.warn(`Some volumes could not be deleted:\n${otherErrors.join('\n')}`);
+                    console.warn(`Some volumes could not be removed:\n${otherErrors.join('\n')}`);
                 }
             }
 
             if (data.deleted_count > 0) {
-                console.log(`Successfully deleted ${data.deleted_count} volume(s)`);
-                showNotification(`Successfully deleted ${data.deleted_count} volume(s)`, 'success');
+                console.log(`Successfully removed ${data.deleted_count} volume(s)`);
+                showNotification(`Successfully removed ${data.deleted_count} volume(s)`, 'success');
             }
         } catch (error) {
-            console.error(`Error deleting selected volumes: ${error.message}`);
-            showNotification(`Failed to delete volumes: ${error.message}`, 'error');
+            console.error(`Error removing selected volumes: ${error.message}`);
+            showNotification(`Failed to remove volumes: ${error.message}`, 'error');
             showAlertModal(
-                `Failed to delete volumes\n\n${error.message}`,
+                `Failed to remove volumes\n\n${error.message}`,
                 'Error'
             );
         } finally {
@@ -5720,19 +5848,19 @@ async function deleteSelectedImages() {
     });
 
     if (inUseImages.length > 0 || selfImages.length > 0) {
-        let message = 'Cannot delete selected images:\n\n';
+        let message = 'Cannot remove selected images:\n\n';
         if (inUseImages.length > 0) {
             message += `${inUseImages.length} image(s) are currently in use by containers.\n`;
         }
         if (selfImages.length > 0) {
-            message += `${selfImages.length} image(s) are system images and cannot be deleted.\n`;
+            message += `${selfImages.length} image(s) are system images and cannot be removed.\n`;
         }
-        message += '\nPlease remove containers using these images before attempting to delete them.';
-        showAlertModal(message, 'Cannot Delete Images');
+        message += '\nPlease remove containers using these images before attempting to remove them.';
+        showAlertModal(message, 'Cannot Remove Images');
         return;
     }
 
-    showConfirmationModal(`Are you sure you want to delete ${imageIds.length} selected images? This action cannot be undone.`, async () => {
+    showConfirmationModal(`Are you sure you want to remove ${imageIds.length} selected images? This action cannot be undone.`, async () => {
 
         let successCount = 0;
         let errors = [];
@@ -5744,23 +5872,23 @@ async function deleteSelectedImages() {
                 });
                 if (!response.ok) {
                     const data = await response.json();
-                    console.error(`Failed to delete image ${imageId}: ${data.error}`);
-                    errors.push(data.error || `Failed to delete image ${imageId}`);
+                    console.error(`Failed to remove image ${imageId}: ${data.error}`);
+                    errors.push(data.error || `Failed to remove image ${imageId}`);
                 } else {
                     successCount++;
                 }
             } catch (error) {
-                console.error(`Error deleting image ${imageId}: ${error.message}`);
+                console.error(`Error removing image ${imageId}: ${error.message}`);
                 errors.push(error.message);
             }
         }
 
         if (successCount > 0) {
-            showNotification(selectedCheckboxes.length === 1 ? 'Image deleted successfully' : `${successCount} images deleted successfully`, 'success');
+            showNotification(selectedCheckboxes.length === 1 ? 'Image removed successfully' : `${successCount} images removed successfully`, 'success');
         }
 
         if (errors.length > 0) {
-            showNotification(`Failed to delete ${errors.length} image(s)`, 'error');
+            showNotification(`Failed to remove ${errors.length} image(s)`, 'error');
         }
 
         loadImages();
@@ -5768,7 +5896,7 @@ async function deleteSelectedImages() {
 }
 
 async function deleteImage(imageId, imageName) {
-    showConfirmationModal(`Delete image "${imageName}"?\n\nThis will permanently remove the image. This action cannot be undone.`, async () => {
+    showConfirmationModal(`Remove image "${imageName}"?\n\nThis will permanently remove the image. This action cannot be undone.`, async () => {
 
         try {
             const response = await fetch(`/api/image/${imageId}/delete`, {
@@ -5777,15 +5905,15 @@ async function deleteImage(imageId, imageName) {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to delete image');
+                throw new Error(data.error || 'Failed to remove image');
             }
 
-            console.log('Image deleted');
-            showNotification('Image deleted successfully', 'success');
+            console.log('Image removed');
+            showNotification('Image removed successfully', 'success');
             loadImages();
         } catch (error) {
-            console.error(`Error deleting image: ${error.message}`);
-            showNotification(`Error deleting image: ${error.message}`, 'error');
+            console.error(`Error removing image: ${error.message}`);
+            showNotification(`Error removing image: ${error.message}`, 'error');
         }
     });
 }
@@ -5919,9 +6047,9 @@ function createNetworkRow(network) {
     // Delete button for non-default networks - disabled/ghosted when containers > 0
     if (!isDefault) {
         if (containerCount > 0) {
-            actionsHtml += `<button class="btn btn-danger btn-sm" style="opacity: 0.5; cursor: not-allowed;" title="Cannot delete network with ${containerCount} container(s) using it" disabled><i class="ph ph-trash"></i> Delete</button>`;
+            actionsHtml += `<button class="btn btn-danger btn-sm" style="opacity: 0.5; cursor: not-allowed;" title="Cannot remove network with ${containerCount} container(s) using it" disabled><i class="ph ph-trash"></i> Remove</button>`;
         } else {
-            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteNetwork('${escapeHtml(network.id)}', '${escapeHtml(network.name)}')" title="Delete network"><i class="ph ph-trash"></i> Delete</button>`;
+            actionsHtml += `<button class="btn btn-danger btn-sm" onclick="deleteNetwork('${escapeHtml(network.id)}', '${escapeHtml(network.name)}')" title="Remove network"><i class="ph ph-trash"></i> Remove</button>`;
         }
     }
 
@@ -5981,9 +6109,9 @@ async function backupNetwork(networkId, networkName) {
     });
 }
 
-// Delete network
+// Remove network
 async function deleteNetwork(networkId, networkName) {
-    showConfirmationModal(`Delete network "${networkName}"?\n\nThis will remove the network. Containers using this network will be disconnected.\n\nThis action cannot be undone.`, async () => {
+    showConfirmationModal(`Remove network "${networkName}"?\n\nThis will remove the network. Containers using this network will be disconnected.\n\nThis action cannot be undone.`, async () => {
 
         try {
             const response = await fetch(`/api/network/${networkId}/delete`, {
@@ -5992,15 +6120,15 @@ async function deleteNetwork(networkId, networkName) {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Failed to delete network');
+                throw new Error(data.error || 'Failed to remove network');
             }
 
-            console.log('Network deleted');
-            showNotification('Network deleted successfully', 'success');
+            console.log('Network removed');
+            showNotification('Network removed successfully', 'success');
             loadNetworks();
         } catch (error) {
-            console.error(`Error deleting network: ${error.message}`);
-            showNotification(`Error deleting network: ${error.message}`, 'error');
+            console.error(`Error removing network: ${error.message}`);
+            showNotification(`Error removing network: ${error.message}`, 'error');
         }
     });
 }
@@ -6037,6 +6165,271 @@ async function restoreNetworkBackup(filename) {
         } catch (error) {
             console.error(`Error restoring network backup: ${error.message}`);
         }
+    });
+}
+
+// ========== Events Functions ==========
+
+function updateEventsActionFilter() {
+    const typeFilter = document.getElementById('events-filter-type')?.value || '';
+    const actionFilter = document.getElementById('events-filter-action');
+    
+    if (!actionFilter) return;
+    
+    // Store current selection
+    const currentValue = actionFilter.value;
+    
+    // Clear existing options except "All Actions"
+    actionFilter.innerHTML = '<option value="">All Actions</option>';
+    
+    if (typeFilter) {
+        // Get actions for selected type
+        const actions = eventTypeActions[typeFilter.toLowerCase()] || [];
+        
+        // Add actions as options
+        actions.forEach(action => {
+            const option = document.createElement('option');
+            option.value = action;
+            option.textContent = action.charAt(0).toUpperCase() + action.slice(1).replace(/_/g, ' ');
+            actionFilter.appendChild(option);
+        });
+        
+        // Restore selection if it's still valid
+        if (currentValue && actions.includes(currentValue)) {
+            actionFilter.value = currentValue;
+        } else {
+            actionFilter.value = '';
+        }
+    } else {
+        // Show all actions when no type filter is selected
+        const allActions = new Set();
+        Object.values(eventTypeActions).forEach(actions => {
+            actions.forEach(action => allActions.add(action));
+        });
+        
+        // Sort actions alphabetically
+        const sortedActions = Array.from(allActions).sort();
+        
+        sortedActions.forEach(action => {
+            const option = document.createElement('option');
+            option.value = action;
+            option.textContent = action.charAt(0).toUpperCase() + action.slice(1).replace(/_/g, ' ');
+            actionFilter.appendChild(option);
+        });
+        
+        // Restore selection if it's still valid
+        if (currentValue && sortedActions.includes(currentValue)) {
+            actionFilter.value = currentValue;
+        } else {
+            actionFilter.value = '';
+        }
+    }
+}
+
+async function loadEvents() {
+    const errorEl = document.getElementById('events-error');
+    const eventsList = document.getElementById('events-list');
+    const eventsSpinner = document.getElementById('events-spinner');
+    const eventsWrapper = document.getElementById('events-table-wrapper');
+
+    errorEl.style.display = 'none';
+    eventsList.innerHTML = '';
+
+    // Show spinner and prevent scrollbars
+    if (eventsSpinner) eventsSpinner.style.display = 'flex';
+    if (eventsWrapper) {
+        eventsWrapper.style.overflow = 'hidden';
+        eventsWrapper.classList.add('loading-grid');
+    }
+
+    try {
+        const response = await fetch('/api/events');
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load events');
+        }
+
+        // Store all events for sorting and filtering
+        allEvents = data.events || [];
+
+        // Update action filter based on available event types
+        updateEventsActionFilter();
+
+        // Apply filters, then sort, then render
+        applyEventsFiltersAndSort();
+
+    } catch (error) {
+        errorEl.innerHTML = `<h3>Error</h3><p>${escapeHtml(error.message)}</p>`;
+        errorEl.style.display = 'block';
+    } finally {
+        // Hide spinner and restore overflow
+        if (eventsSpinner) eventsSpinner.style.display = 'none';
+        if (eventsWrapper) {
+            eventsWrapper.style.overflow = '';
+            eventsWrapper.classList.remove('loading-grid');
+        }
+    }
+}
+
+function filterEvents() {
+    // Apply filters and sort, then render
+    applyEventsFiltersAndSort();
+}
+
+function applyEventsFiltersAndSort() {
+    // Get filter values
+    const typeFilter = document.getElementById('events-filter-type')?.value || '';
+    const actionFilter = document.getElementById('events-filter-action')?.value || '';
+    const searchQuery = (document.getElementById('events-search')?.value || '').toLowerCase().trim();
+
+    // Filter events
+    let filteredEvents = [...allEvents];
+    
+    if (typeFilter) {
+        filteredEvents = filteredEvents.filter(event => {
+            const eventType = (event.type || '').toLowerCase();
+            return eventType === typeFilter.toLowerCase();
+        });
+    }
+
+    if (actionFilter) {
+        filteredEvents = filteredEvents.filter(event => {
+            const eventAction = (event.action || '').toLowerCase();
+            return eventAction === actionFilter.toLowerCase();
+        });
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+        filteredEvents = filteredEvents.filter(event => {
+            const name = (event.name || '').toLowerCase();
+            const type = (event.type || '').toLowerCase();
+            const action = (event.action || '').toLowerCase();
+            const timeFormatted = (event.time_formatted || '').toLowerCase();
+            
+            return name.includes(searchQuery) ||
+                   type.includes(searchQuery) ||
+                   action.includes(searchQuery) ||
+                   timeFormatted.includes(searchQuery);
+        });
+    }
+
+    // Apply current sort if any
+    let eventsToDisplay = filteredEvents;
+    if (currentEventsSortColumn) {
+        eventsToDisplay = sortEventsData([...filteredEvents], currentEventsSortColumn, currentEventsSortDirection);
+        // Restore sort indicator
+        const sortIndicator = document.getElementById(`sort-events-${currentEventsSortColumn}`);
+        if (sortIndicator) {
+            sortIndicator.textContent = currentEventsSortDirection === 'asc' ? ' ▲' : ' ▼';
+            sortIndicator.style.color = 'var(--accent)';
+        }
+    }
+
+    renderEvents(eventsToDisplay);
+}
+
+function sortEvents(column) {
+    // Toggle direction if same column, otherwise default to desc for time, asc for others
+    if (currentEventsSortColumn === column) {
+        currentEventsSortDirection = currentEventsSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentEventsSortColumn = column;
+        currentEventsSortDirection = column === 'time' ? 'desc' : 'asc';
+    }
+
+    // Clear all sort indicators
+    document.querySelectorAll('#events-table .sort-indicator').forEach(indicator => {
+        indicator.textContent = '';
+        indicator.style.color = '';
+    });
+
+    // Apply filters and sort, then render
+    applyEventsFiltersAndSort();
+}
+
+function sortEventsData(events, column, direction) {
+    return events.sort((a, b) => {
+        let aVal, bVal;
+
+        switch (column) {
+            case 'time':
+                aVal = a.time || 0;
+                bVal = b.time || 0;
+                break;
+            case 'type':
+                aVal = (a.type || '').toLowerCase();
+                bVal = (b.type || '').toLowerCase();
+                break;
+            case 'action':
+                aVal = (a.action || '').toLowerCase();
+                bVal = (b.action || '').toLowerCase();
+                break;
+            case 'name':
+                aVal = (a.name || '').toLowerCase();
+                bVal = (b.name || '').toLowerCase();
+                break;
+            default:
+                return 0;
+        }
+
+        if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+}
+
+function renderEvents(events) {
+    const eventsList = document.getElementById('events-list');
+    eventsList.innerHTML = '';
+
+    if (events.length === 0) {
+        eventsList.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 40px; color: var(--text-secondary);">No events found</td></tr>';
+        return;
+    }
+
+    events.forEach(event => {
+        const tr = document.createElement('tr');
+        tr.className = 'event-row';
+
+        // Determine color based on event type/action
+        let actionColor = 'var(--text-secondary)';
+        if (event.action) {
+            const actionLower = event.action.toLowerCase();
+            if (actionLower.includes('start') || actionLower.includes('create')) {
+                actionColor = 'var(--accent)';
+            } else if (actionLower.includes('stop') || actionLower.includes('kill') || actionLower.includes('die')) {
+                actionColor = 'var(--danger)';
+            } else if (actionLower.includes('destroy') || actionLower.includes('remove')) {
+                actionColor = 'var(--warning)';
+            }
+        }
+
+        tr.innerHTML = `
+            <td>
+                <div style="font-size: 0.9em; color: var(--text-secondary); font-family: monospace;">
+                    ${escapeHtml(event.time_formatted || 'N/A')}
+                </div>
+            </td>
+            <td>
+                <div style="color: var(--text-secondary); text-transform: capitalize;">
+                    ${escapeHtml(event.type || 'unknown')}
+                </div>
+            </td>
+            <td>
+                <div style="color: ${actionColor}; text-transform: capitalize; font-weight: 500;">
+                    ${escapeHtml(event.action || 'unknown')}
+                </div>
+            </td>
+            <td>
+                <div style="font-weight: 500; color: var(--text-primary);">
+                    ${escapeHtml(event.name || 'N/A')}
+                </div>
+            </td>
+        `;
+
+        eventsList.appendChild(tr);
     });
 }
 
@@ -6181,11 +6574,11 @@ function createStackRow(stack) {
         ? stack.networks.map(n => `<span style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 3px; font-size: 0.85em; margin-right: 4px;">${escapeHtml(n)}</span>`).join('')
         : '<span style="color: var(--text-light);">-</span>';
 
-    // Actions column: Delete for Swarm stacks, View Containers for Compose stacks
+    // Actions column: Remove for Swarm stacks, View Containers for Compose stacks
     const actionsCell = stack.type === 'swarm'
         ? `<td style="white-space: nowrap;">
-            <button class="btn btn-danger btn-sm" onclick="deleteStack('${escapeHtml(stack.name)}', '${stack.type}')" title="Delete Swarm Stack">
-                <i class="ph ph-trash"></i> Delete
+            <button class="btn btn-danger btn-sm" onclick="deleteStack('${escapeHtml(stack.name)}', '${stack.type}')" title="Remove Swarm Stack">
+                <i class="ph ph-trash"></i> Remove
             </button>
         </td>`
         : `<td style="white-space: nowrap;">
@@ -6401,8 +6794,8 @@ function viewNetworkContainers(networkName) {
 async function deleteStack(stackName, stackType) {
     const stackTypeLabel = stackType === 'swarm' ? 'Swarm stack' : 'Compose stack';
     showConfirmationModal(
-        `Delete ${stackTypeLabel} "${stackName}"?`,
-        `This will ${stackType === 'swarm' ? 'remove the stack and all its services' : 'delete all containers in this stack'}. This action cannot be undone.`,
+        `Remove ${stackTypeLabel} "${stackName}"?`,
+        `This will ${stackType === 'swarm' ? 'remove the stack and all its services' : 'remove all containers in this stack'}. This action cannot be undone.`,
         async () => {
             try {
                 const response = await fetch(`/api/stack/${encodeURIComponent(stackName)}/delete`, {
@@ -6411,13 +6804,13 @@ async function deleteStack(stackName, stackType) {
                 const data = await response.json();
 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to delete stack');
+                    throw new Error(data.error || 'Failed to remove stack');
                 }
 
-                showNotification(`Stack "${stackName}" deleted successfully`, 'success');
+                showNotification(`Stack "${stackName}" removed successfully`, 'success');
                 await loadStacks();
             } catch (error) {
-                showNotification(`Failed to delete stack: ${error.message}`, 'error');
+                showNotification(`Failed to remove stack: ${error.message}`, 'error');
             }
         }
     );
@@ -6432,8 +6825,8 @@ async function deleteSelectedStacks() {
     const stackList = stackNames.map(name => `"${name}"`).join(', ');
 
     showConfirmationModal(
-        `Delete ${selectedStacks.size} stack${selectedStacks.size !== 1 ? 's' : ''}?`,
-        `This will delete: ${stackList}. This action cannot be undone.`,
+        `Remove ${selectedStacks.size} stack${selectedStacks.size !== 1 ? 's' : ''}?`,
+        `This will remove: ${stackList}. This action cannot be undone.`,
         async () => {
             let successCount = 0;
             let errorCount = 0;
@@ -6449,19 +6842,19 @@ async function deleteSelectedStacks() {
                         successCount++;
                     } else {
                         errorCount++;
-                        console.error(`Failed to delete stack ${stackName}:`, data.error);
+                        console.error(`Failed to remove stack ${stackName}:`, data.error);
                     }
                 } catch (error) {
                     errorCount++;
-                    console.error(`Error deleting stack ${stackName}:`, error);
+                    console.error(`Error removing stack ${stackName}:`, error);
                 }
             }
 
             if (successCount > 0) {
-                showNotification(`Deleted ${successCount} stack${successCount !== 1 ? 's' : ''} successfully`, 'success');
+                showNotification(`Removed ${successCount} stack${successCount !== 1 ? 's' : ''} successfully`, 'success');
             }
             if (errorCount > 0) {
-                showNotification(`Failed to delete ${errorCount} stack${errorCount !== 1 ? 's' : ''}`, 'error');
+                showNotification(`Failed to remove ${errorCount} stack${errorCount !== 1 ? 's' : ''}`, 'error');
             }
 
             await loadStacks();
@@ -6745,6 +7138,52 @@ async function killSelectedContainers() {
 
     if (successCount > 0) {
         const msg = successCount === 1 ? 'Container killed successfully.' : `${successCount} containers killed successfully.`;
+        showNotification(msg, 'success');
+    }
+
+    resetSelection();
+    setTimeout(() => loadContainers(), 300);
+}
+
+async function pauseSelectedContainers() {
+    const selectedIds = getSelectedContainerIds();
+    if (selectedIds.length === 0) {
+        console.warn('No containers selected.');
+        return;
+    }
+
+    let successCount = 0;
+    for (const containerId of selectedIds) {
+        if (await pauseContainer(containerId)) {
+            successCount++;
+        }
+    }
+
+    if (successCount > 0) {
+        const msg = successCount === 1 ? 'Container paused successfully.' : `${successCount} containers paused successfully.`;
+        showNotification(msg, 'success');
+    }
+
+    resetSelection();
+    setTimeout(() => loadContainers(), 300);
+}
+
+async function resumeSelectedContainers() {
+    const selectedIds = getSelectedContainerIds();
+    if (selectedIds.length === 0) {
+        console.warn('No containers selected.');
+        return;
+    }
+
+    let successCount = 0;
+    for (const containerId of selectedIds) {
+        if (await resumeContainer(containerId)) {
+            successCount++;
+        }
+    }
+
+    if (successCount > 0) {
+        const msg = successCount === 1 ? 'Container resumed successfully.' : `${successCount} containers resumed successfully.`;
         showNotification(msg, 'success');
     }
 
@@ -7179,7 +7618,7 @@ async function deleteSelectedContainers() {
         return;
     }
 
-    // Store selected container IDs globally for bulk delete
+    // Store selected container IDs globally for bulk remove
     window.selectedContainerIdsForDelete = selectedIds;
 
     // Get first container name for display (or show count)
@@ -7193,7 +7632,7 @@ async function deleteSelectedContainers() {
         }
     }
 
-    // Show delete modal with checkboxes (applies to all selected containers)
+    // Show remove modal with checkboxes (applies to all selected containers)
     if (selectedIds.length === 1) {
         showDeleteOptions(firstContainerId, containerName);
     } else {
@@ -7405,7 +7844,10 @@ async function loadSchedulerContainers() {
                 };
 
                 const statusLower = container.status.toLowerCase();
-                const statusClass = statusLower === 'running' ? 'status-running' : 'status-stopped';
+                const statusTextLower = (container.status_text || '').toLowerCase();
+                const isPaused = statusLower === 'paused' || statusTextLower.includes('paused');
+                const statusClass = isPaused ? 'status-paused' :
+                    statusLower === 'running' ? 'status-running' : 'status-stopped';
                 const statusDisplay = container.status_text || container.status.toUpperCase();
 
                 const imageInfo = container.image_info || {};
@@ -8067,6 +8509,11 @@ async function saveSettings(event) {
 
 // Close settings modal when clicking outside (set up in DOMContentLoaded)
 document.addEventListener('DOMContentLoaded', function() {
+    // Initialize events action filter
+    if (typeof updateEventsActionFilter === 'function') {
+        updateEventsActionFilter();
+    }
+    
     const settingsModal = document.getElementById('settings-modal');
     if (settingsModal) {
         settingsModal.addEventListener('click', function(e) {

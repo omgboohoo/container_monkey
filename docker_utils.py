@@ -47,7 +47,7 @@ def init_docker_client():
     """Initialize Docker client with multiple fallback strategies"""
     global docker_client, docker_api_client, _docker_client_initialized
     
-    # Strategy 0: Try direct API client first (like Portainer)
+    # Strategy 0: Try direct API client first
     if _use_direct_api:
         try:
             api_client = DockerAPIClient()
