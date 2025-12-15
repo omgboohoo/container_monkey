@@ -49,9 +49,19 @@ class EventsManager:
                 if not name:
                     name = event.get('id', '')[:12] if event.get('id') else 'unknown'
                 
-                # Format timestamp
+                # Extract timestamp - prefer timeNano for sub-second precision
                 timestamp = event.get('time', 0)
-                if isinstance(timestamp, (int, float)):
+                time_nano = event.get('timeNano', None)
+                
+                # Use timeNano if available, otherwise fall back to time
+                # timeNano is in nanoseconds, convert to seconds for datetime
+                if time_nano is not None and isinstance(time_nano, (int, float)):
+                    # Convert nanoseconds to seconds (divide by 1e9)
+                    timestamp_seconds = time_nano / 1e9
+                    dt = datetime.fromtimestamp(timestamp_seconds)
+                    # Format with milliseconds precision (show 3 decimal places)
+                    time_str = dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # Remove last 3 digits to show milliseconds
+                elif isinstance(timestamp, (int, float)):
                     dt = datetime.fromtimestamp(timestamp)
                     time_str = dt.strftime('%Y-%m-%d %H:%M:%S')
                 else:
@@ -63,13 +73,14 @@ class EventsManager:
                     'action': action,
                     'name': name,
                     'time': timestamp,
+                    'timeNano': time_nano,  # Include timeNano for frontend sorting
                     'time_formatted': time_str,
                     'attributes': attributes,
                     'raw': event  # Keep raw event for debugging
                 })
             
-            # Sort by timestamp (newest first)
-            formatted_events.sort(key=lambda x: x.get('time', 0), reverse=True)
+            # Sort by timeNano if available (for sub-second precision), otherwise by time (newest first)
+            formatted_events.sort(key=lambda x: (x.get('timeNano') if x.get('timeNano') is not None else x.get('time', 0) * 1e9), reverse=True)
             
             return {
                 'events': formatted_events,

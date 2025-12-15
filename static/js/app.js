@@ -6355,8 +6355,10 @@ function sortEventsData(events, column, direction) {
 
         switch (column) {
             case 'time':
-                aVal = a.time || 0;
-                bVal = b.time || 0;
+                // Use timeNano for sub-second precision if available, otherwise use time
+                // timeNano is in nanoseconds, so we can compare directly
+                aVal = a.timeNano !== undefined && a.timeNano !== null ? a.timeNano : (a.time || 0) * 1e9;
+                bVal = b.timeNano !== undefined && b.timeNano !== null ? b.timeNano : (b.time || 0) * 1e9;
                 break;
             case 'type':
                 aVal = (a.type || '').toLowerCase();
