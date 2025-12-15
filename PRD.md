@@ -29,12 +29,33 @@ The open-source backup and recovery solution for Docker. Protect your containers
   - `storage_settings_manager.py` - Storage settings management (local vs S3)
   - `ui_settings_manager.py` - UI settings management (server name, etc.)
   - `s3_storage_manager.py` - S3 storage operations
+  - `database_manager.py` - Unified database initialization and schema management
+  - `stats_cache_manager.py` - Background caching and refresh of container statistics
   - `encryption_utils.py` - Encryption utilities for securing credentials
+  - `error_utils.py` - Safe error logging utilities to prevent information disclosure
 - **Storage**: Docker volumes for backup persistence
   - Organized directory structure: `backups/` subdirectory for backup files, `config/` subdirectory for configuration
   - Automatic migration of existing files to organized structure on startup
 - **Database**: SQLite database (`monkey.db`) for user management, audit logs, storage settings, and UI settings (stored in `config/` subdirectory of backup volume)
-- **Rate Limiting**: Flask-Limiter 3.5.0 for API protection (progress endpoint exempt)
+  - Unified database schema managed by `DatabaseManager` class
+  - Tables: `users`, `audit_logs`, `backup_schedules`, `storage_settings`, `ui_settings`
+  - Indexes on audit_logs for performance (timestamp, operation_type, container_id, status)
+  - Automatic default user creation on first run
+- **Rate Limiting**: Flask-Limiter 3.5.0 for API protection
+  - Default limits: 200 requests per day, 50 requests per hour per IP
+  - Progress endpoint (`/api/backup-progress/<progress_id>`) exempt from rate limiting for frequent polling
+  - Login endpoint limited to 5 requests per minute
+- **CSRF Protection**: Flask-WTF 1.2.1 CSRF protection for all state-changing requests
+  - CSRF token cookie name: `X-CSRFToken`
+  - CSRF token headers: `X-CSRFToken`, `X-CSRF-Token`
+  - No time limit on CSRF tokens
+  - Login endpoint exempt (creates new session)
+- **Session Security**: Enhanced session cookie protection
+  - `HttpOnly` flag prevents JavaScript access (XSS protection)
+  - `SameSite='Lax'` provides CSRF protection
+  - Automatic HTTPS detection via `X-Forwarded-Proto` header from reverse proxy
+  - Secure flag dynamically set based on proxy header (works with nginx, Apache, etc.)
+  - Session lifetime: 1 day (24 hours)
 - **Server**: Flask development server (container port 80, host port 1066 by default)
 
 ### Frontend
@@ -137,12 +158,17 @@ The open-source backup and recovery solution for Docker. Protect your containers
 
 ### System Monitoring
 - Dashboard with resource overview and backup schedule next run time
-- Real-time system CPU/RAM stats in top bar
+- Real-time system CPU/RAM stats in top bar (polled every 5 seconds)
 - **Statistics Page**: Comprehensive container statistics view with background caching, refresh countdown, and manual refresh button
   - All containers displayed in a grid format
   - Shows CPU %, RAM usage, Network I/O, Block I/O, and Next Refresh countdown for each container
   - Status badges (running/stopped) matching container viewer styling
-  - Background caching for instant page load (stats refresh every 5 minutes automatically)
+  - **Background Caching**: `StatsCacheManager` handles background refresh every 5 minutes (300 seconds)
+    - Background thread refreshes stats automatically
+    - Cached stats returned immediately on API request
+    - Manual refresh triggers background update and polls for completion
+    - Thread-safe with locking to prevent concurrent refreshes
+    - Automatic thread restart on failure
   - Next Refresh column shows countdown timer (5:00 to 0:00) indicating time until next automatic refresh
   - Countdown updates every second in real-time
   - Manual refresh button (enabled by default, allows on-demand refresh)
@@ -290,6 +316,8 @@ GET    /console/<container_id>                  # Container console page
 ### Backup
 - Filename, size, creation date, container name
 - Metadata: volumes, port mappings, environment variables
+- Companion JSON files (`.tar.gz.json`) store server name and backup type (Manual/Scheduled)
+- Storage location tracked (Local/S3)
 
 ### Volume
 - Name, driver, mount point, size (if available)
@@ -300,40 +328,95 @@ GET    /console/<container_id>                  # Container console page
 ### Network
 - ID, name, driver, scope, IPAM configuration
 
-### User
-- ID, username (unique), password_hash, created_at timestamp
+### Database Schema (SQLite - monkey.db)
+
+#### users table
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `username` TEXT UNIQUE NOT NULL
+- `password_hash` TEXT NOT NULL
+- `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+#### audit_logs table
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `timestamp` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- `operation_type` TEXT NOT NULL (Manual Backup, Scheduled Backup, Restore, Lifecycle Cleanup, Backup Deletion)
+- `container_id` TEXT
+- `container_name` TEXT
+- `backup_filename` TEXT
+- `status` TEXT NOT NULL (Started, Completed, Error)
+- `error_message` TEXT
+- `user` TEXT
+- `details` TEXT
+- Indexes: timestamp, operation_type, container_id, status
+
+#### backup_schedules table
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `schedule_type` TEXT NOT NULL DEFAULT 'daily' (daily/weekly)
+- `hour` INTEGER NOT NULL DEFAULT 2 (0-23)
+- `day_of_week` INTEGER (0-6, for weekly schedules)
+- `lifecycle` INTEGER NOT NULL DEFAULT 7 (number of scheduled backups to keep per container)
+- `selected_containers` TEXT NOT NULL DEFAULT '[]' (JSON array of container IDs)
+- `last_run` TIMESTAMP
+- `next_run` TIMESTAMP
+- `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+#### storage_settings table
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `storage_type` TEXT NOT NULL DEFAULT 'local' (local/s3)
+- `s3_bucket` TEXT
+- `s3_region` TEXT
+- `s3_access_key` TEXT
+- `s3_secret_key` TEXT (encrypted at rest using Fernet)
+- `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+
+#### ui_settings table
+- `id` INTEGER PRIMARY KEY AUTOINCREMENT
+- `setting_key` TEXT UNIQUE NOT NULL (e.g., 'server_name')
+- `setting_value` TEXT NOT NULL
+- `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+- `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 ## Key Technical Decisions
 
-1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`, `scheduler_manager.py`, `audit_log_manager.py`, `storage_settings_manager.py`, `ui_settings_manager.py`, `s3_storage_manager.py`, `encryption_utils.py`) for better maintainability and separation of concerns
+1. **Modular Architecture**: Application refactored into separate manager modules (`auth_manager.py`, `container_manager.py`, `backup_manager.py`, `backup_file_manager.py`, `restore_manager.py`, `volume_manager.py`, `image_manager.py`, `network_manager.py`, `stack_manager.py`, `system_manager.py`, `scheduler_manager.py`, `audit_log_manager.py`, `storage_settings_manager.py`, `ui_settings_manager.py`, `s3_storage_manager.py`, `database_manager.py`, `stats_cache_manager.py`, `encryption_utils.py`, `error_utils.py`) for better maintainability and separation of concerns
 2. **Direct Docker Socket API**: Uses direct HTTP requests to Docker socket (`docker_api.py`) for better reliability than docker-py library
 3. **Modular Backup System**: Backup functionality separated into `backup_manager.py` and `backup_file_manager.py` modules for maintainability
 4. **Sequential Backup Queue**: Queue processor ensures backups complete fully (including tar.gz writing) before starting next
 5. **Session-based Authentication**: SQLite database stores user credentials with password hashing for security (`auth_manager.py`)
-6. **Volume-based Storage**: Backups stored in Docker volume for persistence across container restarts, with optional S3 cloud storage
-7. **Encrypted Credentials**: S3 access keys and secret keys encrypted at rest in database using Fernet symmetric encryption
-8. **Client-side Polling**: Stats updated via 5-second polling intervals for real-time updates
-9. **Rate Limiting**: Flask-Limiter protects API endpoints (progress endpoint exempt for frequent polling)
-10. **Progressive Enhancement**: Works without JavaScript for basic functionality, enhanced with JS
-11. **Self-filtering**: Application filters itself from container/image/volume listings to avoid recursion
-12. **Backup Completion Verification**: Ensures tar.gz files are fully written before marking backup complete
-13. **S3 Integration**: Seamless integration with AWS S3 for cloud backup storage with encrypted credentials
+6. **Unified Database Management**: `DatabaseManager` handles all database initialization, schema creation, and default data setup in a single unified database (`monkey.db`)
+7. **Volume-based Storage**: Backups stored in Docker volume for persistence across container restarts, with optional S3 cloud storage
+8. **Encrypted Credentials**: S3 access keys and secret keys encrypted at rest in database using Fernet symmetric encryption (`encryption_utils.py`)
+9. **Background Stats Caching**: `StatsCacheManager` provides background thread-based caching of container statistics with 5-minute refresh interval, enabling instant API responses
+10. **Rate Limiting**: Flask-Limiter protects API endpoints with default limits (200/day, 50/hour), progress endpoint exempt for frequent polling
+11. **CSRF Protection**: Flask-WTF CSRF protection on all state-changing requests with automatic token management
+12. **Dynamic Session Security**: Session cookie Secure flag automatically set based on `X-Forwarded-Proto` header from reverse proxy (supports HTTP and HTTPS deployments)
+13. **Safe Error Handling**: `error_utils.py` provides safe error logging that prevents information disclosure in production (full stack traces only in debug mode)
+14. **Progressive Enhancement**: Works without JavaScript for basic functionality, enhanced with JS
+15. **Self-filtering**: Application filters itself from container/image/volume listings to avoid recursion
+16. **Backup Completion Verification**: Ensures tar.gz files are fully written before marking backup complete
+17. **S3 Integration**: Seamless integration with AWS S3 for cloud backup storage with encrypted credentials
 
 ## Performance Considerations
 
-- Stats polling limited to 5-second intervals
-- Backup operations run in background threads with progress tracking
-- Sequential backup queue prevents resource contention and ensures reliability
-- Large file downloads use streaming
-- Bulk operations use queue system for sequential processing (prevents conflicts)
-- Container metadata cached client-side
-- Progress endpoint exempt from rate limiting to allow frequent status updates
+- **System Stats Polling**: Limited to 5-second intervals for top bar CPU/RAM stats
+- **Statistics Caching**: Background thread-based caching (`StatsCacheManager`) refreshes container statistics every 5 minutes, enabling instant API responses without blocking
+- **Backup Operations**: Run in background threads with progress tracking
+- **Sequential Backup Queue**: Prevents resource contention and ensures reliability
+- **Large File Downloads**: Use streaming for efficient memory usage
+- **Bulk Operations**: Use queue system for sequential processing (prevents conflicts)
+- **Container Metadata**: Cached client-side to reduce API calls
+- **Progress Endpoint**: Exempt from rate limiting to allow frequent status updates during long-running operations
+- **Database Indexes**: Indexes on audit_logs table (timestamp, operation_type, container_id, status) for fast queries
+- **Request Cancellation**: Statistics refresh uses AbortController to cancel duplicate requests
 
 ## Security Considerations
 
 - Requires Docker socket access (run with appropriate permissions)
 - **Built-in authentication**: Session-based login system with SQLite user database (`auth_manager.py`)
   - Session lifetime: 1 day (24 hours)
+  - Session cookie security: `HttpOnly`, `SameSite='Lax'`, dynamic `Secure` flag based on HTTPS detection
 - **Strong Password Policy**: Enforced password complexity requirements
   - Minimum 12 characters length
   - Must contain at least one uppercase letter (A-Z)
@@ -345,18 +428,32 @@ GET    /console/<container_id>                  # Container console page
   - Backend validation ensures policy enforcement
 - Default credentials: username `admin`, password `c0Nta!nerM0nK3y#Q92x` (should be changed in production)
   - **Security warning modal** appears automatically when default credentials are used
+- **CSRF Protection**: Flask-WTF CSRF protection on all state-changing API endpoints
+  - CSRF tokens required in headers (`X-CSRFToken` or `X-CSRF-Token`)
+  - Login endpoint exempt (creates new session)
+  - CSRF errors return 400 status with clear error message
 - **Encryption Key Management**: Unique random encryption key generated per installation
   - Key stored at `/backups/config/encryption.key` in Docker volume
   - Key file has restricted permissions (600 - owner read/write only)
   - No hardcoded encryption keys - fails securely if key cannot be accessed
-- All API endpoints require authentication (except `/api/login`, `/api/logout`, `/api/auth-status`)
+- **S3 Credentials Security**: S3 secret keys never exposed in API responses
+  - Secret keys returned as masked placeholders (`***`) in API responses
+  - Users can update S3 settings without re-entering secret key (preserves existing)
+  - Secret keys only transmitted when explicitly changed by user
+  - Prevents credential exposure through API inspection or network monitoring
+- All API endpoints require authentication (except `/api/login`, `/api/logout`, `/api/auth-status`, `/api/backup-progress/<progress_id>`)
 - **Command Injection Prevention**: 
   - Container exec commands sanitized using `shlex.quote()` to prevent shell injection
   - Commands with shell operators (`&&`, `|`, `;`) are safely escaped
   - Container ID validation ensures proper format before execution
   - Container redeploy uses secure command parsing without shell fallback
 - **Secure Working Directory**: Uses Docker's native `-w` flag instead of shell-based directory changes
+- **Error Handling Security**: `error_utils.py` prevents information disclosure
+  - Full stack traces only shown in debug mode
+  - Generic error messages returned to users in production
+  - Prevents exposure of file paths, code structure, and internal system details
 - File uploads validated and sanitized
 - Container commands executed with user permissions
 - Volume exploration limited to readable paths
+- Rate limiting protects against brute force attacks (login endpoint: 5 requests/minute)
 

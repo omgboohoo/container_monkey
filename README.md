@@ -6,25 +6,26 @@ The open-source backup and recovery solution for Docker. Protect your containers
 
 ## Features
 
-- **Container Management**: Start, stop (graceful), kill (immediate), restart, delete containers with bulk operations
-- **Volume Management**: Explore, download, and manage Docker volumes
-- **Image Management**: View and delete Docker images, cleanup dangling images
-- **Network Management**: Backup and restore Docker networks, view containers using each network
-- **Backup & Restore**: Full container backup with volumes, port mappings, and restore functionality
-- **Backup Scheduler**: Automated scheduled backups with daily or weekly schedules, force backup option
-- **S3 Storage Support**: Store backups in AWS S3, toggle between local and S3 storage, enables shared vaults across Container Monkey instances
-- **Multi-Server Identification**: Server name tracking allows multiple Container Monkey instances sharing the same S3 bucket to identify which server created each backup
-- **Backup Audit Log**: Comprehensive audit logging for all backup operations, restores, and lifecycle management
-- **Real-time Stats**: System-wide CPU and RAM utilization monitoring in top bar
-- **Statistics Page**: Comprehensive container statistics including CPU, RAM, Network I/O, Block I/O, and Next Refresh countdown (5:00 to 0:00) with background caching for instant load times and manual refresh button
-- **Backup Type Tracking**: Backup vault shows whether backups are Manual or Scheduled and storage location (Local/S3)
-- **Backup Vault Search**: Real-time search filter to quickly find backups by filename, type, storage, server name, or date
-- **Sortable Backup Columns**: All backup vault columns are sortable with visual indicators for easy organization
-- **Web Console**: Interactive terminal access to containers
-- **Logs Viewer**: Real-time container logs viewing
-- **Bulk Operations**: Select multiple containers/volumes/images for batch operations
-- **User Management**: Change username and password
-- **Rate Limiting**: Built-in API rate limiting for security
+### Core Capabilities
+
+- **One-Click Backup & Restore**: Full container backups including volumes, port mappings, and environment variables. Restore anywhere with a single click.
+- **Instant Server Migration**: Instantly move containers and volumes from one server to another. Backup on one server, restore on another—seamless infrastructure mobility.
+- **Automated Scheduling**: Set-and-forget backup schedules with daily or weekly options. Never lose data again.
+- **Cloud Storage Integration**: Store backups in AWS S3 for off-site protection and shared vaults across multiple servers.
+- **Multi-Server Support**: Deploy Container Monkey across your infrastructure. All instances can share the same S3 backup vault while maintaining server identification.
+
+### Docker Management
+
+- **Container Operations**: Start, stop, restart, and manage containers with bulk operations support
+- **Volume Management**: Explore, download, and manage Docker volumes through an intuitive web interface
+- **Image Management**: View and clean up Docker images, including automatic dangling image detection
+- **Network Management**: Backup and restore Docker networks with full configuration preservation
+
+### Operations & Monitoring
+
+- **Real-Time Monitoring**: System-wide CPU and RAM utilization with detailed container statistics (CPU, RAM, Network I/O, Block I/O)
+- **Web Console**: Interactive terminal access to containers directly from your browser
+- **Audit Logging**: Comprehensive audit trail for all backup operations, restores, and lifecycle events
 
 ## Quick Start
 
@@ -109,7 +110,6 @@ Access the web UI at: http://your-server:1066
 ### Environment Variables
 
 - `FLASK_PORT`: Port to run the web server inside container (default: 80)
-- `FLASK_ENV`: Flask environment mode (default: production)
 
 ### Volume Mounts
 
@@ -168,28 +168,94 @@ Access the web UI at: http://your-server:1066
 
 The application provides a RESTful API. Key endpoints include:
 
+### Authentication
+- `POST /api/login` - User login
+- `POST /api/logout` - User logout
+- `GET /api/auth-status` - Check authentication status
+- `POST /api/change-password` - Change username/password
+
+### Containers
 - `GET /api/containers` - List all containers
 - `POST /api/container/<id>/start` - Start container
 - `POST /api/container/<id>/stop` - Stop container gracefully (SIGTERM)
 - `POST /api/container/<id>/kill` - Kill container immediately (SIGKILL)
+- `POST /api/container/<id>/restart` - Restart container
+- `DELETE /api/container/<id>/delete` - Delete container
+- `GET /api/container/<id>/details` - Get container details
+- `GET /api/container/<id>/logs` - Get container logs
+- `GET /api/container/<id>/stats` - Get container stats
+- `POST /api/container/<id>/exec` - Execute command in container
+- `POST /api/container/<id>/redeploy` - Redeploy container
+
+### Backups
 - `POST /api/backup/<container_id>` - Backup container (supports `?queue=true` for bulk operations)
-- `GET /api/backup-progress/<progress_id>` - Get backup progress (exempt from rate limiting)
-- `GET /api/backup/status` - Get backup system status
+- `GET /api/backups` - List all backups (from S3 and local)
+- `GET /api/backup/<filename>/preview` - Preview backup contents
 - `POST /api/restore-backup` - Restore backup
-- `GET /api/volumes` - List volumes
-- `GET /api/images` - List images
-- `GET /api/networks` - List networks
-- `GET /api/backups` - List backups
-- `GET /api/system-stats` - System CPU/RAM stats
-- `GET /api/statistics` - Comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
+- `DELETE /api/backup/<filename>` - Delete backup (from S3 or local)
+- `DELETE /api/backups/delete-all` - Delete all backups
+- `GET /api/download/<filename>` - Download backup file (from S3 or local)
+- `POST /api/upload-backup` - Upload backup file (to S3 or local)
+- `POST /api/backups/download-all-prepare` - Prepare bulk download session
+- `GET /api/backups/download-all-progress/<id>` - Get bulk download progress
+- `POST /api/backups/download-all-create/<id>` - Create download session
+- `GET /api/backups/download-all/<id>` - Download individual file from bulk download
+- `GET /api/backup-progress/<progress_id>` - Get backup progress (exempt from rate limiting)
+- `GET /api/backup/status` - Get backup system status (includes queue size)
+
+### Scheduler
 - `GET /api/scheduler/config` - Get scheduler configuration
 - `POST /api/scheduler/config` - Update scheduler configuration
 - `POST /api/scheduler/test` - Trigger scheduled backups immediately (for testing)
 - `POST /api/scheduler/cleanup` - Manually trigger cleanup of old scheduled backups
+
+### Storage Settings
+- `GET /api/storage/settings` - Get storage settings (local/S3)
+- `POST /api/storage/settings` - Update storage settings
+- `POST /api/storage/test-s3` - Test S3 connection and permissions
+
+### Volumes
+- `GET /api/volumes` - List all volumes
+- `GET /api/volume/<name>/explore` - Explore volume contents
+- `GET /api/volume/<name>/file` - Get volume file contents
+- `GET /api/volume/<name>/download` - Download volume file
+- `DELETE /api/volume/<name>/delete` - Delete volume
+- `POST /api/volumes/delete` - Delete multiple volumes
+
+### Images
+- `GET /api/images` - List all images
+- `DELETE /api/image/<id>/delete` - Delete image
+- `POST /api/cleanup/dangling-images` - Cleanup dangling images
+
+### Networks
+- `GET /api/networks` - List all networks
+- `POST /api/network/<id>/backup` - Backup network (uploads to S3 if enabled)
+- `POST /api/network/restore` - Restore network backup (downloads from S3 if needed)
+- `DELETE /api/network/<id>/delete` - Delete network
+- `GET /api/network-backups` - List network backups (from S3 and local)
+
+### Stacks
+- `GET /api/stacks` - List all Docker stacks
+- `DELETE /api/stack/<name>/delete` - Delete stack
+
+### System & Monitoring
+- `GET /api/dashboard-stats` - Get dashboard statistics
+- `GET /api/system-stats` - Get system CPU/RAM stats
+- `GET /api/statistics` - Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
+- `POST /api/statistics/refresh` - Trigger background refresh of statistics cache
+- `GET /api/system-time` - Get current system time
+- `GET /api/check-environment` - Check Docker environment
+- `POST /api/cleanup/temp-containers` - Cleanup temporary containers
+
+### Audit Logs
 - `GET /api/audit-logs` - Get audit logs with optional filtering (operation_type, status, container_id, date range)
 - `GET /api/audit-logs/statistics` - Get audit log statistics
 - `DELETE /api/audit-logs/clear` - Clear all audit logs
-- `POST /api/change-password` - Change username/password
+
+### UI Settings
+- `GET /api/ui/settings` - Get all UI settings
+- `GET /api/ui/settings/<key>` - Get UI setting value (e.g., server_name)
+- `POST /api/ui/settings/<key>` - Set UI setting value (e.g., server_name)
 
 See PRD.md for complete API documentation.
 
