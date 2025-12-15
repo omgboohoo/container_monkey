@@ -1372,20 +1372,20 @@
                 <p id="change-password-success-message">Password changed successfully.</p>
             </div>
             <form id="change-password-form" onsubmit="handleChangePassword(event); return false;">
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 20px; overflow: hidden;">
                     <label for="current-password"
                         style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Current
                         Password <span style="color: var(--danger);">*</span></label>
                     <input type="password" id="current-password" required
-                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em; box-sizing: border-box; max-width: 100%;"
                         placeholder="Enter current password">
                 </div>
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 20px; overflow: hidden;">
                     <label for="new-password"
                         style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">New
                         Password <span style="color: var(--danger);">*</span></label>
                     <input type="password" id="new-password" required
-                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em; box-sizing: border-box; max-width: 100%;"
                         placeholder="Enter new password" oninput="validatePasswordStrength()">
                     <div id="password-policy"
                         style="margin-top: 10px; padding: 12px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); font-size: 0.9em;">
@@ -1418,12 +1418,12 @@
                         </div>
                     </div>
                 </div>
-                <div style="margin-bottom: 24px;">
+                <div style="margin-bottom: 24px; overflow: hidden;">
                     <label for="confirm-password"
                         style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Confirm
                         New Password <span style="color: var(--danger);">*</span></label>
                     <input type="password" id="confirm-password" required
-                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em; box-sizing: border-box; max-width: 100%;"
                         placeholder="Confirm new password">
                 </div>
                 <div class="modal-actions">
@@ -1446,20 +1446,20 @@
                 <p id="change-username-success-message">Username changed successfully.</p>
             </div>
             <form id="change-username-form" onsubmit="handleChangeUsername(event); return false;">
-                <div style="margin-bottom: 20px;">
+                <div style="margin-bottom: 20px; overflow: hidden;">
                     <label for="current-password-username"
                         style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">Current
                         Password <span style="color: var(--danger);">*</span></label>
                     <input type="password" id="current-password-username" required
-                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em; box-sizing: border-box; max-width: 100%;"
                         placeholder="Enter current password">
                 </div>
-                <div style="margin-bottom: 24px;">
+                <div style="margin-bottom: 24px; overflow: hidden;">
                     <label for="new-username"
                         style="display: block; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;">New
                         Username <span style="color: var(--danger);">*</span></label>
                     <input type="text" id="new-username" required
-                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em;"
+                        style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-secondary); color: var(--text-primary); font-size: 1em; box-sizing: border-box; max-width: 100%;"
                         placeholder="Enter new username">
                 </div>
                 <div class="modal-actions">

@@ -1578,6 +1578,102 @@ select.form-control:focus option:checked {
     color: var(--text-primary) !important;
 }
 
+/* Change password modal - prevent button hover clipping */
+#change-password-modal .modal-content {
+    overflow-y: visible;
+    overflow-x: hidden;
+    max-height: none;
+    /* Ensure button hover doesn't get cut off - allow overflow for button transform */
+    overflow: visible;
+    padding-bottom: 8px; /* Add bottom padding to prevent button hover from being cut off */
+}
+
+#change-password-modal .modal-content form {
+    overflow-x: hidden !important;
+    overflow-y: visible !important; /* Allow button hover transform */
+}
+
+#change-password-modal .modal-content form > div {
+    overflow: visible !important; /* Allow input focus border to display properly */
+}
+
+#change-password-modal .modal-actions {
+    overflow: visible !important;
+    padding-top: 4px; /* Add padding to prevent button hover from being cut off */
+    margin-top: 24px;
+}
+
+/* Change password modal input focus styles */
+#change-password-modal input[type="text"]:focus,
+#change-password-modal input[type="text"]:active,
+#change-password-modal input[type="password"]:focus,
+#change-password-modal input[type="password"]:active {
+    outline: none !important;
+    border-color: var(--secondary) !important;
+    background: var(--bg-secondary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    border: 1px solid var(--secondary) !important; /* Ensure clean border on focus */
+}
+
+/* Remove autofill background color from password managers */
+#change-password-modal input:-webkit-autofill,
+#change-password-modal input:-webkit-autofill:hover,
+#change-password-modal input:-webkit-autofill:focus,
+#change-password-modal input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px var(--bg-secondary) inset !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    border-color: var(--secondary) !important;
+}
+
+/* Change username modal - prevent button hover clipping */
+#change-username-modal .modal-content {
+    overflow-y: visible;
+    overflow-x: hidden;
+    max-height: none;
+    /* Ensure button hover doesn't get cut off - allow overflow for button transform */
+    overflow: visible;
+    padding-bottom: 8px; /* Add bottom padding to prevent button hover from being cut off */
+}
+
+#change-username-modal .modal-content form {
+    overflow-x: hidden !important;
+    overflow-y: visible !important; /* Allow button hover transform */
+}
+
+#change-username-modal .modal-content form > div {
+    overflow: visible !important; /* Allow input focus border to display properly */
+}
+
+#change-username-modal .modal-actions {
+    overflow: visible !important;
+    padding-top: 4px; /* Add padding to prevent button hover from being cut off */
+    margin-top: 24px;
+}
+
+/* Change username modal input focus styles */
+#change-username-modal input[type="text"]:focus,
+#change-username-modal input[type="text"]:active,
+#change-username-modal input[type="password"]:focus,
+#change-username-modal input[type="password"]:active {
+    outline: none !important;
+    border-color: var(--secondary) !important;
+    background: var(--bg-secondary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    border: 1px solid var(--secondary) !important; /* Ensure clean border on focus */
+}
+
+/* Remove autofill background color from password managers */
+#change-username-modal input:-webkit-autofill,
+#change-username-modal input:-webkit-autofill:hover,
+#change-username-modal input:-webkit-autofill:focus,
+#change-username-modal input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px var(--bg-secondary) inset !important;
+    -webkit-text-fill-color: var(--text-primary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    border-color: var(--secondary) !important;
+}
+
 /* Prevent overflow in modal forms */
 .modal-content form {
     overflow-x: hidden;
