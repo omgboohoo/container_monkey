@@ -55,10 +55,18 @@ class ContainerManager:
                         
                         for network_name, network_info in networks.items():
                             if isinstance(network_info, dict):
+                                # First try to get IP from IPAddress (works for running containers)
                                 ip = network_info.get('IPAddress', '')
                                 if ip:
                                     ip_address = ip
                                     break
+                                # For stopped containers with static IP, check IPAMConfig
+                                ipam_config = network_info.get('IPAMConfig', {}) or {}
+                                if isinstance(ipam_config, dict):
+                                    static_ip = ipam_config.get('IPv4Address', '')
+                                    if static_ip:
+                                        ip_address = static_ip
+                                        break
                         
                         host_config = inspect_data.get('HostConfig', {}) or {}
                         port_bindings = host_config.get('PortBindings', {}) or {}
@@ -211,6 +219,7 @@ class ContainerManager:
                     port_mappings = []
                     
                     try:
+                        # First try to get IP from IPAddress (works for running containers)
                         inspect_result = subprocess.run(
                             ['docker', 'inspect', container_id, '--format', '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'],
                             capture_output=True,
@@ -219,6 +228,17 @@ class ContainerManager:
                         )
                         if inspect_result.returncode == 0 and inspect_result.stdout.strip():
                             ip_address = inspect_result.stdout.strip()
+                        
+                        # If no IP found (stopped container), check for static IP in IPAMConfig
+                        if not ip_address or ip_address == 'N/A':
+                            static_ip_result = subprocess.run(
+                                ['docker', 'inspect', container_id, '--format', '{{range .NetworkSettings.Networks}}{{if .IPAMConfig}}{{.IPAMConfig.IPv4Address}}{{end}}{{end}}'],
+                                capture_output=True,
+                                text=True,
+                                timeout=5
+                            )
+                            if static_ip_result.returncode == 0 and static_ip_result.stdout.strip():
+                                ip_address = static_ip_result.stdout.strip()
                         
                         ports_result = subprocess.run(
                             ['docker', 'inspect', container_id, '--format', '{{json .HostConfig.PortBindings}}'],
@@ -554,10 +574,14 @@ class ContainerManager:
                                 container_id = full_id
                                 break
             
-            cmd = ['docker', 'logs', '--tail', str(tail) if tail > 0 else '0']
-            if tail == 0:
-                cmd.append('--all')
-            cmd.append(container_id)
+            # Build docker logs command
+            # When tail=0, we want all logs, so omit --tail flag (defaults to "all")
+            # When tail>0, use --tail with the specified number
+            if tail > 0:
+                cmd = ['docker', 'logs', '--tail', str(tail), container_id]
+            else:
+                # tail=0 means all logs - don't use --tail flag, it defaults to "all"
+                cmd = ['docker', 'logs', container_id]
             
             result = subprocess.run(
                 cmd,

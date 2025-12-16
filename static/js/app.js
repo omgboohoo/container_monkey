@@ -882,15 +882,18 @@ function createContainerCard(container) {
             <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
         </td>
         <td>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">
-                <div><strong>IP:</strong> ${escapeHtml(ipAddress)}</div>
-                <div style="margin-top: 2px;">${portsDisplay}</div>
-            </div>
+            <div style="font-size: 0.85em; color: var(--text-secondary);">${escapeHtml(ipAddress)}</div>
+        </td>
+        <td>
+            <div style="font-size: 0.85em; color: var(--text-secondary);">${portsDisplay}</div>
         </td>
         <td style="white-space: nowrap;">
             <div class="btn-group" style="display: flex; gap: 2px; pointer-events: auto;">
                 <button class="btn-icon" onclick="event.stopPropagation(); event.preventDefault(); showContainerDetails('${container.id}'); return false;" title="Container Details" style="pointer-events: auto;">
                     <i class="ph ph-info"></i>
+                </button>
+                <button class="btn-icon" onclick="event.stopPropagation(); event.preventDefault(); showContainerInspect('${container.id}', '${escapeHtml(container.name)}'); return false;" title="Inspect Container" style="pointer-events: auto;">
+                    <i class="ph ph-magnifying-glass"></i>
                 </button>
                 <button class="btn-icon" onclick="event.stopPropagation(); event.preventDefault(); showLogs('${container.id}', '${escapeHtml(container.name)}'); return false;" title="Container Logs" style="pointer-events: auto;">
                     <i class="ph ph-terminal-window"></i>
@@ -974,6 +977,13 @@ function sortContainers(column) {
             case 'created':
                 aVal = a.created || 0;
                 bVal = b.created || 0;
+                break;
+            case 'ip':
+                aVal = (a.ip_address || 'N/A').toLowerCase();
+                bVal = (b.ip_address || 'N/A').toLowerCase();
+                // Put N/A at the end
+                if (aVal === 'n/a' && bVal !== 'n/a') return 1;
+                if (aVal !== 'n/a' && bVal === 'n/a') return -1;
                 break;
             default:
                 return 0;
@@ -1060,9 +1070,28 @@ function updateButtonStates(containers) {
         });
     }
 
+    // Handle restart button explicitly (works on any container status)
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) {
+        const shouldBeDisabled = !hasSelection;
+        if (shouldBeDisabled) {
+            restartBtn.setAttribute('disabled', 'disabled');
+        } else {
+            restartBtn.removeAttribute('disabled');
+        }
+        restartBtn.disabled = shouldBeDisabled;
+        restartBtn.style.opacity = shouldBeDisabled ? '0.5' : '1';
+        restartBtn.style.cursor = shouldBeDisabled ? 'not-allowed' : 'pointer';
+    }
+    
     // Handle buttons that depend on selection and status
     bulkActionButtons.forEach(btn => {
-        const onclickAttr = btn.getAttribute('onclick') || '';
+        // Skip restart button as it's handled above
+        if (btn.id === 'restart-btn') {
+            return;
+        }
+        
+        const onclickAttr = btn.getAttribute('onclick') || btn.onclick?.toString() || '';
         let isDisabled = !hasSelection;
         
         // Start button: disabled if no selection OR if no stopped containers selected
@@ -1077,10 +1106,6 @@ function updateButtonStates(containers) {
         else if (onclickAttr.includes('killSelectedContainers')) {
             isDisabled = !hasSelection || hasStoppedContainers;
         }
-        // Restart button: disabled only if no selection (works on any container)
-        else if (onclickAttr.includes('restartSelectedContainers')) {
-            isDisabled = !hasSelection;
-        }
         // Pause button: disabled if no selection OR if no running containers selected
         else if (onclickAttr.includes('pauseSelectedContainers')) {
             isDisabled = !hasSelection || !hasRunningContainers;
@@ -1092,6 +1117,12 @@ function updateButtonStates(containers) {
         // Backup and Remove buttons: disabled only if no selection
         // (they work on both running and stopped containers)
         
+        // Explicitly set disabled state
+        if (isDisabled) {
+            btn.setAttribute('disabled', 'disabled');
+        } else {
+            btn.removeAttribute('disabled');
+        }
         btn.disabled = isDisabled;
         btn.style.opacity = isDisabled ? '0.5' : '1';
         btn.style.cursor = isDisabled ? 'not-allowed' : 'pointer';
@@ -1146,6 +1177,109 @@ async function showContainerDetails(containerId) {
         detailsDiv.innerHTML = formatContainerDetails(data);
     } catch (error) {
         detailsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+    }
+}
+
+// Show container inspect (raw JSON)
+async function showContainerInspect(containerId, containerName) {
+    const modal = document.getElementById('inspect-modal');
+    const titleDiv = document.getElementById('inspect-modal-title');
+    const contentDiv = document.getElementById('inspect-content');
+    const copyBtn = document.getElementById('inspect-copy-btn');
+
+    if (!modal || !contentDiv) {
+        console.error('Inspect modal elements not found');
+        return;
+    }
+
+    if (titleDiv) {
+        titleDiv.textContent = `Inspect: ${containerName || containerId.substring(0, 12)}`;
+    }
+
+    contentDiv.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
+    modal.style.display = 'block';
+
+    // Disable copy button while loading
+    if (copyBtn) {
+        copyBtn.disabled = true;
+    }
+
+    try {
+        const response = await fetch(`/api/container/${containerId}/inspect`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to inspect container');
+        }
+
+        // Format JSON with proper indentation and basic syntax highlighting
+        const jsonString = JSON.stringify(data, null, 2);
+        const highlightedJson = highlightJson(jsonString);
+        contentDiv.innerHTML = `<pre id="inspect-json-content"><code>${highlightedJson}</code></pre>`;
+
+        // Enable copy button
+        if (copyBtn) {
+            copyBtn.disabled = false;
+        }
+    } catch (error) {
+        contentDiv.innerHTML = `<div class="error">Error: ${escapeHtml(error.message)}</div>`;
+        if (copyBtn) {
+            copyBtn.disabled = true;
+        }
+    }
+}
+
+// Basic JSON syntax highlighting
+function highlightJson(json) {
+    return escapeHtml(json)
+        .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (match) => {
+            let cls = 'json-value';
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                    cls = 'json-key';
+                } else {
+                    cls = 'json-string';
+                }
+            } else if (/true|false/.test(match)) {
+                cls = 'json-boolean';
+            } else if (/null/.test(match)) {
+                cls = 'json-null';
+            } else if (/^-?\d/.test(match)) {
+                cls = 'json-number';
+            }
+            return `<span class="${cls}">${match}</span>`;
+        });
+}
+
+// Copy inspect JSON to clipboard
+function copyInspectJson() {
+    const contentDiv = document.getElementById('inspect-json-content');
+    if (!contentDiv) {
+        return;
+    }
+
+    const jsonText = contentDiv.textContent || contentDiv.innerText;
+    
+    navigator.clipboard.writeText(jsonText).then(() => {
+        const copyBtn = document.getElementById('inspect-copy-btn');
+        if (copyBtn) {
+            const originalText = copyBtn.innerHTML;
+            copyBtn.innerHTML = '<i class="ph ph-check"></i> Copied!';
+            setTimeout(() => {
+                copyBtn.innerHTML = originalText;
+            }, 2000);
+        }
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        showNotification('Failed to copy to clipboard', 'error');
+    });
+}
+
+// Close inspect modal
+function closeInspectModal() {
+    const modal = document.getElementById('inspect-modal');
+    if (modal) {
+        modal.style.display = 'none';
     }
 }
 
@@ -1627,6 +1761,7 @@ function closeModal() {
 function closeAllModals() {
     const modals = [
         'details-modal',
+        'inspect-modal',
         'backup-modal',
         'restore-modal',
         'env-check-modal',
@@ -2586,15 +2721,6 @@ function createBackupRow(backup) {
     const serverName = backup.server_name || 'Unknown Server';
     const serverDisplay = `<span style="color: var(--text-primary);"><i class="ph ph-server" style="margin-right: 4px; color: var(--text-secondary);"></i>${escapeHtml(serverName)}</span>`;
 
-    // Add data attributes for filtering
-    tr.setAttribute('data-filename', backup.filename.toLowerCase());
-    tr.setAttribute('data-type', backupType);
-    tr.setAttribute('data-backup-type', backupTypeValue);
-    tr.setAttribute('data-storage', storageLocation);
-    tr.setAttribute('data-server', serverName.toLowerCase());
-    tr.setAttribute('data-size', backup.size.toString());
-    tr.setAttribute('data-created', createdDate.toLowerCase());
-
     tr.innerHTML = `
         <td class="checkbox-cell" onclick="event.stopPropagation();">
             <input type="checkbox" class="backup-checkbox" data-backup-filename="${escapeHtml(backup.filename)}" onclick="event.stopPropagation(); handleBackupCheckboxClick(this);">
@@ -2624,6 +2750,15 @@ function createBackupRow(backup) {
             ${actionsHtml}
         </td>
     `;
+
+    // Add data attributes for filtering (after innerHTML to ensure they persist)
+    tr.setAttribute('data-filename', backup.filename.toLowerCase());
+    tr.setAttribute('data-type', backupType);
+    tr.setAttribute('data-backup-type', backupTypeValue);
+    tr.setAttribute('data-storage', storageLocation);
+    tr.setAttribute('data-server', serverName.toLowerCase());
+    tr.setAttribute('data-size', backup.size.toString());
+    tr.setAttribute('data-created', createdDate.toLowerCase());
 
     // Add click handler to toggle checkbox when row is clicked
     tr.onclick = (event) => toggleBackupSelection(event, tr);
@@ -2657,23 +2792,21 @@ function filterBackups() {
         return;
     }
 
-    // Filter rows based on search term
+    // Filter rows based on search term - search only the displayed filename
     let visibleCount = 0;
     rows.forEach(row => {
-        const filename = row.getAttribute('data-filename') || '';
-        const type = row.getAttribute('data-type') || '';
-        const backupType = row.getAttribute('data-backup-type') || '';
-        const storage = row.getAttribute('data-storage') || '';
-        const server = row.getAttribute('data-server') || '';
-        const created = row.getAttribute('data-created') || '';
-
-        // Check if search term matches any field
-        const matches = filename.includes(searchTerm) ||
-            type.includes(searchTerm) ||
-            backupType.includes(searchTerm) ||
-            storage.includes(searchTerm) ||
-            server.includes(searchTerm) ||
-            created.includes(searchTerm);
+        // Get filename from the displayed text in the second column (filename column)
+        const filenameCell = row.querySelector('td:nth-child(2)');
+        let filename = '';
+        if (filenameCell) {
+            const filenameDiv = filenameCell.querySelector('div');
+            if (filenameDiv) {
+                filename = (filenameDiv.textContent || filenameDiv.innerText || '').toLowerCase().trim();
+            }
+        }
+        
+        // Check if search term matches the filename (case-insensitive)
+        const matches = filename.includes(searchTerm);
 
         if (matches) {
             row.style.display = '';
@@ -3644,8 +3777,8 @@ async function showRestoreModal(filename) {
             data.port_mappings.forEach(port => {
                 portsHtml += `
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; align-items: center;">
-                        <div style="font-family: monospace; background: var(--bg-card); padding: 8px; border-radius: 4px; border: 1px solid var(--border); text-align: center; color: var(--text-primary);">${escapeHtml(port.container_port)}</div>
                         <input type="text" class="restore-port-input" data-container-port="${escapeHtml(port.container_port)}" value="${escapeHtml(port.host_port)}" placeholder="e.g. 8080" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); padding: 8px; border-radius: 4px; font-family: monospace;">
+                        <div style="font-family: monospace; background: var(--bg-card); padding: 8px; border-radius: 4px; border: 1px solid var(--border); text-align: center; color: var(--text-primary);">${escapeHtml(port.container_port)}</div>
                     </div>
                 `;
             });
@@ -5246,6 +5379,9 @@ function closeDeleteAllModal() {
 // Logs Modal Functions
 // Store current container ID for logs refresh
 let currentLogsContainerId = null;
+let logsAutoRefreshInterval = null;
+let logsLastContent = '';
+let logsIsScrolledToBottom = true;
 
 async function showLogs(containerId, containerName) {
     const modal = document.getElementById('logs-modal');
@@ -5256,54 +5392,125 @@ async function showLogs(containerId, containerName) {
     containerNameEl.textContent = containerName;
     logsContainer.innerHTML = '<div class="spinner-container"><div class="spinner"></div></div>';
     modal.style.display = 'block';
+    
+    // Reset state
+    logsLastContent = '';
+    logsIsScrolledToBottom = true;
+    
+    // Setup scroll tracking (only once)
+    setupLogsScrollTracking();
 
-    await loadLogsContent(containerId, logsContainer);
+    // Load all logs initially (tail=0 means all logs)
+    await loadLogsContent(containerId, logsContainer, true);
+    
+    // Start real-time streaming (poll every 2 seconds)
+    startLogsAutoRefresh(containerId, logsContainer);
 }
 
-async function loadLogsContent(containerId, logsContainer) {
+async function loadLogsContent(containerId, logsContainer, isInitialLoad = false) {
     try {
-        const response = await fetch(`/api/container/${containerId}/logs`);
+        // Use 'all' for initial load to get all logs, or a large number for streaming updates
+        // Fetch all logs each time and replace content
+        const tail = isInitialLoad ? 'all' : 'all';
+        const response = await fetch(`/api/container/${containerId}/logs?tail=${tail}`);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to load logs: ${response.status} ${response.statusText}`);
+        }
+        
         const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to load logs');
+        if (data.error) {
+            throw new Error(data.error);
         }
 
-        logsContainer.textContent = data.logs || 'No logs found.';
-        // Scroll to the bottom
-        setTimeout(() => {
-            logsContainer.scrollTop = logsContainer.scrollHeight;
-        }, 100);
+        const newLogs = data.logs || '';
+        
+        // Check if user is scrolled to bottom before updating (for streaming)
+        if (!isInitialLoad) {
+            const container = logsContainer;
+            logsIsScrolledToBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+        }
+        
+        // Replace content (always replace, not append)
+        if (newLogs.trim() === '') {
+            logsContainer.textContent = 'No logs available for this container.';
+        } else {
+            logsContainer.textContent = newLogs;
+        }
+        logsLastContent = newLogs;
+        
+        // Auto-scroll to bottom if initial load or if user was already at bottom
+        if (isInitialLoad || logsIsScrolledToBottom) {
+            setTimeout(() => {
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            }, isInitialLoad ? 100 : 10);
+        }
     } catch (error) {
-        logsContainer.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+        console.error('Error loading logs:', error);
+        logsContainer.innerHTML = `<div class="error" style="color: #ef4444; padding: 10px;">Error: ${error.message}</div>`;
+        if (isInitialLoad) {
+            stopLogsAutoRefresh();
+        }
     }
 }
 
-async function refreshLogs() {
-    if (!currentLogsContainerId) {
-        return;
+function startLogsAutoRefresh(containerId, logsContainer) {
+    // Clear any existing interval
+    stopLogsAutoRefresh();
+    
+    // Show live indicator
+    const liveIndicator = document.getElementById('logs-live-indicator');
+    if (liveIndicator) {
+        liveIndicator.style.display = 'inline-block';
     }
+    
+    // Poll every 3 seconds for new logs
+    logsAutoRefreshInterval = setInterval(() => {
+        if (currentLogsContainerId === containerId) {
+            loadLogsContent(containerId, logsContainer, false);
+        } else {
+            stopLogsAutoRefresh();
+        }
+    }, 3000);
+}
 
+function stopLogsAutoRefresh() {
+    if (logsAutoRefreshInterval) {
+        clearInterval(logsAutoRefreshInterval);
+        logsAutoRefreshInterval = null;
+    }
+    
+    // Hide live indicator
+    const liveIndicator = document.getElementById('logs-live-indicator');
+    if (liveIndicator) {
+        liveIndicator.style.display = 'none';
+    }
+}
+
+// Track scroll position to maintain auto-scroll behavior
+let logsScrollTrackingSetup = false;
+function setupLogsScrollTracking() {
+    if (logsScrollTrackingSetup) return;
+    
     const logsContainer = document.getElementById('logs-container');
-    const refreshBtn = document.getElementById('refresh-logs-btn');
-
-    // Disable button and show loading state
-    refreshBtn.disabled = true;
-    const originalHtml = refreshBtn.innerHTML;
-    refreshBtn.innerHTML = '<i class="ph ph-arrows-clockwise" style="animation: spin 1s linear infinite;"></i> Refreshing...';
-
-    try {
-        await loadLogsContent(currentLogsContainerId, logsContainer);
-    } finally {
-        // Re-enable button
-        refreshBtn.disabled = false;
-        refreshBtn.innerHTML = originalHtml;
+    if (logsContainer) {
+        logsContainer.addEventListener('scroll', () => {
+            const container = logsContainer;
+            logsIsScrolledToBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+        });
+        logsScrollTrackingSetup = true;
     }
 }
+
+// Refresh function removed - logs now auto-refresh every 3 seconds
 
 function closeLogsModal() {
+    stopLogsAutoRefresh();
     document.getElementById('logs-modal').style.display = 'none';
     currentLogsContainerId = null;
+    logsLastContent = '';
 }
 
 // Load volumes

@@ -1,5 +1,57 @@
 # Release Notes
 
+## Version 0.3.13
+
+### Container Management Enhancements
+- **Real-Time Container Logs Streaming**: Enhanced container logs modal with live log streaming
+  - Logs now automatically refresh every 3 seconds while modal is open
+  - Displays all container logs when modal is first opened (using `tail='all'`)
+  - Added "Live" indicator with pulsing animation to show when logs are streaming
+  - Smart auto-scroll: automatically scrolls to bottom when new logs arrive, but only if user is already at bottom
+  - Removed manual refresh button (no longer needed with auto-refresh)
+  - Backend updated to properly handle `tail='all'` parameter for fetching all logs
+  - Improved error handling with clearer error messages
+- **Container Inspect Feature**: Added quick action to inspect containers and view raw JSON
+  - New "Inspect" button in container quick actions (magnifying glass icon)
+  - Displays full container inspect JSON in a modal (similar to `docker inspect`)
+  - Syntax-highlighted JSON display with dark theme
+  - Copy to clipboard functionality for easy sharing
+  - Shows complete container configuration, network settings, mounts, and all Docker inspect data
+- **Static IP Display for Stopped Containers**: IP addresses now displayed for stopped containers with static IP configuration
+  - Shows static IP address from `IPAMConfig.IPv4Address` for stopped containers
+  - Works for containers created with `--ip` flag or docker-compose static IP configuration
+  - IP address column displays configured static IP even when container is powered off
+- **Restart Button Fix**: Fixed restart button not enabling when running containers are selected
+  - Restart button now properly enables when any container (running, stopped, or paused) is selected
+  - Button state management improved with explicit ID-based handling
+
+### UI Improvements
+- **Container Table Column Separation**: Separated IP address and ports into distinct columns
+  - IP address now has its own sortable column with click-to-sort functionality
+  - Ports displayed in a separate column next to IP address
+  - Improved table organization and easier data scanning
+  - IP column supports ascending/descending sort with visual indicators
+- **Restore Modal Enhancements**: Improved restore modal display and functionality
+  - Fixed port mapping display order to show "Host Port → Container Port" (standard Docker format)
+  - Restore loading message now displays text and filename on separate lines for better readability
+  - Port mapping inputs now have consistent focus styling matching login inputs
+- **Universal Text Input Focus Styling**: Consolidated all text input focus styles into a single universal CSS rule
+  - All text inputs, password inputs, and textareas now share consistent focus styling
+  - Blue border, background change, and glow effect applied universally
+  - Removed duplicate modal-specific focus style rules for cleaner codebase
+  - Search boxes (backup vault, audit log, events) now have proper focus styling
+
+### Bug Fixes
+- **Backup Vault Search Fix**: Fixed search functionality for backup filenames
+  - Simplified search to read filename directly from displayed grid text
+  - Search now reliably finds all backups including those with special characters in filenames
+  - Case-insensitive search works correctly for all backup filenames
+
+### Version Update
+- Updated version number to 0.3.13 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.12
 
 ### UI Improvements

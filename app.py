@@ -385,7 +385,15 @@ def delete_container(container_id):
 
 @app.route('/api/container/<container_id>/logs')
 def container_logs(container_id):
-    tail = request.args.get('tail', 100, type=int)
+    tail = request.args.get('tail', '100')
+    # Support 'all' as string or integer
+    if tail == 'all':
+        tail = 0  # 0 means all logs
+    else:
+        try:
+            tail = int(tail)
+        except (ValueError, TypeError):
+            tail = 100
     result = container_manager.container_logs(container_id, tail)
     if 'error' in result:
         return jsonify(result), 500
@@ -397,6 +405,19 @@ def container_details(container_id):
     if 'error' in result:
         return jsonify(result), 500
     return jsonify(result)
+
+@app.route('/api/container/<container_id>/inspect')
+def container_inspect(container_id):
+    """Get raw container inspect JSON (like docker inspect)"""
+    docker_api_client = docker_utils.docker_api_client
+    if docker_api_client:
+        try:
+            inspect_data = docker_api_client.inspect_container(container_id)
+            return jsonify(inspect_data)
+        except Exception as e:
+            safe_log_error(e, context="container_inspect")
+            return jsonify({'error': f'Failed to inspect container: {str(e)}'}), 500
+    return jsonify({'error': 'Docker client not available'}), 503
 
 @app.route('/api/container/<container_id>/exec', methods=['POST'])
 def exec_container_command(container_id):

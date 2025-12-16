@@ -1120,6 +1120,22 @@ body {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Universal text input focus styles - applies to all text and password inputs */
+input[type="text"]:focus,
+input[type="text"]:active,
+input[type="password"]:focus,
+input[type="password"]:active,
+textarea:focus,
+textarea:active {
+    outline: none !important;
+    border-color: var(--secondary) !important;
+    background: var(--bg-secondary) !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    border: 1px solid var(--secondary) !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
+}
+
 .form-control:disabled {
     opacity: 0.5;
     cursor: not-allowed;
@@ -1167,55 +1183,29 @@ select.form-control:focus option:checked {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* Audit log search input hover/focus */
-#audit-log-search {
-    transition: all 0.2s ease;
-}
-
-#audit-log-search:hover {
-    border-color: var(--border-hover);
-    background: var(--bg-tertiary);
-}
-
-#audit-log-search:focus {
-    outline: none;
-    border-color: var(--secondary);
-    background: var(--bg-tertiary);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* Backup search input hover/focus */
-#backup-search-input {
-    transition: all 0.2s ease;
-}
-
-#backup-search-input:hover {
-    border-color: var(--border-hover);
-    background: var(--bg-tertiary);
-}
-
-#backup-search-input:focus {
-    outline: none;
-    border-color: var(--secondary);
-    background: var(--bg-tertiary);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-/* Events search input hover/focus */
+/* Search input hover styles and z-index for icon visibility */
+#audit-log-search,
+#backup-search-input,
 #events-search {
+    position: relative;
+    z-index: 1;
     transition: all 0.2s ease;
 }
 
+#audit-log-search:hover,
+#backup-search-input:hover,
 #events-search:hover {
     border-color: var(--border-hover);
     background: var(--bg-tertiary);
 }
 
-#events-search:focus {
-    outline: none;
-    border-color: var(--secondary);
-    background: var(--bg-tertiary);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+/* Ensure search icons appear above inputs - target icons in search containers */
+.section-header i.ph.ph-magnifying-glass,
+#backup-vault-section i.ph.ph-magnifying-glass,
+#audit-log-section i.ph.ph-magnifying-glass,
+#events-section i.ph.ph-magnifying-glass {
+    z-index: 2 !important;
+    pointer-events: none !important; /* Allow clicks to pass through to input */
 }
 
 .container-name {
@@ -1405,6 +1395,67 @@ select.form-control:focus option:checked {
 }
 
 /* Details modal - scrollbar on inner content */
+/* Inspect modal styles */
+#inspect-modal .modal-content {
+    max-width: 1000px;
+    height: 85vh;
+}
+
+#inspect-content {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow: auto;
+    padding: 15px;
+    border-radius: 4px;
+    white-space: pre;
+    word-wrap: break-word;
+}
+
+#inspect-content pre {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+#inspect-content code {
+    color: #d4d4d4;
+    font-family: inherit;
+    font-size: inherit;
+}
+
+/* JSON syntax highlighting */
+#inspect-content .json-key {
+    color: #9cdcfe;
+}
+
+#inspect-content .json-string {
+    color: #ce9178;
+}
+
+#inspect-content .json-number {
+    color: #b5cea8;
+}
+
+#inspect-content .json-boolean {
+    color: #569cd6;
+}
+
+#inspect-content .json-null {
+    color: #569cd6;
+    font-style: italic;
+}
+
+#inspect-content .json-value {
+    color: #d4d4d4;
+}
+
 #details-modal .modal-content {
     overflow-y: visible;
     max-height: none;
@@ -1458,6 +1509,17 @@ select.form-control:focus option:checked {
     margin-top: 16px;
     flex: 1;
     min-height: 0;
+}
+
+/* Ensure restore ports section allows focus border to display properly */
+#restore-ports-section {
+    overflow: visible !important;
+}
+
+/* Restore port input z-index for focus border visibility */
+.restore-port-input {
+    position: relative;
+    z-index: 1;
 }
 
 #restore-modal .modal-actions {
@@ -1523,39 +1585,13 @@ select.form-control:focus option:checked {
     margin-top: 24px;
 }
 
-/* Settings modal input focus styles */
-#settings-modal input[type="text"]:focus,
-#settings-modal input[type="text"]:active {
-    outline: none !important;
-    border-color: var(--secondary) !important;
-    background: var(--bg-secondary) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-    border: 1px solid var(--secondary) !important; /* Ensure clean border on focus */
-}
-
-/* S3 config modal input focus styles */
-#s3-config-modal input[type="text"]:focus,
-#s3-config-modal input[type="text"]:active,
-#s3-config-modal input[type="password"]:focus,
-#s3-config-modal input[type="password"]:active {
-    outline: none !important;
-    border-color: var(--secondary) !important;
-    background: var(--bg-secondary) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-    border: 1px solid var(--secondary) !important; /* Ensure clean border on focus */
-}
-
 #s3-config-modal .modal-content form > div {
     overflow: visible !important; /* Allow input focus border to display properly */
 }
 
-/* Override password manager focus styles on login inputs */
-#login-modal input[type="text"]:focus,
-#login-modal input[type="password"]:focus {
-    outline: none !important;
-    border-color: var(--secondary) !important;
-    background: var(--bg-secondary) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+/* Override password manager injected styles on login inputs */
+#login-modal input[type="text"],
+#login-modal input[type="password"] {
     /* Remove any password manager injected styles */
     -webkit-appearance: none !important;
     appearance: none !important;
@@ -1603,18 +1639,6 @@ select.form-control:focus option:checked {
     margin-top: 24px;
 }
 
-/* Change password modal input focus styles */
-#change-password-modal input[type="text"]:focus,
-#change-password-modal input[type="text"]:active,
-#change-password-modal input[type="password"]:focus,
-#change-password-modal input[type="password"]:active {
-    outline: none !important;
-    border-color: var(--secondary) !important;
-    background: var(--bg-secondary) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-    border: 1px solid var(--secondary) !important; /* Ensure clean border on focus */
-}
-
 /* Remove autofill background color from password managers */
 #change-password-modal input:-webkit-autofill,
 #change-password-modal input:-webkit-autofill:hover,
@@ -1649,18 +1673,6 @@ select.form-control:focus option:checked {
     overflow: visible !important;
     padding-top: 4px; /* Add padding to prevent button hover from being cut off */
     margin-top: 24px;
-}
-
-/* Change username modal input focus styles */
-#change-username-modal input[type="text"]:focus,
-#change-username-modal input[type="text"]:active,
-#change-username-modal input[type="password"]:focus,
-#change-username-modal input[type="password"]:active {
-    outline: none !important;
-    border-color: var(--secondary) !important;
-    background: var(--bg-secondary) !important;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
-    border: 1px solid var(--secondary) !important; /* Ensure clean border on focus */
 }
 
 /* Remove autofill background color from password managers */
@@ -1811,6 +1823,11 @@ select.form-control:focus option:checked {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
 }
 
 .success-message {

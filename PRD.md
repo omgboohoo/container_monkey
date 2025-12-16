@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.12**
+**Version 0.3.13**
 
 ## Overview
 
@@ -76,9 +76,23 @@ The open-source backup and recovery solution for Docker. Protect your containers
 ### Container Management
 - List, start, stop (graceful), pause, resume, kill (immediate), restart, remove containers
 - Bulk operations on multiple containers with intelligent button state management
-- Container logs streaming
+  - Start button: Only enabled when stopped containers are selected
+  - Stop button: Only enabled when running containers are selected
+  - Kill button: Only enabled when running containers are selected (disabled if stopped containers selected)
+  - Restart button: Enabled when any containers are selected (works on any container status)
+  - Pause button: Only enabled when running containers are selected
+  - Resume button: Only enabled when paused containers are selected
+- Container logs streaming with real-time updates
+  - Displays all container logs when modal first opens (using `tail='all'`)
+  - Auto-refreshes every 3 seconds while modal is open
+  - Live indicator with pulsing animation shows when logs are streaming
+  - Smart auto-scroll: automatically scrolls to bottom when new logs arrive, but only if user is already at bottom
+  - No manual refresh button needed (auto-refresh handles updates)
 - Interactive exec console
-- Container details inspection
+- Container details inspection (formatted view)
+- Container JSON inspection (raw Docker inspect output with syntax highlighting)
+  - Quick action "Inspect" button in container actions
+  - Copy to clipboard functionality
 
 ### Backup & Restore
 - Full container backup (includes volumes, port mappings, environment variables)
@@ -211,8 +225,9 @@ POST   /api/container/<id>/pause                # Pause container
 POST   /api/container/<id>/resume               # Resume (unpause) container
 DELETE /api/container/<id>/delete               # Remove container
 GET    /api/container/<id>/details              # Get container details
-GET    /api/container/<id>/logs                 # Get container logs
-GET    /api/container/<id>/stats                # Get container stats
+GET    /api/container/<id>/inspect               # Get raw container inspect JSON (like docker inspect)
+GET    /api/container/<id>/logs                  # Get container logs (supports ?tail=all for all logs)
+GET    /api/container/<id>/stats                 # Get container stats
 POST   /api/container/<id>/exec                 # Execute command in container
 POST   /api/container/<id>/redeploy             # Redeploy container
 ```

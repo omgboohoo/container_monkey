@@ -7,7 +7,7 @@
     <title>Container Monkey - Secure Your Docker Environment</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.12">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.13">
     <!-- CSRF Token -->
     <script>
         // Make CSRF token available to JavaScript
@@ -154,7 +154,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.12</span>
+                    v0.3.13</span>
             </div>
         </aside>
 
@@ -307,7 +307,7 @@
                                 disabled><i class="ph ph-square"></i> Stop</button>
                             <button class="btn btn-danger btn-sm bulk-btn" onclick="killSelectedContainers()"
                                 disabled><i class="ph ph-x-circle"></i> Kill</button>
-                            <button class="btn btn-primary btn-sm bulk-btn" onclick="restartSelectedContainers()"
+                            <button class="btn btn-primary btn-sm bulk-btn" id="restart-btn" onclick="restartSelectedContainers()"
                                 disabled><i class="ph ph-arrows-clockwise"></i> Restart</button>
                             <button class="btn btn-warning btn-sm bulk-btn" onclick="pauseSelectedContainers()"
                                 disabled><i class="ph ph-pause"></i> Pause</button>
@@ -358,7 +358,11 @@
                                     style="cursor: pointer; user-select: none;">
                                     Created <span class="sort-indicator" id="sort-created"></span>
                                 </th>
-                                <th>IP / Ports</th>
+                                <th class="sortable" data-sort="ip" onclick="sortContainers('ip')"
+                                    style="cursor: pointer; user-select: none;">
+                                    IP <span class="sort-indicator" id="sort-ip"></span>
+                                </th>
+                                <th>Ports</th>
                                 <th width="120">Quick Actions</th>
                             </tr>
                         </thead>
@@ -988,6 +992,27 @@
         </div>
     </div>
 
+    <!-- Modal for container inspect (JSON) -->
+    <div id="inspect-modal" class="modal">
+        <div class="modal-content" style="max-width: 1000px; height: 85vh; display: flex; flex-direction: column;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0;" id="inspect-modal-title">Inspect Container</h2>
+                <span class="close" onclick="closeInspectModal()">&times;</span>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                <button class="btn btn-primary btn-sm" id="inspect-copy-btn" onclick="copyInspectJson()">
+                    <i class="ph ph-copy"></i> Copy JSON
+                </button>
+            </div>
+            <div id="inspect-content"
+                style="flex: 1; background: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; font-size: 13px; overflow: auto; padding: 15px; border-radius: 4px; white-space: pre-wrap; line-height: 1.5;">
+            </div>
+            <div class="modal-actions" style="margin-top: 15px;">
+                <button class="btn btn-secondary btn-sm" onclick="closeInspectModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Attach Console Modal -->
     <div id="attach-console-modal" class="modal">
         <div class="modal-content" style="max-width: 900px; height: 80vh; display: flex; flex-direction: column;">
@@ -1007,16 +1032,19 @@
     <div id="logs-modal" class="modal">
         <div class="modal-content" style="max-width: 900px; height: 80vh; display: flex; flex-direction: column;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2 style="margin: 0;">Container Logs: <span id="logs-container-name"></span></h2>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <h2 style="margin: 0;">Container Logs: <span id="logs-container-name"></span></h2>
+                    <span id="logs-live-indicator" style="display: none; font-size: 12px; color: #4ade80; font-weight: normal;">
+                        <span style="display: inline-block; width: 8px; height: 8px; background: #4ade80; border-radius: 50%; margin-right: 5px; animation: pulse 2s infinite;"></span>
+                        Live
+                    </span>
+                </div>
                 <span class="close" onclick="closeLogsModal()">&times;</span>
             </div>
             <div id="logs-container"
                 style="flex: 1; background: #000; color: #fff; font-family: monospace; font-size: 14px; overflow: auto; padding: 10px; border-radius: 4px; white-space: pre-wrap;">
             </div>
             <div class="modal-actions" style="margin-top: 15px;">
-                <button class="btn btn-primary btn-sm" onclick="refreshLogs()" id="refresh-logs-btn">
-                    <i class="ph ph-arrows-clockwise"></i> Refresh
-                </button>
                 <button class="btn btn-secondary btn-sm" onclick="closeLogsModal()">Close</button>
             </div>
         </div>
@@ -1088,7 +1116,8 @@
             <span class="close" onclick="closeRestoreModal()">&times;</span>
             <h2>Restore Backup</h2>
             <div id="restore-content">
-                <p>Restore container from backup: <strong id="restore-filename"></strong></p>
+                <p>Restore container from backup:</p>
+                <p style="margin-top: 8px;"><strong id="restore-filename"></strong></p>
 
                 <div id="restore-loading" class="backup-progress"
                     style="display: none; text-align: center; padding: 60px 20px;">
@@ -1120,8 +1149,8 @@
                             Mappings</h3>
                         <div
                             style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; font-weight: bold; font-size: 0.9em; color: var(--text-secondary); border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                            <div>Container Port</div>
                             <div>Host Port</div>
+                            <div>Container Port</div>
                         </div>
                         <div id="restore-ports-list"></div>
                         <p style="font-size: 0.85em; color: var(--text-light); margin-top: 10px; margin-bottom: 0;">

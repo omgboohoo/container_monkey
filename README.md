@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.12**
+**Version 0.3.13**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -17,6 +17,9 @@ The open-source backup and recovery solution for Docker. Protect your containers
 ### Docker Management
 
 - **Container Operations**: Start, stop, pause, resume, restart, kill, and manage containers with bulk operations support
+- **Container Inspection**: View detailed container information and inspect raw container JSON (like `docker inspect`)
+  - Quick action "Inspect" button to view full container inspect JSON
+  - Syntax-highlighted JSON display with copy to clipboard functionality
 - **Volume Management**: Explore, download, and manage Docker volumes through an intuitive web interface
 - **Image Management**: View and clean up Docker images, including automatic dangling image detection
 - **Network Management**: Backup and restore Docker networks with full configuration preservation
@@ -132,6 +135,10 @@ Access the web UI at: http://your-server:1066
 3. **Backup**: Click backup button to create a full container backup
 4. **Remove**: Remove containers with options to remove associated volumes/images
 5. **View Logs**: Click logs icon to view real-time container logs
+   - Displays all container logs when modal opens
+   - Auto-refreshes every 3 seconds while modal is open
+   - Live indicator shows when logs are streaming
+   - Smart auto-scroll (only scrolls if user is at bottom)
 6. **Exec Console**: Click console icon for interactive terminal access
 
 ### Backup & Restore
@@ -193,7 +200,8 @@ The application provides a RESTful API. Key endpoints include:
 - `POST /api/container/<id>/resume` - Resume (unpause) container
 - `DELETE /api/container/<id>/delete` - Remove container
 - `GET /api/container/<id>/details` - Get container details
-- `GET /api/container/<id>/logs` - Get container logs
+- `GET /api/container/<id>/inspect` - Get raw container inspect JSON (like `docker inspect`)
+- `GET /api/container/<id>/logs` - Get container logs (supports `?tail=all` for all logs)
 - `GET /api/container/<id>/stats` - Get container stats
 - `POST /api/container/<id>/exec` - Execute command in container
 - `POST /api/container/<id>/redeploy` - Redeploy container
