@@ -1,4 +1,4 @@
-# Container Monkey – The Recovery Story - Tissues Not Required
+# The Recovery Story - Tissues Not Required
 
 ## The Disaster
 
