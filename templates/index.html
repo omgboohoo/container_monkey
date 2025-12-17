@@ -7,7 +7,7 @@
     <title>Container Monkey - Secure Your Docker Environment</title>
     <link rel="icon"
         href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 256 256%22><path d=%22M 224 80 L 128 32 L 32 80 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 32 80 L 32 176 L 128 224 L 128 128 Z%22 fill=%22%2338bdf8%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 224 80 L 224 176 L 128 224 L 128 128 Z%22 fill=%22%23000000%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/><path d=%22M 128 128 L 128 224%22 fill=%22none%22 stroke=%22%2338bdf8%22 stroke-width=%2218%22 stroke-linejoin=%22round%22 stroke-linecap=%22round%22/></svg>">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.3.13">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=0.4.0">
     <!-- CSRF Token -->
     <script>
         // Make CSRF token available to JavaScript
@@ -154,7 +154,7 @@
                 </a>
                 <span class="version-text">© 2025 <a href="https://containermonkey.com" target="_blank"
                         rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Dan Bailey</a> -
-                    v0.3.13</span>
+                    v0.4.0</span>
             </div>
         </aside>
 
@@ -1287,6 +1287,26 @@
         </div>
     </div>
 
+    <!-- Cleanup Dangling Images Progress Modal -->
+    <div id="cleanup-images-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close" onclick="closeCleanupImagesModal()">&times;</span>
+            <h2>Cleaning Up Dangling Images</h2>
+            <div id="cleanup-images-progress" style="margin: 20px 0;">
+                <div id="cleanup-images-status"
+                    style="margin-bottom: 15px; font-size: 1.1em; color: var(--text-primary);"></div>
+                <div id="cleanup-images-list"
+                    style="max-height: 400px; overflow-y: auto; background: var(--bg-secondary); padding: 15px; border-radius: 5px; border: 1px solid var(--border);">
+                    <div style="text-align: center; color: var(--text-light);">Preparing...</div>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button id="cleanup-images-close-btn" class="btn btn-secondary btn-sm" onclick="closeCleanupImagesModal()"
+                    style="display: none;">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Upload Progress Modal -->
     <div id="upload-progress-modal" class="modal">
         <div class="modal-content" style="max-width: 1050px;">
@@ -1612,7 +1632,32 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Load modules in correct order -->
+    <!-- 1. Shared state (must be first) -->
+    <script src="{{ url_for('static', filename='js/shared-state.js') }}?v=0.4.0"></script>
+    <!-- 2. Core utilities -->
+    <script src="{{ url_for('static', filename='js/csrf.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/ui-utils.js') }}?v=0.4.0"></script>
+    <!-- 3. Authentication -->
+    <script src="{{ url_for('static', filename='js/auth.js') }}?v=0.4.0"></script>
+    <!-- 4. Navigation -->
+    <script src="{{ url_for('static', filename='js/navigation.js') }}?v=0.4.0"></script>
+    <!-- 5. Domain modules -->
+    <script src="{{ url_for('static', filename='js/containers.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/backups.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/volumes.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/images.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/networks.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/stacks.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/events.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/statistics.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/audit-log.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/scheduler.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/console.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/storage.js') }}?v=0.4.0"></script>
+    <script src="{{ url_for('static', filename='js/settings.js') }}?v=0.4.0"></script>
+    <!-- Main coordinator -->
+    <script src="{{ url_for('static', filename='js/app.js') }}?v=0.4.0"></script>
 </body>
 
 </html>

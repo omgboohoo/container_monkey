@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Container Console - {{ container_name }}</title>
+    <title>Container Console - {{ container_name|e }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
         body {
@@ -92,7 +92,7 @@
 </head>
 <body>
     <div class="console-header">
-        <h2>📺 Console: {{ container_name }}</h2>
+        <h2>📺 Console: {{ container_name|e }}</h2>
         <div class="console-controls">
             <label for="log-tail" style="margin-right: 10px;">Lines:</label>
             <select id="log-tail" onchange="loadLogs()">
@@ -110,7 +110,8 @@
     </div>
 
     <script>
-        const containerId = '{{ container_id }}';
+        // Use data attribute approach for better security - escape container_id to prevent XSS
+        const containerId = {{ container_id|tojson }};
         let autoRefreshInterval = null;
         let isAutoRefreshing = false;
 

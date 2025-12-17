@@ -171,8 +171,21 @@ class BackupFileManager:
             return {'error': str(e)}
     
     def get_backup_path(self, filename: str) -> Optional[str]:
-        """Get full path to a backup file (downloads from S3 if needed)"""
+        """Get full path to a backup file (downloads from S3 if needed)
+        
+        Security: Validates filename and ensures resolved path stays within backup directory
+        """
+        # Sanitize filename - remove any directory components
         filename = os.path.basename(filename)
+        
+        # Additional security: validate filename doesn't contain dangerous characters
+        if not filename or '..' in filename or '/' in filename or '\\' in filename:
+            return None
+        
+        # Use secure_filename for additional sanitization
+        filename = secure_filename(filename)
+        if not filename:
+            return None
         
         # Check if S3 storage is enabled
         use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
@@ -197,6 +210,12 @@ class BackupFileManager:
                     download_result = s3_manager.download_file(filename, temp_path)
                     if download_result.get('success'):
                         if os.path.exists(temp_path) and os.path.getsize(temp_path) > 0:
+                            # Security: Validate temp path is within temp_dir
+                            resolved_temp_path = os.path.realpath(temp_path)
+                            resolved_temp_dir = os.path.realpath(self.temp_dir)
+                            if not resolved_temp_path.startswith(resolved_temp_dir):
+                                print(f"⚠️  Security: Temp path outside allowed directory: {resolved_temp_path}")
+                                return None
                             print(f"✅ Successfully downloaded {filename} from S3 ({os.path.getsize(temp_path)} bytes)")
                             return temp_path
                         else:
@@ -211,8 +230,26 @@ class BackupFileManager:
         
         # Fall back to local
         file_path = os.path.join(self.backup_dir, filename)
-        if os.path.exists(file_path):
-            return file_path
+        
+        # Security: Validate resolved path stays within backup directory
+        # Use realpath to resolve symlinks and normalize path
+        try:
+            resolved_file_path = os.path.realpath(file_path)
+            resolved_backup_dir = os.path.realpath(self.backup_dir)
+            
+            # Ensure the resolved path is within the backup directory
+            if not resolved_file_path.startswith(resolved_backup_dir):
+                print(f"⚠️  Security: File path outside backup directory: {resolved_file_path}")
+                return None
+            
+            # Additional check: ensure it's actually a file (not a directory)
+            if os.path.exists(resolved_file_path) and os.path.isfile(resolved_file_path):
+                return resolved_file_path
+        except (OSError, ValueError) as e:
+            # If path resolution fails, it's likely invalid
+            safe_log_error(e, context="get_backup_path_validation")
+            return None
+        
         return None
     
     def delete_backup(self, filename: str, user: Optional[str] = None) -> Dict[str, Any]:

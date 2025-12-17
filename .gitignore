@@ -115,4 +115,8 @@ website/
 # Miscellaneous
 *.orig
 *.rej
-cleanup-docker.sh
+cleanup_docker.sh
+create_dangling_images.sh
+
+# Old/backup files
+app_old.js

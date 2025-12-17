@@ -1,5 +1,80 @@
 # Release Notes
 
+## Version 0.4.0
+
+### Major Code Refactoring - Frontend Modularization
+- **Complete Frontend Refactoring**: Refactored massive monolithic `app.js` (8,868 lines) into 19 manageable, focused modules
+  - **Modular Architecture**: Code now organized into logical modules for better maintainability and development
+  - **Module Breakdown**:
+    - `shared-state.js` (108 lines) - Centralized state management (`window.AppState`)
+    - `csrf.js` (116 lines) - CSRF token handling and API request utilities
+    - `ui-utils.js` (508 lines) - UI utilities (modals, notifications, spinners, time display)
+    - `auth.js` (470 lines) - Authentication, login, logout, password/username management
+    - `navigation.js` (216 lines) - Section navigation and dashboard
+    - `containers.js` (2,097 lines) - Container management, operations, and backup functions
+    - `backups.js` (1,691 lines) - Backup file management, restore, upload, download
+    - `volumes.js` (546 lines) - Volume exploration and management
+    - `images.js` (532 lines) - Image management and cleanup
+    - `networks.js` (262 lines) - Network management and backup/restore
+    - `stacks.js` (496 lines) - Stack management and filtering
+    - `events.js` (312 lines) - Docker events viewing and filtering
+    - `statistics.js` (638 lines) - Container statistics and system stats polling
+    - `audit-log.js` (295 lines) - Audit log management and pagination
+    - `console.js` (440 lines) - Terminal console and container logs
+    - `scheduler.js` (469 lines) - Backup scheduler configuration
+    - `storage.js` (324 lines) - Storage settings (S3/local)
+    - `settings.js` (182 lines) - UI settings (server name)
+    - `app.js` (32 lines) - Main application coordinator
+  - **Benefits**:
+    - Improved code organization and maintainability
+    - Easier to locate and modify specific functionality
+    - Better separation of concerns
+    - Reduced cognitive load when working on specific features
+    - All functions properly exported to `window` for HTML access
+    - Centralized state management through `window.AppState`
+  - **Total**: 9,734 lines across 19 modules (vs 8,868 lines in single file)
+  - **Backward Compatible**: All functionality preserved, no breaking changes
+
+### Image Management Enhancements
+- **Progress Modal for Cleanup Dangling Images**: Added beautiful progress modal for cleaning up dangling images
+  - Shows all dangling images being cleaned up with real-time status updates
+  - Sequential deletion: images are removed one by one (matching backup removal behavior)
+  - Auto-scrolling: modal automatically scrolls to keep the current image being processed in view
+  - Visual status indicators: ⏳ Waiting → 🗑️ Removing → ✅ Removed / ❌ Failed
+  - Accurate progress counter: displays "Removing X / Y: image-name" for each image
+  - Final summary shows total images cleaned up
+  - Same elegant design and behavior as the backup removal progress modal
+- **Rate Limit Exemption for Image Deletion**: Image delete endpoint now exempt from rate limiting
+  - Allows bulk cleanup operations to delete many images without hitting rate limits
+  - Prevents interruption during cleanup of 100+ dangling images
+  - Endpoint: `/api/image/<image_id>/delete` now has `@limiter.exempt` decorator
+
+### Security Enhancements
+- **Enhanced Input Validation**: Improved validation and sanitization of user inputs across all endpoints
+  - Added comprehensive container ID validation to prevent injection attacks
+  - Enhanced path traversal protection for volume file operations
+  - Improved XSS protection in template rendering
+  - Strengthened authentication requirements for sensitive routes
+- **Path Security**: Enhanced file path validation with support for encoded attack patterns
+- **Comprehensive Parameter Validation**: Added validation for all route parameters and query strings
+  - Volume name validation across all volume operations
+  - Network ID validation for network management endpoints
+  - Image ID validation for image deletion operations
+  - Stack name validation for stack management
+  - Progress and session ID validation for backup operations
+  - Query parameter validation (limit, offset, tail, since, until) with proper type checking and bounds
+  - Filename validation for all backup file operations
+  - Container ID list validation in scheduler configuration
+- **Additional Security Hardening**: Enhanced validation for container operations and UI settings
+  - Working directory path validation for container exec operations to prevent path traversal attacks
+  - UI setting key validation to prevent injection and ensure safe database operations
+  - Comprehensive path sanitization with URL encoding detection for working directories
+
+### Version Update
+- Updated version number to 0.4.0 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.3.13
 
 ### Container Management Enhancements

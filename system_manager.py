@@ -739,17 +739,31 @@ def cleanup_dangling_images() -> Dict[str, Any]:
                 print(f"Warning: Failed to parse reclaimed space: {e}")
                 reclaimed_space = '0B'
         
+        deleted_images = []
+        deleted_image_ids = []  # Store just the SHA256 hash for easier matching
         deleted_count = 0
         if output:
-            deleted_count = len([line for line in output.split('\n') 
-                                if line.strip().startswith('deleted:') 
-                                or line.strip().startswith('untagged:')])
+            for line in output.split('\n'):
+                line = line.strip()
+                if line.startswith('deleted:') or line.startswith('untagged:'):
+                    deleted_count += 1
+                    # Extract image ID/name from the line
+                    # Format is usually "deleted: sha256:..." or "untagged: <none>:<none>@sha256:..."
+                    image_name = line.split(':', 1)[1].strip() if ':' in line else line
+                    deleted_images.append(image_name)
+                    # Extract SHA256 hash for matching (format: sha256:abc123... or ...@sha256:abc123...)
+                    import re
+                    sha256_match = re.search(r'sha256:([a-f0-9]{12,})', line, re.IGNORECASE)
+                    if sha256_match:
+                        deleted_image_ids.append(sha256_match.group(1).lower())
         
         return {
             'success': True,
             'message': f'Cleaned up {deleted_count} dangling image(s)',
             'reclaimed_space': reclaimed_space,
-            'deleted_count': deleted_count
+            'deleted_count': deleted_count,
+            'deleted_images': deleted_images,
+            'deleted_image_ids': deleted_image_ids  # SHA256 hashes for matching
         }
     except Exception as e:
         return {'error': str(e)}

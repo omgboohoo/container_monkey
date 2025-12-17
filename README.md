@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.3.13**
+**Version 0.4.0**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -286,9 +286,29 @@ See PRD.md for complete API documentation.
 The application has been refactored into a modular architecture with separate manager modules for better maintainability:
 
 - **Backend**: Flask 3.0.0 (Python 3.11)
-- **Frontend**: Vanilla JavaScript (ES6+) with modern CSS
+- **Frontend**: Vanilla JavaScript (ES6+) with modern CSS, organized into 19 focused modules
+  - **Frontend Modules**:
+    - `shared-state.js` - Centralized state management
+    - `csrf.js` - CSRF token handling and API utilities
+    - `ui-utils.js` - UI utilities (modals, notifications, spinners)
+    - `auth.js` - Authentication and user management
+    - `navigation.js` - Section navigation and dashboard
+    - `containers.js` - Container management and operations
+    - `backups.js` - Backup file management and restore
+    - `volumes.js` - Volume exploration and management
+    - `images.js` - Image management
+    - `networks.js` - Network management
+    - `stacks.js` - Stack management
+    - `events.js` - Docker events viewing
+    - `statistics.js` - Container statistics and monitoring
+    - `audit-log.js` - Audit log management
+    - `console.js` - Terminal console and logs
+    - `scheduler.js` - Backup scheduler
+    - `storage.js` - Storage settings (S3/local)
+    - `settings.js` - UI settings
+    - `app.js` - Main application coordinator
 - **Docker API**: Direct Docker socket communication (`docker_api.py`) with fallback to docker-py
-- **Modular Managers**: 
+- **Backend Modular Managers**: 
   - `auth_manager.py` - Authentication and user management
   - `container_manager.py` - Container operations
   - `backup_manager.py` - Backup operations with queue support
@@ -332,7 +352,20 @@ The application has been refactored into a modular architecture with separate ma
 - **CSRF Protection**: Flask-WTF CSRF protection for all state-changing requests
 - **Encryption Key**: Unique random encryption key generated per installation, stored securely in Docker volume
 - **Default Credentials Warning**: Modal warning appears when using default login credentials
+- **Comprehensive Input Validation**: All user inputs are validated to prevent injection attacks
+  - Container ID validation (hex ID or name format) on all container operations
+  - Volume name validation for volume operations
+  - Network ID validation for network management
+  - Image ID validation for image operations
+  - Stack name validation for stack management
+  - Progress and session ID validation for backup operations
+  - Query parameter validation (limit, offset, tail, since, until) with type checking
+  - Filename validation for all backup file operations
+  - Working directory path validation for container exec operations
+  - UI setting key validation for settings management
 - **Command Injection Prevention**: Container exec commands are properly sanitized to prevent command injection attacks
+  - Commands sanitized using `shlex.quote()` to prevent shell injection
+  - Working directory paths validated to prevent path traversal attacks
 - **Secure Command Execution**: Uses Docker's native working directory support instead of shell-based operations
 - **Error Handling Security**: Safe error logging prevents information disclosure in production
   - Full stack traces only shown in debug mode

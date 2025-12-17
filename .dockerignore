@@ -143,3 +143,6 @@ website/
 # Miscellaneous
 *.orig
 *.rej
+
+# Old/backup files
+app_old.js

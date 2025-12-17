@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.3.13**
+**Version 0.4.0**
 
 ## Overview
 
@@ -65,6 +65,38 @@ The open-source backup and recovery solution for Docker. Protect your containers
 - **Icons**: Phosphor Icons
 - **Terminal**: XTerm.js for container console access
 - **Architecture**: Single Page Application (SPA) with client-side routing
+- **Modular Structure**: Frontend code organized into 19 focused modules for maintainability
+  - **Core Modules**:
+    - `shared-state.js` - Centralized state management (`window.AppState`) for all modules
+    - `csrf.js` - CSRF token handling, API request utilities, and global fetch interception
+    - `ui-utils.js` - UI utilities (modals, notifications, spinners, time display, sidebar)
+    - `auth.js` - Authentication, login, logout, password/username management
+    - `navigation.js` - Section navigation, dashboard, and tab switching
+    - `app.js` - Main application coordinator and initialization
+  - **Feature Modules**:
+    - `containers.js` - Container management, operations, backup functions, filtering
+    - `backups.js` - Backup file management, restore, upload, download operations
+    - `volumes.js` - Volume exploration, file browsing, download, management
+    - `images.js` - Image listing, removal, dangling image cleanup
+    - `networks.js` - Network management, backup/restore operations
+    - `stacks.js` - Stack management, container filtering by stack
+    - `events.js` - Docker events viewing, filtering, and sorting
+    - `statistics.js` - Container statistics, system stats polling, refresh management
+    - `audit-log.js` - Audit log management, pagination, filtering
+    - `console.js` - Terminal console (XTerm.js), container logs streaming
+    - `scheduler.js` - Backup scheduler configuration, environment checks
+    - `storage.js` - Storage settings (S3/local), S3 configuration
+    - `settings.js` - UI settings (server name, etc.)
+  - **Module Loading Order**: Critical dependency order ensures proper initialization
+    1. `shared-state.js` (defines `window.AppState`)
+    2. `csrf.js` (core API utilities)
+    3. `ui-utils.js` (UI helpers)
+    4. `auth.js` (authentication)
+    5. `navigation.js` (section switching)
+    6. Domain modules (containers, backups, etc.)
+    7. `app.js` (main coordinator)
+  - **State Management**: Centralized through `window.AppState` object
+  - **Function Export**: All functions exported to `window` object for HTML `onclick` access
 
 ### Infrastructure
 - **Container Runtime**: Docker Engine
@@ -479,18 +511,36 @@ GET    /console/<container_id>                  # Container console page
   - Secret keys only transmitted when explicitly changed by user
   - Prevents credential exposure through API inspection or network monitoring
 - All API endpoints require authentication (except `/api/login`, `/api/logout`, `/api/auth-status`, `/api/backup-progress/<progress_id>`)
+- **Comprehensive Input Validation**: All route parameters and user inputs are validated to prevent injection attacks
+  - Container ID validation (hex ID or name format) on all container operations
+  - Volume name validation for volume exploration, file access, and deletion
+  - Network ID validation for network backup and deletion operations
+  - Image ID validation for image deletion operations
+  - Stack name validation for stack deletion operations
+  - Progress and session ID validation (UUID-like format) for backup operations
+  - Query parameter validation (limit, offset, tail, since, until) with type checking and bounds
+  - Filename validation for all backup file operations (download, delete, preview, restore)
+  - Working directory path validation for container exec operations (prevents path traversal)
+  - UI setting key validation for settings management
 - **Command Injection Prevention**: 
   - Container exec commands sanitized using `shlex.quote()` to prevent shell injection
   - Commands with shell operators (`&&`, `|`, `;`) are safely escaped
   - Container ID validation ensures proper format before execution
   - Container redeploy uses secure command parsing without shell fallback
-- **Secure Working Directory**: Uses Docker's native `-w` flag instead of shell-based directory changes
+- **Secure Working Directory**: Uses Docker's native `-w` flag with comprehensive path validation
+  - Working directory paths validated to prevent path traversal attacks
+  - URL-encoded attack patterns detected and blocked
+  - Ensures absolute paths only
+- **Path Traversal Protection**: Enhanced file path validation across all operations
+  - Volume file paths validated with encoded pattern detection
+  - Backup file paths validated with realpath checks
+  - All file operations restricted to allowed directories
 - **Error Handling Security**: `error_utils.py` prevents information disclosure
   - Full stack traces only shown in debug mode
   - Generic error messages returned to users in production
   - Prevents exposure of file paths, code structure, and internal system details
-- File uploads validated and sanitized
+- File uploads validated and sanitized with secure filename checks
 - Container commands executed with user permissions
-- Volume exploration limited to readable paths
+- Volume exploration limited to readable paths with path validation
 - Rate limiting protects against brute force attacks (login endpoint: 5 requests/minute)
 

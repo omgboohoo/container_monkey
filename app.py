@@ -10,6 +10,7 @@ from flask_wtf.csrf import CSRFProtect, CSRFError
 import os
 import secrets
 import socket
+import re
 from datetime import timedelta
 
 # Import all managers
@@ -151,6 +152,359 @@ if docker_api_client:
 def login_required(f):
     return auth_manager.login_required(f)
 
+# Container ID validation helper
+def validate_container_id(container_id: str):
+    """
+    Validate container ID or name format to prevent injection attacks.
+    
+    Docker container IDs are hexadecimal (12-64 chars, or partial 1-11 chars).
+    Container names can contain: alphanumeric, hyphens, underscores, dots, colons, slashes.
+    
+    Args:
+        container_id: Container ID or name to validate
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+        - is_valid: True if format is valid
+        - error_message: Empty string if valid, error message if invalid
+    """
+    if not container_id:
+        return (False, 'Container ID is required')
+    
+    # Remove leading/trailing whitespace
+    container_id = container_id.strip()
+    
+    if not container_id:
+        return (False, 'Container ID cannot be empty')
+    
+    # Check length (Docker IDs are max 64 chars, names can be up to 255 chars)
+    if len(container_id) > 255:  # Docker name limit
+        return (False, 'Container ID is too long')
+    
+    # Check for dangerous characters that could be used for injection
+    # These characters could be used in shell commands or cause issues
+    dangerous_chars = ['\x00', '\r', '\n', ';', '&', '|', '`', '$', '(', ')', '<', '>', ' ', '\t', '\v', '\f']
+    for char in dangerous_chars:
+        if char in container_id:
+            return (False, 'Container ID contains invalid characters')
+    
+    # Check for path traversal attempts
+    if '..' in container_id:
+        return (False, 'Container ID contains invalid path characters')
+    
+    # Validate format: either hex ID or valid container name
+    # Hex ID pattern: 1-64 hexadecimal characters (Docker accepts partial IDs)
+    hex_id_pattern = r'^[a-f0-9]{1,64}$'
+    
+    # Check if it's a valid hex ID (case-insensitive)
+    if re.match(hex_id_pattern, container_id, re.IGNORECASE):
+        return (True, '')
+    
+    # Container name pattern: alphanumeric, hyphens, underscores, dots, colons, slashes
+    # Docker allows: [a-zA-Z0-9][a-zA-Z0-9_.-]* for names
+    # Also allows slashes for registry/image:tag format
+    # Must start and end with alphanumeric (or allow single char)
+    # Allow slashes for registry paths like registry.example.com/image:tag
+    name_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9_.:/-]*[a-zA-Z0-9])?$'
+    
+    # Check if it's a valid container name
+    if re.match(name_pattern, container_id):
+        # Additional check: ensure it doesn't have consecutive slashes or end with slash
+        if '//' in container_id or container_id.endswith('/'):
+            return (False, 'Invalid container name format')
+        return (True, '')
+    
+    return (False, 'Invalid container ID format')
+
+# Validation helpers for other Docker resource identifiers
+def validate_docker_name(name: str, resource_type: str = 'name'):
+    """
+    Validate Docker resource name (volumes, networks, stacks).
+    Docker names follow: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+    
+    Args:
+        name: Name to validate
+        resource_type: Type of resource for error messages
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not name:
+        return (False, f'{resource_type.capitalize()} is required')
+    
+    name = name.strip()
+    if not name:
+        return (False, f'{resource_type.capitalize()} cannot be empty')
+    
+    # Docker name length limit
+    if len(name) > 255:
+        return (False, f'{resource_type.capitalize()} is too long')
+    
+    # Check for dangerous characters
+    dangerous_chars = ['\x00', '\r', '\n', ';', '&', '|', '`', '$', '(', ')', '<', '>', ' ', '\t', '\v', '\f', '/', '\\']
+    for char in dangerous_chars:
+        if char in name:
+            return (False, f'{resource_type.capitalize()} contains invalid characters')
+    
+    # Check for path traversal
+    if '..' in name:
+        return (False, f'{resource_type.capitalize()} contains invalid path characters')
+    
+    # Docker name pattern: [a-zA-Z0-9][a-zA-Z0-9_.-]*
+    name_pattern = r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$'
+    if re.match(name_pattern, name):
+        return (True, '')
+    
+    return (False, f'Invalid {resource_type} format')
+
+def validate_network_id(network_id: str):
+    """Validate network ID or name (similar to container ID validation)"""
+    if not network_id:
+        return (False, 'Network ID is required')
+    
+    network_id = network_id.strip()
+    if not network_id:
+        return (False, 'Network ID cannot be empty')
+    
+    if len(network_id) > 255:
+        return (False, 'Network ID is too long')
+    
+    # Check for dangerous characters
+    dangerous_chars = ['\x00', '\r', '\n', ';', '&', '|', '`', '$', '(', ')', '<', '>', ' ', '\t', '\v', '\f']
+    for char in dangerous_chars:
+        if char in network_id:
+            return (False, 'Network ID contains invalid characters')
+    
+    if '..' in network_id:
+        return (False, 'Network ID contains invalid path characters')
+    
+    # Hex ID pattern (Docker network IDs are hex)
+    hex_id_pattern = r'^[a-f0-9]{1,64}$'
+    if re.match(hex_id_pattern, network_id, re.IGNORECASE):
+        return (True, '')
+    
+    # Network name pattern (same as Docker names)
+    name_pattern = r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$'
+    if re.match(name_pattern, network_id):
+        return (True, '')
+    
+    return (False, 'Invalid network ID format')
+
+def validate_image_id(image_id: str):
+    """Validate image ID or name"""
+    if not image_id:
+        return (False, 'Image ID is required')
+    
+    image_id = image_id.strip()
+    if not image_id:
+        return (False, 'Image ID cannot be empty')
+    
+    if len(image_id) > 255:
+        return (False, 'Image ID is too long')
+    
+    # Check for dangerous characters
+    dangerous_chars = ['\x00', '\r', '\n', ';', '&', '|', '`', '$', '(', ')', '<', '>', ' ', '\t', '\v', '\f']
+    for char in dangerous_chars:
+        if char in image_id:
+            return (False, 'Image ID contains invalid characters')
+    
+    if '..' in image_id:
+        return (False, 'Image ID contains invalid path characters')
+    
+    # Hex ID pattern (Docker image IDs are hex, sha256: prefix optional)
+    if image_id.startswith('sha256:'):
+        image_id = image_id[7:]
+    
+    hex_id_pattern = r'^[a-f0-9]{1,64}$'
+    if re.match(hex_id_pattern, image_id, re.IGNORECASE):
+        return (True, '')
+    
+    # Image name pattern: can include registry, repo, tag (with colons and slashes)
+    # e.g., registry.example.com/repo/image:tag
+    image_name_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9_.:/-]*[a-zA-Z0-9])?$|^[a-zA-Z0-9]$'
+    if re.match(image_name_pattern, image_id):
+        if '//' in image_id or image_id.endswith('/'):
+            return (False, 'Invalid image name format')
+        return (True, '')
+    
+    return (False, 'Invalid image ID format')
+
+def validate_uuid_like(identifier: str, resource_type: str = 'ID'):
+    """
+    Validate UUID-like identifiers (progress_id, session_id).
+    Accepts alphanumeric with hyphens (UUID format).
+    
+    Args:
+        identifier: Identifier to validate
+        resource_type: Type for error messages
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not identifier:
+        return (False, f'{resource_type} is required')
+    
+    identifier = identifier.strip()
+    if not identifier:
+        return (False, f'{resource_type} cannot be empty')
+    
+    # UUID format: 8-4-4-4-12 hex chars with hyphens, or just alphanumeric
+    # Allow flexible format for session/progress IDs
+    if len(identifier) > 128:  # Reasonable limit
+        return (False, f'{resource_type} is too long')
+    
+    # Check for dangerous characters
+    dangerous_chars = ['\x00', '\r', '\n', ';', '&', '|', '`', '$', '(', ')', '<', '>', ' ', '\t', '\v', '\f', '/', '\\', '.']
+    for char in dangerous_chars:
+        if char in identifier:
+            return (False, f'{resource_type} contains invalid characters')
+    
+    if '..' in identifier:
+        return (False, f'{resource_type} contains invalid path characters')
+    
+    # UUID-like pattern: alphanumeric and hyphens
+    uuid_pattern = r'^[a-zA-Z0-9-]+$'
+    if re.match(uuid_pattern, identifier):
+        return (True, '')
+    
+    return (False, f'Invalid {resource_type.lower()} format')
+
+def validate_query_int(param_value, param_name: str, default: int = None, min_val: int = None, max_val: int = None):
+    """
+    Validate and convert query parameter to integer.
+    
+    Args:
+        param_value: Raw parameter value
+        param_name: Parameter name for error messages
+        default: Default value if None/invalid
+        min_val: Minimum allowed value
+        max_val: Maximum allowed value
+        
+    Returns:
+        Tuple of (is_valid, value_or_default, error_message)
+    """
+    if param_value is None:
+        if default is not None:
+            return (True, default, '')
+        return (False, None, f'{param_name} is required')
+    
+    try:
+        # Handle string 'all' or similar special cases
+        if isinstance(param_value, str) and param_value.lower() == 'all':
+            return (True, 0, '')  # 0 often means "all" in Docker contexts
+        
+        value = int(param_value)
+        
+        if min_val is not None and value < min_val:
+            return (False, None, f'{param_name} must be at least {min_val}')
+        if max_val is not None and value > max_val:
+            return (False, None, f'{param_name} must be at most {max_val}')
+        
+        return (True, value, '')
+    except (ValueError, TypeError):
+        if default is not None:
+            return (True, default, '')
+        return (False, None, f'{param_name} must be a valid integer')
+
+def validate_working_directory(working_dir: str):
+    """
+    Validate working directory path for container exec operations.
+    Prevents path traversal attacks.
+    
+    Args:
+        working_dir: Working directory path to validate
+        
+    Returns:
+        Tuple of (is_valid, sanitized_path, error_message)
+    """
+    if not working_dir:
+        return (False, None, 'Working directory cannot be empty')
+    
+    working_dir = working_dir.strip()
+    if not working_dir:
+        return (False, None, 'Working directory cannot be empty')
+    
+    # Check length
+    if len(working_dir) > 4096:  # Linux PATH_MAX
+        return (False, None, 'Working directory path is too long')
+    
+    # Check for dangerous characters
+    dangerous_chars = ['\x00', '\r', '\n', ';', '&', '|', '`', '$', '(', ')', '<', '>', '\t', '\v', '\f']
+    for char in dangerous_chars:
+        if char in working_dir:
+            return (False, None, 'Working directory contains invalid characters')
+    
+    # Check for path traversal patterns
+    dangerous_patterns = ['..', '%2e%2e', '%2E%2E', '..%2f', '..%5c', '../', '..\\']
+    path_lower = working_dir.lower()
+    for pattern in dangerous_patterns:
+        if pattern in path_lower:
+            return (False, None, 'Working directory contains invalid path characters')
+    
+    # Decode URL encoding if present
+    try:
+        from urllib.parse import unquote
+        decoded_path = unquote(working_dir)
+    except Exception:
+        decoded_path = working_dir
+    
+    # Normalize path
+    normalized = os.path.normpath(decoded_path)
+    
+    # Check normalized path for traversal
+    if normalized.startswith('..') or '/..' in normalized or '\\..' in normalized:
+        return (False, None, 'Working directory contains invalid path characters')
+    
+    # Ensure it's an absolute path (Docker requires absolute paths)
+    if not normalized.startswith('/'):
+        return (False, None, 'Working directory must be an absolute path')
+    
+    # Final check for remaining dangerous patterns
+    if '..' in normalized:
+        return (False, None, 'Working directory contains invalid path characters')
+    
+    return (True, normalized, '')
+
+def validate_setting_key(setting_key: str):
+    """
+    Validate UI setting key to prevent injection and ensure safe database operations.
+    
+    Args:
+        setting_key: Setting key to validate
+        
+    Returns:
+        Tuple of (is_valid, error_message)
+    """
+    if not setting_key:
+        return (False, 'Setting key is required')
+    
+    setting_key = setting_key.strip()
+    if not setting_key:
+        return (False, 'Setting key cannot be empty')
+    
+    # Check length (reasonable limit for setting keys)
+    if len(setting_key) > 255:
+        return (False, 'Setting key is too long')
+    
+    # Check for dangerous characters that could be used for SQL injection or path traversal
+    # Even though we use parameterized queries, we should still validate
+    dangerous_chars = ['\x00', '\r', '\n', ';', '&', '|', '`', '$', '(', ')', '<', '>', ' ', '\t', '\v', '\f', '/', '\\']
+    for char in dangerous_chars:
+        if char in setting_key:
+            return (False, 'Setting key contains invalid characters')
+    
+    # Check for path traversal
+    if '..' in setting_key:
+        return (False, 'Setting key contains invalid path characters')
+    
+    # Allow alphanumeric, underscores, hyphens, and dots (common for setting keys)
+    # Pattern: [a-zA-Z0-9_.-]+
+    setting_key_pattern = r'^[a-zA-Z0-9_.-]+$'
+    if not re.match(setting_key_pattern, setting_key):
+        return (False, 'Setting key contains invalid characters')
+    
+    return (True, '')
+
 # Configure session cookie Secure flag dynamically based on reverse proxy header
 @app.before_request
 def configure_session_cookie():
@@ -177,6 +531,11 @@ def require_login():
     
     if request.path == '/':
         return None
+    
+    # Protect console routes
+    if request.path.startswith('/console/'):
+        if 'logged_in' not in session or not session['logged_in']:
+            return redirect(url_for('index'))
     
     if request.path.startswith('/api/'):
         if 'logged_in' not in session or not session['logged_in']:
@@ -236,8 +595,49 @@ def index():
     return render_template('index.html', **stats)
 
 @app.route('/console/<container_id>')
+@login_required
 def console_page(container_id):
-    return render_template('console.html', container_id=container_id)
+    """
+    Console page for viewing container logs
+    Validates container exists and gets container name for display
+    """
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return redirect(url_for('index'))
+    
+    # Get container details to verify container exists and get name
+    container_name = container_id  # Default to ID if name lookup fails
+    try:
+        details = container_manager.container_details(container_id)
+        
+        # Check if container exists (if error, container doesn't exist)
+        if details.get('error'):
+            # Container doesn't exist - redirect to index with error message
+            # The frontend will handle showing the error via the API
+            return redirect(url_for('index'))
+        
+        # Get container name from details
+        if 'name' in details:
+            container_name = details['name']
+        elif 'id' in details:
+            # Use short ID if name not available
+            container_name = details['id'][:12] if len(details['id']) > 12 else details['id']
+    except Exception as e:
+        # Log error but don't expose details to user
+        safe_log_error(e, context="console_page")
+        # Container lookup failed - redirect to index
+        return redirect(url_for('index'))
+    
+    # Validate that we have a valid container_id to pass to template
+    # The template will use this in API calls, so it must be safe
+    # container_id comes from URL parameter, so it's already validated by Flask routing
+    # But we ensure it doesn't contain dangerous characters
+    safe_container_id = container_id.strip()
+    if not safe_container_id:
+        return redirect(url_for('index'))
+    
+    return render_template('console.html', container_id=safe_container_id, container_name=container_name)
 
 # System routes
 @app.route('/api/dashboard-stats')
@@ -330,6 +730,10 @@ def list_containers():
 
 @app.route('/api/container/<container_id>/start', methods=['POST'])
 def start_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.start_container(container_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -337,6 +741,10 @@ def start_container(container_id):
 
 @app.route('/api/container/<container_id>/stop', methods=['POST'])
 def stop_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.stop_container(container_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -344,6 +752,10 @@ def stop_container(container_id):
 
 @app.route('/api/container/<container_id>/kill', methods=['POST'])
 def kill_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.kill_container(container_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -351,6 +763,10 @@ def kill_container(container_id):
 
 @app.route('/api/container/<container_id>/restart', methods=['POST'])
 def restart_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.restart_container(container_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -358,6 +774,10 @@ def restart_container(container_id):
 
 @app.route('/api/container/<container_id>/pause', methods=['POST'])
 def pause_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.pause_container(container_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -365,6 +785,10 @@ def pause_container(container_id):
 
 @app.route('/api/container/<container_id>/resume', methods=['POST'])
 def resume_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.resume_container(container_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -372,6 +796,10 @@ def resume_container(container_id):
 
 @app.route('/api/container/<container_id>/delete', methods=['DELETE'])
 def delete_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     delete_volumes = request.args.get('delete_volumes', 'false').lower() == 'true'
     result = container_manager.delete_container(container_id, delete_volumes)
     if 'error' in result:
@@ -385,15 +813,19 @@ def delete_container(container_id):
 
 @app.route('/api/container/<container_id>/logs')
 def container_logs(container_id):
-    tail = request.args.get('tail', '100')
-    # Support 'all' as string or integer
-    if tail == 'all':
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
+    # Validate and sanitize tail parameter
+    tail_param = request.args.get('tail', '100')
+    if tail_param == 'all':
         tail = 0  # 0 means all logs
     else:
-        try:
-            tail = int(tail)
-        except (ValueError, TypeError):
-            tail = 100
+        is_valid_tail, tail_value, tail_error = validate_query_int(tail_param, 'tail', default=100, min_val=0, max_val=100000)
+        if not is_valid_tail:
+            return jsonify({'error': tail_error or 'Invalid tail parameter'}), 400
+        tail = tail_value
     result = container_manager.container_logs(container_id, tail)
     if 'error' in result:
         return jsonify(result), 500
@@ -401,6 +833,10 @@ def container_logs(container_id):
 
 @app.route('/api/container/<container_id>/details')
 def container_details(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.container_details(container_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -409,6 +845,10 @@ def container_details(container_id):
 @app.route('/api/container/<container_id>/inspect')
 def container_inspect(container_id):
     """Get raw container inspect JSON (like docker inspect)"""
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     docker_api_client = docker_utils.docker_api_client
     if docker_api_client:
         try:
@@ -421,9 +861,19 @@ def container_inspect(container_id):
 
 @app.route('/api/container/<container_id>/exec', methods=['POST'])
 def exec_container_command(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     data = request.get_json() or {}
     command = data.get('command', '')
     working_dir = data.get('working_dir')  # Optional working directory
+    # Validate working directory if provided
+    if working_dir:
+        is_valid_wd, sanitized_wd, wd_error = validate_working_directory(working_dir)
+        if not is_valid_wd:
+            return jsonify({'error': wd_error or 'Invalid working directory'}), 400
+        working_dir = sanitized_wd
     result = container_manager.exec_container_command(container_id, command, working_dir=working_dir)
     if 'error' in result:
         return jsonify(result), 500
@@ -431,11 +881,19 @@ def exec_container_command(container_id):
 
 @app.route('/api/container/<container_id>/stats')
 def get_container_stats(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = container_manager.get_container_stats(container_id)
     return jsonify(result)
 
 @app.route('/api/container/<container_id>/redeploy', methods=['POST'])
 def redeploy_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     data = request.get_json() or {}
     port_overrides = data.get('port_overrides')
     result = container_manager.redeploy_container(container_id, port_overrides)
@@ -453,6 +911,10 @@ def list_volumes():
 
 @app.route('/api/volume/<volume_name>/explore')
 def explore_volume(volume_name):
+    # Validate volume name
+    is_valid, error_msg = validate_docker_name(volume_name, 'volume name')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     path = request.args.get('path', '/')
     result = volume_manager.explore_volume(volume_name, path)
     if 'error' in result:
@@ -461,6 +923,10 @@ def explore_volume(volume_name):
 
 @app.route('/api/volume/<volume_name>/file')
 def get_volume_file(volume_name):
+    # Validate volume name
+    is_valid, error_msg = validate_docker_name(volume_name, 'volume name')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     file_path = request.args.get('path', '')
     result = volume_manager.get_volume_file(volume_name, file_path)
     if 'error' in result:
@@ -469,6 +935,10 @@ def get_volume_file(volume_name):
 
 @app.route('/api/volume/<volume_name>/download')
 def download_volume_file(volume_name):
+    # Validate volume name
+    is_valid, error_msg = validate_docker_name(volume_name, 'volume name')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     file_path = request.args.get('path', '')
     try:
         from flask import Response
@@ -487,6 +957,10 @@ def download_volume_file(volume_name):
 
 @app.route('/api/volume/<volume_name>/delete', methods=['DELETE'])
 def delete_volume(volume_name):
+    # Validate volume name
+    is_valid, error_msg = validate_docker_name(volume_name, 'volume name')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = volume_manager.delete_volume(volume_name)
     if 'error' in result:
         status_code = 400 if result.get('in_use') else 500
@@ -497,6 +971,13 @@ def delete_volume(volume_name):
 def delete_volumes():
     data = request.get_json() or {}
     volume_names = data.get('names', [])
+    # Validate all volume names
+    if not isinstance(volume_names, list):
+        return jsonify({'error': 'Volume names must be a list'}), 400
+    for vol_name in volume_names:
+        is_valid, error_msg = validate_docker_name(vol_name, 'volume name')
+        if not is_valid:
+            return jsonify({'error': f'Invalid volume name "{vol_name}": {error_msg}'}), 400
     result = volume_manager.delete_volumes(volume_names)
     if 'error' in result:
         return jsonify(result), 500
@@ -512,6 +993,10 @@ def list_networks():
 
 @app.route('/api/network/<network_id>/backup', methods=['POST'])
 def backup_network(network_id):
+    # Validate network ID
+    is_valid, error_msg = validate_network_id(network_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = network_manager.backup_network(network_id)
     if 'error' in result:
         status_code = 400 if 'Cannot backup default' in result['error'] else 500
@@ -520,6 +1005,10 @@ def backup_network(network_id):
 
 @app.route('/api/network/<network_id>/delete', methods=['DELETE'])
 def delete_network(network_id):
+    # Validate network ID
+    is_valid, error_msg = validate_network_id(network_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = network_manager.delete_network(network_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -529,6 +1018,15 @@ def delete_network(network_id):
 def restore_network():
     data = request.get_json() or {}
     filename = data.get('filename')
+    # Validate filename
+    if not filename:
+        return jsonify({'error': 'Filename is required'}), 400
+    # Filename should be validated (network backups use network_*.json format)
+    sanitized_filename = secure_filename(filename)
+    if not sanitized_filename or sanitized_filename != filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'error': 'Invalid filename'}), 400
     result = network_manager.restore_network(filename)
     if 'error' in result:
         status_code = 400 if 'Cannot restore default' in result.get('error', '') else (409 if 'already exists' in result.get('error', '') else 500)
@@ -548,8 +1046,25 @@ def list_network_backups():
 def list_events():
     """Get Docker events"""
     try:
-        since = request.args.get('since', type=int)
-        until = request.args.get('until', type=int)
+        # Validate and sanitize query parameters
+        since_param = request.args.get('since')
+        until_param = request.args.get('until')
+        
+        since = None
+        until = None
+        
+        if since_param is not None:
+            is_valid_since, since_value, since_error = validate_query_int(since_param, 'since', min_val=0)
+            if not is_valid_since:
+                return jsonify({'error': since_error or 'Invalid since parameter'}), 400
+            since = since_value
+        
+        if until_param is not None:
+            is_valid_until, until_value, until_error = validate_query_int(until_param, 'until', min_val=0)
+            if not is_valid_until:
+                return jsonify({'error': until_error or 'Invalid until parameter'}), 400
+            until = until_value
+        
         result = events_manager.list_events(since=since, until=until)
         if 'error' in result:
             status_code = 500 if result['error'] != 'Docker client not available' else 503
@@ -567,7 +1082,13 @@ def list_images():
     return jsonify(result)
 
 @app.route('/api/image/<image_id>/delete', methods=['DELETE'])
+@limiter.exempt  # Exempt from rate limiting - bulk cleanup operations may delete many images
+@login_required
 def delete_image(image_id):
+    # Validate image ID
+    is_valid, error_msg = validate_image_id(image_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = image_manager.delete_image(image_id)
     if 'error' in result:
         return jsonify(result), 500
@@ -583,6 +1104,10 @@ def list_stacks():
 
 @app.route('/api/stack/<stack_name>/delete', methods=['DELETE'])
 def delete_stack(stack_name):
+    # Validate stack name
+    is_valid, error_msg = validate_docker_name(stack_name, 'stack name')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = stack_manager.delete_stack(stack_name)
     if 'error' in result:
         return jsonify(result), 500
@@ -591,6 +1116,10 @@ def delete_stack(stack_name):
 # Backup routes
 @app.route('/api/backup/<container_id>', methods=['POST'])
 def backup_container(container_id):
+    # Validate container ID format
+    is_valid, error_msg = validate_container_id(container_id)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     if not backup_manager:
         return jsonify({'error': 'Backup manager not available'}), 500
     
@@ -627,6 +1156,10 @@ def backup_container(container_id):
 @limiter.exempt
 def get_backup_progress(progress_id):
     """Get progress of backup operation"""
+    # Validate progress ID format
+    is_valid, error_msg = validate_uuid_like(progress_id, 'Progress ID')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     if not backup_manager:
         return jsonify({'error': 'Backup manager not available'}), 500
     
@@ -653,13 +1186,45 @@ def list_backups():
 
 @app.route('/api/download/<filename>')
 def download_backup(filename):
+    # Security: Validate and sanitize filename before processing
+    # Additional validation at route level (get_backup_path also validates)
+    sanitized_filename = secure_filename(filename)
+    if not sanitized_filename or sanitized_filename != filename:
+        # Filename was modified by secure_filename, indicating invalid characters
+        return jsonify({'error': 'Invalid filename'}), 400
+    
+    # Check for path traversal attempts
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    
     file_path = backup_file_manager.get_backup_path(filename)
     if not file_path:
         return jsonify({'error': 'Backup file not found'}), 404
-    return send_file(file_path, as_attachment=True, download_name=filename)
+    
+    # Final security check: ensure file_path is within allowed directories
+    try:
+        resolved_path = os.path.realpath(file_path)
+        resolved_backup_dir = os.path.realpath(backup_file_manager.backup_dir)
+        resolved_temp_dir = os.path.realpath(backup_file_manager.temp_dir)
+        
+        # File must be in either backup_dir or temp_dir
+        if not (resolved_path.startswith(resolved_backup_dir) or resolved_path.startswith(resolved_temp_dir)):
+            safe_log_error(Exception(f"Path traversal attempt: {resolved_path}"), context="download_backup")
+            return jsonify({'error': 'Invalid file path'}), 400
+    except (OSError, ValueError) as e:
+        safe_log_error(e, context="download_backup_path_validation")
+        return jsonify({'error': 'Invalid file path'}), 400
+    
+    return send_file(file_path, as_attachment=True, download_name=sanitized_filename)
 
 @app.route('/api/backup/<filename>', methods=['DELETE'])
 def delete_backup(filename):
+    # Validate filename
+    sanitized_filename = secure_filename(filename)
+    if not sanitized_filename or sanitized_filename != filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'error': 'Invalid filename'}), 400
     user = session.get('username')
     result = backup_file_manager.delete_backup(filename, user=user)
     if 'error' in result:
@@ -710,6 +1275,12 @@ def upload_backup():
 
 @app.route('/api/backup/<filename>/preview')
 def preview_backup(filename):
+    # Validate filename
+    sanitized_filename = secure_filename(filename)
+    if not sanitized_filename or sanitized_filename != filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'error': 'Invalid filename'}), 400
     if not restore_manager:
         return jsonify({'error': 'Restore manager not available'}), 500
     
@@ -737,6 +1308,19 @@ def restore_backup():
     
     if not filename:
         return jsonify({'error': 'Filename required'}), 400
+    
+    # Validate filename
+    sanitized_filename = secure_filename(filename)
+    if not sanitized_filename or sanitized_filename != filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    if '..' in filename or '/' in filename or '\\' in filename:
+        return jsonify({'error': 'Invalid filename'}), 400
+    
+    # Validate new_name if provided
+    if new_name:
+        is_valid, error_msg = validate_container_id(new_name)
+        if not is_valid:
+            return jsonify({'error': f'Invalid new container name: {error_msg}'}), 400
     
     file_path = backup_file_manager.get_backup_path(filename)
     if not file_path:
@@ -775,6 +1359,10 @@ def prepare_download_all():
 @app.route('/api/backups/download-all-progress/<session_id>')
 @limiter.exempt
 def get_download_all_progress(session_id):
+    # Validate session ID
+    is_valid, error_msg = validate_uuid_like(session_id, 'Session ID')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = backup_file_manager.get_download_all_progress(session_id)
     if 'error' in result:
         return jsonify(result), 404
@@ -782,6 +1370,10 @@ def get_download_all_progress(session_id):
 
 @app.route('/api/backups/download-all-create/<session_id>', methods=['POST'])
 def create_download_all_archive(session_id):
+    # Validate session ID
+    is_valid, error_msg = validate_uuid_like(session_id, 'Session ID')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     result = backup_file_manager.create_download_all_archive(session_id)
     if 'error' in result:
         return jsonify(result), 404
@@ -789,6 +1381,10 @@ def create_download_all_archive(session_id):
 
 @app.route('/api/backups/download-all/<session_id>')
 def download_all_backups(session_id):
+    # Validate session ID
+    is_valid, error_msg = validate_uuid_like(session_id, 'Session ID')
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     archive_path = backup_file_manager.get_download_all_file(session_id)
     if not archive_path:
         return jsonify({'error': 'Archive file not ready'}), 400
@@ -845,6 +1441,14 @@ def update_scheduler_config():
             return jsonify({'error': 'day_of_week must be 0-6 for weekly schedule'}), 400
         if lifecycle < 1:
             return jsonify({'error': 'Lifecycle must be at least 1'}), 400
+        
+        # Validate selected_containers list and container IDs
+        if not isinstance(selected_containers, list):
+            return jsonify({'error': 'selected_containers must be a list'}), 400
+        for container_id in selected_containers:
+            is_valid, error_msg = validate_container_id(container_id)
+            if not is_valid:
+                return jsonify({'error': f'Invalid container ID in selected_containers: {error_msg}'}), 400
         
         # Update configuration
         scheduler_manager.update_config(
@@ -911,14 +1515,30 @@ def get_system_time():
 def get_audit_logs():
     """Get audit logs with optional filtering"""
     try:
-        limit = request.args.get('limit', 1000, type=int)
-        offset = request.args.get('offset', 0, type=int)
+        # Validate and sanitize query parameters
+        limit_param = request.args.get('limit', '1000')
+        offset_param = request.args.get('offset', '0')
+        
+        is_valid_limit, limit, limit_error = validate_query_int(limit_param, 'limit', default=1000, min_val=1, max_val=10000)
+        if not is_valid_limit:
+            return jsonify({'error': limit_error or 'Invalid limit parameter'}), 400
+        
+        is_valid_offset, offset, offset_error = validate_query_int(offset_param, 'offset', default=0, min_val=0)
+        if not is_valid_offset:
+            return jsonify({'error': offset_error or 'Invalid offset parameter'}), 400
+        
         operation_type = request.args.get('operation_type')
         container_id = request.args.get('container_id')
         status = request.args.get('status')
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         search = request.args.get('search')
+        
+        # Validate container_id if provided
+        if container_id:
+            is_valid_cid, cid_error = validate_container_id(container_id)
+            if not is_valid_cid:
+                return jsonify({'error': f'Invalid container_id: {cid_error}'}), 400
         
         result = audit_log_manager.get_logs(
             limit=limit,
@@ -1093,6 +1713,10 @@ def get_ui_settings():
 @login_required
 def get_ui_setting(setting_key):
     """Get a specific UI setting"""
+    # Validate setting key
+    is_valid, error_msg = validate_setting_key(setting_key)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     try:
         value = ui_settings_manager.get_setting(setting_key)
         return jsonify({'key': setting_key, 'value': value})
@@ -1103,6 +1727,10 @@ def get_ui_setting(setting_key):
 @login_required
 def set_ui_setting(setting_key):
     """Set a UI setting"""
+    # Validate setting key
+    is_valid, error_msg = validate_setting_key(setting_key)
+    if not is_valid:
+        return jsonify({'error': error_msg}), 400
     try:
         data = request.get_json() or {}
         value = data.get('value')

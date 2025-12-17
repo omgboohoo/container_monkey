@@ -5,6 +5,7 @@ Handles all Docker volume operations
 import os
 import subprocess
 import json
+import urllib.parse
 from typing import Dict, List, Any, Optional
 import docker_utils
 from docker_utils import APP_VOLUME_NAME
@@ -18,6 +19,76 @@ class VolumeManager:
     def __init__(self):
         """Initialize VolumeManager"""
         pass
+    
+    def _validate_volume_path(self, file_path: str, require_absolute: bool = False) -> tuple:
+        """
+        Validate and sanitize a file path to prevent path traversal attacks.
+        
+        Args:
+            file_path: The file path to validate
+            require_absolute: If True, path must start with '/'
+            
+        Returns:
+            Tuple of (is_valid, sanitized_path)
+            - is_valid: True if path is safe to use
+            - sanitized_path: Normalized and validated path, or '/' if invalid
+        """
+        if not file_path:
+            return (False, '/')
+        
+        # Remove any URL encoding first to catch encoded path traversal attempts
+        try:
+            # Decode URL-encoded characters (e.g., %2e%2e -> ..)
+            decoded_path = urllib.parse.unquote(file_path)
+        except Exception:
+            decoded_path = file_path
+        
+        # Check for path traversal patterns in the original path (before normalization)
+        # This catches encoded variants that might bypass simple checks
+        dangerous_patterns = [
+            '..',           # Standard path traversal
+            '%2e%2e',      # URL-encoded ..
+            '%2E%2E',      # URL-encoded .. (uppercase)
+            '..%2f',       # .. followed by encoded /
+            '..%5c',       # .. followed by encoded \ (Windows)
+            '../',         # Path traversal with slash
+            '..\\',         # Path traversal with backslash (Windows)
+        ]
+        
+        # Check original path for dangerous patterns (case-insensitive)
+        path_lower = file_path.lower()
+        for pattern in dangerous_patterns:
+            if pattern in path_lower:
+                return (False, '/')
+        
+        # Normalize the path to resolve any .. or . components
+        # This handles cases like /a/b/../c -> /a/c
+        # Note: normpath on Unix doesn't resolve .. if it goes above root, but we check for that
+        normalized = os.path.normpath(decoded_path)
+        
+        # Check normalized path for going outside root
+        # After normalization, if path starts with .. or contains .., it's dangerous
+        if normalized.startswith('..') or '/..' in normalized or '\\..' in normalized:
+            return (False, '/')
+        
+        # Ensure path doesn't contain null bytes or other dangerous control chars
+        if '\x00' in normalized or '\r' in normalized or '\n' in normalized:
+            return (False, '/')
+        
+        # If absolute path required, ensure it starts with /
+        if require_absolute:
+            if not normalized.startswith('/'):
+                return (False, '/')
+        else:
+            # Convert relative to absolute for consistency
+            if not normalized.startswith('/'):
+                normalized = '/' + normalized
+        
+        # Final check: ensure no .. remains after all processing
+        if '..' in normalized:
+            return (False, '/')
+        
+        return (True, normalized)
     
     def list_volumes(self) -> Dict[str, Any]:
         """List all Docker volumes"""
@@ -192,8 +263,12 @@ class VolumeManager:
     
     def explore_volume(self, volume_name: str, path: str = '/') -> Dict[str, Any]:
         """Explore files in a Docker volume"""
-        if '..' in path or not path.startswith('/'):
+        # Validate and sanitize path to prevent path traversal
+        is_valid, sanitized_path = self._validate_volume_path(path, require_absolute=True)
+        if not is_valid:
             path = '/'
+        else:
+            path = sanitized_path
         
         try:
             temp_container_name = f"explore-temp-{volume_name}-{os.urandom(4).hex()}"
@@ -317,8 +392,12 @@ class VolumeManager:
         if not file_path:
             return {'error': 'File path required'}
         
-        if '..' in file_path:
+        # Validate and sanitize path to prevent path traversal
+        is_valid, sanitized_path = self._validate_volume_path(file_path, require_absolute=True)
+        if not is_valid:
             return {'error': 'Invalid file path'}
+        
+        file_path = sanitized_path
         
         try:
             temp_container_name = f"read-temp-{volume_name}-{os.urandom(4).hex()}"
@@ -373,8 +452,12 @@ class VolumeManager:
         if not file_path:
             raise Exception('File path required')
         
-        if '..' in file_path:
+        # Validate and sanitize path to prevent path traversal
+        is_valid, sanitized_path = self._validate_volume_path(file_path, require_absolute=True)
+        if not is_valid:
             raise Exception('Invalid file path')
+        
+        file_path = sanitized_path
         
         temp_container_name = f"download-temp-{volume_name}-{os.urandom(4).hex()}"
         
