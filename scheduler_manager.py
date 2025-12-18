@@ -419,33 +419,51 @@ class SchedulerManager:
             
             scheduled_backups = []
             for filename in os.listdir(backups_dir):
-                if filename.startswith('scheduled_') and filename.endswith('.tar.gz'):
+                if filename.endswith('.tar.gz'):
                     file_path = os.path.join(backups_dir, filename)
                     if os.path.isfile(file_path):
-                        stat = os.stat(file_path)
-                        scheduled_backups.append({
-                            'filename': filename,
-                            'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                            'file_path': file_path
-                        })
+                        # Check companion JSON for is_scheduled flag
+                        companion_json_filename = f"{filename}.json"
+                        companion_json_path = os.path.join(backups_dir, companion_json_filename)
+                        is_scheduled = False
+                        
+                        if os.path.exists(companion_json_path):
+                            try:
+                                with open(companion_json_path, 'r') as f:
+                                    metadata = json.load(f)
+                                    is_scheduled = metadata.get('is_scheduled', False)
+                            except Exception as e:
+                                # Error reading companion JSON - skip this backup
+                                continue
+                        else:
+                            # No companion JSON - skip this backup (old format or not a container backup)
+                            continue
+                        
+                        # Only include scheduled backups
+                        if is_scheduled:
+                            stat = os.stat(file_path)
+                            scheduled_backups.append({
+                                'filename': filename,
+                                'created': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                'file_path': file_path
+                            })
             
             # Group scheduled backups by container
             container_backups = {}
             for backup in scheduled_backups:
                 filename = backup['filename']
-                # Extract container name from filename (remove scheduled_ prefix and timestamp)
-                # Format: scheduled_container-name_YYYYMMDD_HHMMSS.tar.gz
-                if filename.startswith('scheduled_'):
-                    parts = filename.replace('scheduled_', '').replace('.tar.gz', '').rsplit('_', 2)
-                    if len(parts) >= 2:
-                        container_name = '_'.join(parts[:-2])  # Everything except last 2 parts (timestamp)
-                        if container_name not in container_backups:
-                            container_backups[container_name] = []
-                        container_backups[container_name].append({
-                            'filename': filename,
-                            'created': backup['created'],
-                            'file_path': backup['file_path']
-                        })
+                # Extract container name from filename (remove timestamp)
+                # Format: container-name_YYYYMMDD_HHMMSS.tar.gz
+                parts = filename.replace('.tar.gz', '').rsplit('_', 2)
+                if len(parts) >= 2:
+                    container_name = '_'.join(parts[:-2])  # Everything except last 2 parts (timestamp)
+                    if container_name not in container_backups:
+                        container_backups[container_name] = []
+                    container_backups[container_name].append({
+                        'filename': filename,
+                        'created': backup['created'],
+                        'file_path': backup['file_path']
+                    })
             
             # Cleanup backups for each container
             deleted_count = 0

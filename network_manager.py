@@ -13,18 +13,20 @@ from error_utils import safe_log_error
 class NetworkManager:
     """Manages Docker network operations"""
     
-    def __init__(self, backup_dir: str, storage_settings_manager=None):
+    def __init__(self, backup_dir: str, storage_settings_manager=None, ui_settings_manager=None):
         """
         Initialize NetworkManager
         
         Args:
             backup_dir: Base directory (network backups go in backups/ subdirectory)
             storage_settings_manager: Optional StorageSettingsManager instance for S3 storage
+            ui_settings_manager: Optional UISettingsManager instance for getting server name
         """
         # Network backups go in backups/ subdirectory
         self.backup_dir = os.path.join(backup_dir, 'backups')
         os.makedirs(self.backup_dir, exist_ok=True)
         self.storage_settings_manager = storage_settings_manager
+        self.ui_settings_manager = ui_settings_manager
     
     def list_networks(self) -> Dict[str, Any]:
         """List all Docker networks with detailed information"""
@@ -151,6 +153,16 @@ class NetworkManager:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             backup_filename = f"network_{network_name}_{timestamp}.json"
             backup_path = os.path.join(self.backup_dir, backup_filename)
+            
+            # Get server name from settings
+            server_name = 'My Server Name'  # Default
+            if self.ui_settings_manager:
+                server_name = self.ui_settings_manager.get_setting('server_name', 'My Server Name')
+                if not server_name or server_name == '':
+                    server_name = 'My Server Name'
+            
+            # Add server name to network info
+            network_info['server_name'] = server_name
             
             # Write to local file first
             with open(backup_path, 'w') as f:
@@ -356,6 +368,27 @@ class NetworkManager:
             filename = os.path.basename(filename)
             if not filename.startswith('network_') or not filename.endswith('.json'):
                 return {'error': 'Invalid filename. Network backups must start with "network_" and end with ".json"'}
+            
+            # Parse JSON to validate and extract/add server name
+            try:
+                network_data = json.loads(file_content.decode('utf-8'))
+                if not network_data.get('Name'):
+                    return {'error': 'Invalid network backup: missing network name'}
+            except (json.JSONDecodeError, UnicodeDecodeError) as e:
+                return {'error': f'Invalid JSON file: {str(e)}'}
+            
+            # Get server name from uploaded file or current server settings
+            server_name = network_data.get('server_name')
+            if not server_name and self.ui_settings_manager:
+                server_name = self.ui_settings_manager.get_setting('server_name', 'Unknown Server')
+            if not server_name:
+                server_name = 'Unknown Server'
+            
+            # Add/update server name in network data
+            network_data['server_name'] = server_name
+            
+            # Re-encode the updated JSON
+            file_content = json.dumps(network_data, indent=2).encode('utf-8')
             
             # Check if S3 storage is enabled
             use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()

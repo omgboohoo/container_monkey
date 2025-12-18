@@ -392,9 +392,7 @@ class BackupManager:
                 return
             
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            # Prefix scheduled backups with "scheduled_" to distinguish from manual backups
-            prefix = "scheduled_" if is_scheduled else ""
-            backup_filename = f"{prefix}{container_name}_{timestamp}.tar.gz"
+            backup_filename = f"{container_name}_{timestamp}.tar.gz"
             backup_path = os.path.join(self.backup_dir, backup_filename)
             self.backup_progress[progress_id]['backup_filename'] = backup_filename
             
@@ -595,6 +593,16 @@ class BackupManager:
                 with open(metadata_file, 'w') as f:
                     json.dump(metadata, f, indent=2)
                 
+                # Create companion JSON file in temp_dir so it's included in the tar.gz archive
+                companion_metadata = {
+                    'server_name': server_name,
+                    'is_scheduled': is_scheduled
+                }
+                companion_json_in_archive = os.path.join(temp_dir, 'companion.json')
+                with open(companion_json_in_archive, 'w') as f:
+                    json.dump(companion_metadata, f, indent=2)
+                print(f"✅ Created companion JSON in archive: companion.json")
+                
                 # Create tar.gz file - ensure it's fully written before marking complete
                 self.backup_progress[progress_id]['step'] = 'Creating tar.gz file...'
                 self.backup_progress[progress_id]['current_step'] = 5
@@ -638,10 +646,13 @@ class BackupManager:
                 if tar_thread_error[0]:
                     raise tar_thread_error[0]
                 
-                # Create companion JSON file with server name
+                # Create companion JSON file with server name and scheduled flag
                 companion_json_filename = f"{backup_filename}.json"
                 companion_json_path = os.path.join(self.backup_dir, companion_json_filename)
-                companion_metadata = {'server_name': server_name}
+                companion_metadata = {
+                    'server_name': server_name,
+                    'is_scheduled': is_scheduled
+                }
                 try:
                     with open(companion_json_path, 'w') as f:
                         json.dump(companion_metadata, f, indent=2)

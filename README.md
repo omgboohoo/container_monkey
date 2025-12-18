@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.4.0**
+**Version 0.4.1**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -18,8 +18,6 @@ The open-source backup and recovery solution for Docker. Protect your containers
 
 - **Container Operations**: Start, stop, pause, resume, restart, kill, and manage containers with bulk operations support
 - **Container Inspection**: View detailed container information and inspect raw container JSON (like `docker inspect`)
-  - Quick action "Inspect" button to view full container inspect JSON
-  - Syntax-highlighted JSON display with copy to clipboard functionality
 - **Volume Management**: Explore, download, and manage Docker volumes through an intuitive web interface
 - **Image Management**: View and clean up Docker images, including automatic dangling image detection
 - **Network Management**: Backup and restore Docker networks with full configuration preservation

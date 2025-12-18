@@ -1,5 +1,49 @@
 # Release Notes
 
+## Version 0.4.1
+
+### Backup Management Improvements
+- **Removed Scheduled Backup Filename Prefix**: Scheduled backups no longer use "scheduled_" prefix in filenames
+  - Cleaner filenames: backups now use `container-name_YYYYMMDD_HHMMSS.tar.gz` format for all backups
+  - Scheduled status now stored in companion JSON metadata instead of filename
+  - Backward compatible: old backups with "scheduled_" prefix still work
+- **Metadata-Driven Backup Type Detection**: Backup type (scheduled/manual) now determined from companion JSON metadata
+  - Companion JSON files now include `is_scheduled` flag alongside `server_name`
+  - Backup vault grid populates backup type from JSON metadata instead of filename prefix
+  - More reliable and consistent backup type identification
+- **Self-Contained Backup Archives**: Companion JSON now included inside tar.gz backup archives
+  - Companion JSON stored as `companion.json` inside each backup archive
+  - Uploaded backups automatically extract companion JSON to populate server name and backup type
+  - Backups are now fully self-contained with all metadata preserved
+  - External companion JSON files still created for backward compatibility
+- **Scheduler Cleanup Enhancement**: Scheduler cleanup now uses companion JSON to identify scheduled backups
+  - No longer relies on filename prefix to find scheduled backups
+  - More accurate identification of scheduled backups for lifecycle management
+  - Works with both old and new backup formats
+- **Duplicate File Protection**: Upload now prevents overwriting existing backups
+  - Checks for existing files in both S3 and local storage before uploading
+  - Returns clear error message "File already exists" if duplicate detected
+  - Prevents accidental overwrites of existing backups
+  - Consistent behavior with network backup uploads
+  - Early validation fails fast before processing backup file
+- **Network Backup Server Name Tracking**: Network backups now include server name metadata
+  - Server name automatically added to network backup JSON files when created
+  - Uploaded network backups extract or add server name from current settings
+  - Backup vault grid displays server name for network backups
+  - Consistent with container backup server name tracking
+  - Enables identification of network backup origins in shared S3 vaults
+
+### UI Improvements
+- **Auto-Clear Selection After Download**: Backup vault checkboxes automatically cleared after download completes
+  - Selected checkboxes cleared when download finishes (success or failure)
+  - Button states updated automatically
+  - Improved user experience with cleaner interface state
+
+### Version Update
+- Updated version number to 0.4.1 across application, website, README.md, and PRD.md
+
+---
+
 ## Version 0.4.0
 
 ### Major Code Refactoring - Frontend Modularization

@@ -1395,6 +1395,11 @@ async function downloadAllBackupsInternal(selectedFiles) {
         closeBtn.style.display = 'block';
         window.AppState.currentDownloadAbortController = null;
 
+        // Clear selection after download completes
+        document.querySelectorAll('.backup-checkbox:checked').forEach(cb => cb.checked = false);
+        updateBackupButtonStates();
+        updateSelectAllBackupCheckbox();
+
     } catch (error) {
         statusEl.innerHTML = `❌ Error: ${escapeHtml(error.message)}`;
         listEl.innerHTML = '';

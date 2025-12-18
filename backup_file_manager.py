@@ -40,10 +40,11 @@ class BackupFileManager:
         self.storage_settings_manager = storage_settings_manager
         self.ui_settings_manager = ui_settings_manager
     
-    def _read_companion_json(self, filename: str, storage_location: str, s3_manager=None) -> str:
-        """Read server name from companion JSON file"""
+    def _read_companion_json(self, filename: str, storage_location: str, s3_manager=None) -> Dict[str, Any]:
+        """Read metadata from companion JSON file (server_name and is_scheduled)"""
         companion_json_filename = f"{filename}.json"
         server_name = 'Unknown Server'  # Default
+        is_scheduled = False  # Default
         
         try:
             if storage_location == 's3' and s3_manager:
@@ -55,6 +56,7 @@ class BackupFileManager:
                         if json_content:
                             metadata = json.loads(json_content.decode('utf-8'))
                             server_name = metadata.get('server_name', 'Unknown Server')
+                            is_scheduled = metadata.get('is_scheduled', False)
                 except Exception as e:
                     # Companion JSON doesn't exist or error reading - use default
                     pass
@@ -65,8 +67,42 @@ class BackupFileManager:
                     with open(companion_json_path, 'r') as f:
                         metadata = json.load(f)
                         server_name = metadata.get('server_name', 'Unknown Server')
+                        is_scheduled = metadata.get('is_scheduled', False)
         except Exception as e:
             # Error reading companion JSON - use default
+            pass
+        
+        return {
+            'server_name': server_name if server_name else 'Unknown Server',
+            'is_scheduled': is_scheduled
+        }
+    
+    def _read_network_backup_server_name(self, filename: str, storage_location: str, s3_manager=None) -> str:
+        """Read server_name from network backup JSON file"""
+        server_name = 'Unknown Server'  # Default
+        
+        try:
+            if storage_location == 's3' and s3_manager:
+                # Try to download network backup JSON from S3
+                try:
+                    download_result = s3_manager.download_fileobj(filename)
+                    if download_result.get('success'):
+                        json_content = download_result.get('content', b'')
+                        if json_content:
+                            network_data = json.loads(json_content.decode('utf-8'))
+                            server_name = network_data.get('server_name', 'Unknown Server')
+                except Exception as e:
+                    # Network backup doesn't exist or error reading - use default
+                    pass
+            else:
+                # Read from local file
+                network_backup_path = os.path.join(self.backup_dir, filename)
+                if os.path.exists(network_backup_path):
+                    with open(network_backup_path, 'r') as f:
+                        network_data = json.load(f)
+                        server_name = network_data.get('server_name', 'Unknown Server')
+        except Exception as e:
+            # Error reading network backup - use default
             pass
         
         return server_name if server_name else 'Unknown Server'
@@ -100,8 +136,8 @@ class BackupFileManager:
                                 continue
                             
                             if filename.endswith(('.zip', '.tar.gz')):
-                                backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
-                                server_name = self._read_companion_json(filename, 's3', s3_manager)
+                                companion_metadata = self._read_companion_json(filename, 's3', s3_manager)
+                                backup_type = 'scheduled' if companion_metadata.get('is_scheduled', False) else 'manual'
                                 backups.append({
                                     'filename': filename,
                                     'size': file_info['size'],
@@ -109,9 +145,10 @@ class BackupFileManager:
                                     'type': 'container',
                                     'backup_type': backup_type,
                                     'storage_location': 's3',
-                                    'server_name': server_name
+                                    'server_name': companion_metadata.get('server_name', 'Unknown Server')
                                 })
                             elif filename.startswith('network_') and filename.endswith('.json'):
+                                server_name = self._read_network_backup_server_name(filename, 's3', s3_manager)
                                 backups.append({
                                     'filename': filename,
                                     'size': file_info['size'],
@@ -119,7 +156,7 @@ class BackupFileManager:
                                     'type': 'network',
                                     'backup_type': 'manual',
                                     'storage_location': 's3',
-                                    'server_name': 'Unknown Server'  # Network backups don't have server name
+                                    'server_name': server_name
                                 })
                 except Exception as e:
                     print(f"⚠️  Error listing S3 backups: {e}")
@@ -143,8 +180,8 @@ class BackupFileManager:
                     stat = os.stat(file_path)
                     
                     if filename.endswith(('.zip', '.tar.gz')):
-                        backup_type = 'scheduled' if filename.startswith('scheduled_') else 'manual'
-                        server_name = self._read_companion_json(filename, 'local')
+                        companion_metadata = self._read_companion_json(filename, 'local')
+                        backup_type = 'scheduled' if companion_metadata.get('is_scheduled', False) else 'manual'
                         backups.append({
                             'filename': filename,
                             'size': stat.st_size,
@@ -152,9 +189,10 @@ class BackupFileManager:
                             'type': 'container',
                             'backup_type': backup_type,
                             'storage_location': 'local',
-                            'server_name': server_name
+                            'server_name': companion_metadata.get('server_name', 'Unknown Server')
                         })
                     elif filename.startswith('network_') and filename.endswith('.json'):
+                        server_name = self._read_network_backup_server_name(filename, 'local')
                         backups.append({
                             'filename': filename,
                             'size': stat.st_size,
@@ -162,7 +200,7 @@ class BackupFileManager:
                             'type': 'network',
                             'backup_type': 'manual',
                             'storage_location': 'local',
-                            'server_name': 'Unknown Server'  # Network backups don't have server name
+                            'server_name': server_name
                         })
             
             backups.sort(key=lambda x: x['created'], reverse=True)
@@ -448,10 +486,53 @@ class BackupFileManager:
             
             filename = secure_filename(filename)
             
-            # Verify it's a valid backup first
+            # Check if file already exists (before processing)
+            # Check if S3 storage is enabled
+            use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
+            
+            if use_s3:
+                # Check S3 first
+                try:
+                    from s3_storage_manager import S3StorageManager
+                    settings = self.storage_settings_manager.get_settings()
+                    s3_manager = S3StorageManager(
+                        bucket_name=settings['s3_bucket'],
+                        region=settings['s3_region'],
+                        access_key=settings['s3_access_key'],
+                        secret_key=settings['s3_secret_key']
+                    )
+                    if s3_manager.file_exists(filename):
+                        return {'error': 'File already exists'}
+                except Exception as e:
+                    # If S3 check fails, continue to local check
+                    pass
+            
+            # Check local storage
+            file_path = os.path.join(self.backup_dir, filename)
+            if os.path.exists(file_path):
+                return {'error': 'File already exists'}
+            
+            # Verify it's a valid backup first and extract companion JSON if available
             import io
+            companion_metadata = None
+            metadata = None
+            
             try:
-                with tarfile.open(fileobj=io.BytesIO(file_content), mode='r:gz') as tar:
+                # Create a copy of file_content for reading (since we need to read it multiple times)
+                file_content_copy = io.BytesIO(file_content)
+                
+                with tarfile.open(fileobj=file_content_copy, mode='r:gz') as tar:
+                    # Try to extract companion.json from archive (new format)
+                    try:
+                        companion_file = tar.getmember('./companion.json')
+                        companion_str = tar.extractfile(companion_file).read().decode('utf-8')
+                        companion_metadata = json.loads(companion_str)
+                        print(f"✅ Extracted companion.json from archive")
+                    except KeyError:
+                        # Companion JSON not in archive (old backup format), will use backup_metadata.json
+                        print(f"ℹ️  No companion.json in archive, using backup_metadata.json")
+                    
+                    # Always read backup_metadata.json for validation
                     try:
                         metadata_file = tar.getmember('./backup_metadata.json')
                         metadata_str = tar.extractfile(metadata_file).read().decode('utf-8')
@@ -463,16 +544,29 @@ class BackupFileManager:
             except Exception as e:
                 return {'error': f'Error processing backup: {str(e)}'}
             
-            # Get server name from metadata or current server settings
-            server_name = metadata.get('server_name')
-            if not server_name and self.ui_settings_manager:
-                server_name = self.ui_settings_manager.get_setting('server_name', 'Unknown Server')
-            if not server_name:
-                server_name = 'Unknown Server'
+            # Use companion JSON from archive if available, otherwise fall back to backup_metadata.json
+            if companion_metadata:
+                # Use values from companion.json in archive
+                server_name = companion_metadata.get('server_name', 'Unknown Server')
+                is_scheduled = companion_metadata.get('is_scheduled', False)
+            else:
+                # Fall back to backup_metadata.json (old backup format)
+                server_name = metadata.get('server_name')
+                if not server_name and self.ui_settings_manager:
+                    server_name = self.ui_settings_manager.get_setting('server_name', 'Unknown Server')
+                if not server_name:
+                    server_name = 'Unknown Server'
+                
+                # Get is_scheduled flag from backup metadata
+                backup_type = metadata.get('backup_type', 'manual')
+                is_scheduled = (backup_type == 'scheduled')
             
-            # Create companion JSON file
+            # Create companion JSON file (external, for backward compatibility and current system)
             companion_json_filename = f"{filename}.json"
-            companion_metadata = {'server_name': server_name}
+            companion_metadata = {
+                'server_name': server_name,
+                'is_scheduled': is_scheduled
+            }
             
             # Check if S3 storage is enabled
             use_s3 = self.storage_settings_manager and self.storage_settings_manager.is_s3_enabled()
