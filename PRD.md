@@ -1,6 +1,6 @@
 # Product Requirements Document: Container Monkey
 
-**Version 0.4.1**
+**Version 0.4.2**
 
 ## Overview
 
@@ -218,6 +218,7 @@ The open-source backup and recovery solution for Docker. Protect your containers
 ### System Monitoring
 - Dashboard with resource overview and backup schedule next run time
 - Real-time system CPU/RAM stats in top bar (polled every 5 seconds)
+- Docker version display in dashboard and statistics page
 - **Statistics Page**: Comprehensive container statistics view with background caching, refresh countdown, and manual refresh button
   - All containers displayed in a grid format
   - Shows CPU %, RAM usage, Network I/O, Block I/O, and Next Refresh countdown for each container

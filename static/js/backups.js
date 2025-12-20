@@ -11,9 +11,11 @@ async function loadBackups() {
     if (errorEl) errorEl.style.display = 'none';
     if (backupsList) backupsList.innerHTML = '';
 
-    // Clear search input when reloading
+    // Clear search input and server filter when reloading
     const searchInput = document.getElementById('backup-search-input');
     if (searchInput) searchInput.value = '';
+    const serverFilter = document.getElementById('backup-server-filter');
+    if (serverFilter) serverFilter.value = '';
 
     // Show spinner and prevent scrollbars
     if (backupsSpinner) backupsSpinner.style.display = 'flex';
@@ -32,6 +34,9 @@ async function loadBackups() {
 
         // Store all backups for filtering and sorting
         window.AppState.allBackups = data.backups || [];
+
+        // Populate server filter dropdown
+        populateServerFilter(window.AppState.allBackups);
 
         // Apply current sort if any, then render
         let backupsToDisplay = window.AppState.allBackups;
@@ -81,14 +86,14 @@ function createBackupRow(backup) {
 
     // Build type display
     const typeDisplay = backupType === 'network'
-        ? '<span style="color: #667eea;">🌐 Network</span>'
-        : '<span style="color: #10b981;">📦 Container</span>';
+        ? '<span style="color: #667eea; font-size: 0.9em;">🌐 Network</span>'
+        : '<span style="color: #10b981; font-size: 0.9em;">📦 Container</span>';
 
     // Build backup type display (manual/scheduled)
     const backupTypeValue = backup.backup_type || 'manual';
     const backupTypeDisplay = backupTypeValue === 'scheduled'
-        ? '<span style="color: #f59e0b; font-weight: 500;"><i class="ph ph-clock-clockwise" style="margin-right: 4px;"></i>Scheduled</span>'
-        : '<span style="color: var(--text-secondary);"><i class="ph ph-hand" style="margin-right: 4px;"></i>Manual</span>';
+        ? '<span style="color: #f59e0b; font-weight: 500; font-size: 0.9em;"><i class="ph ph-clock-clockwise" style="margin-right: 4px;"></i>Scheduled</span>'
+        : '<span style="color: var(--text-secondary); font-size: 0.9em;"><i class="ph ph-hand" style="margin-right: 4px;"></i>Manual</span>';
 
     // Build actions column
     const actionsHtml = `
@@ -103,12 +108,12 @@ function createBackupRow(backup) {
     // Build storage location display
     const storageLocation = backup.storage_location || 'local';
     const storageDisplay = storageLocation === 's3'
-        ? '<span style="color: #3b82f6; font-weight: 500;"><i class="ph ph-cloud" style="margin-right: 4px;"></i>S3</span>'
-        : '<span style="color: var(--text-secondary);"><i class="ph ph-hard-drives" style="margin-right: 4px;"></i>Local</span>';
+        ? '<span style="color: #3b82f6; font-weight: 500; font-size: 0.9em;"><i class="ph ph-cloud" style="margin-right: 4px;"></i>S3</span>'
+        : '<span style="color: var(--text-secondary); font-size: 0.9em;"><i class="ph ph-hard-drives" style="margin-right: 4px;"></i>Local</span>';
 
     // Build server name display
     const serverName = backup.server_name || 'Unknown Server';
-    const serverDisplay = `<span style="color: var(--text-primary);"><i class="ph ph-server" style="margin-right: 4px; color: var(--text-secondary);"></i>${escapeHtml(serverName)}</span>`;
+    const serverDisplay = `<span style="color: var(--text-primary); font-size: 0.9em;"><i class="ph ph-server" style="margin-right: 4px; color: var(--text-secondary);"></i>${escapeHtml(serverName)}</span>`;
 
     tr.innerHTML = `
         <td class="checkbox-cell" onclick="event.stopPropagation();">
@@ -130,10 +135,10 @@ function createBackupRow(backup) {
             ${serverDisplay}
         </td>
         <td>
-            <div style="color: var(--text-secondary);">${sizeDisplay}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${sizeDisplay}</div>
         </td>
         <td>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary);">${createdDate}</div>
         </td>
         <td>
             ${actionsHtml}
@@ -155,14 +160,53 @@ function createBackupRow(backup) {
     return tr;
 }
 
-// Filter backups based on search input
+// Populate server filter dropdown with unique server names
+function populateServerFilter(backups) {
+    const serverFilter = document.getElementById('backup-server-filter');
+    if (!serverFilter) return;
+
+    // Get unique server names from backups
+    const serverNames = new Set();
+    backups.forEach(backup => {
+        const serverName = backup.server_name || 'Unknown Server';
+        if (serverName) {
+            serverNames.add(serverName);
+        }
+    });
+
+    // Sort server names alphabetically
+    const sortedServers = Array.from(serverNames).sort();
+
+    // Store current selection
+    const currentValue = serverFilter.value;
+
+    // Clear existing options except "All"
+    serverFilter.innerHTML = '<option value="">All</option>';
+
+    // Add server options
+    sortedServers.forEach(serverName => {
+        const option = document.createElement('option');
+        option.value = serverName;
+        option.textContent = serverName;
+        serverFilter.appendChild(option);
+    });
+
+    // Restore previous selection if it still exists
+    if (currentValue && sortedServers.includes(currentValue)) {
+        serverFilter.value = currentValue;
+    }
+}
+
+// Filter backups based on search input and server filter
 function filterBackups() {
     const searchInput = document.getElementById('backup-search-input');
+    const serverFilter = document.getElementById('backup-server-filter');
     const backupsList = document.getElementById('backups-list');
 
     if (!searchInput || !backupsList) return;
 
     const searchTerm = searchInput.value.toLowerCase().trim();
+    const selectedServer = serverFilter ? serverFilter.value : '';
     const rows = backupsList.querySelectorAll('.backup-row');
 
     // Remove any existing "no results" message
@@ -171,31 +215,56 @@ function filterBackups() {
         noResultsRow.remove();
     }
 
-    if (!searchTerm) {
-        // Show all rows if search is empty
-        rows.forEach(row => {
-            row.style.display = '';
-        });
-        updateBackupButtonStates();
-        updateSelectAllBackupCheckbox();
-        return;
-    }
-
-    // Filter rows based on search term
+    // Filter rows based on search term and server
     let visibleCount = 0;
     rows.forEach(row => {
-        const filenameCell = row.querySelector('td:nth-child(2)');
-        let filename = '';
-        if (filenameCell) {
-            const filenameDiv = filenameCell.querySelector('div');
-            if (filenameDiv) {
-                filename = (filenameDiv.textContent || filenameDiv.innerText || '').toLowerCase().trim();
-            }
-        }
-        
-        const matches = filename.includes(searchTerm);
+        let matchesSearch = true;
+        let matchesServer = true;
 
-        if (matches) {
+        // Check search term - search across multiple columns
+        if (searchTerm) {
+            // Get text from filename column (column 2)
+            const filenameCell = row.querySelector('td:nth-child(2)');
+            let filename = '';
+            if (filenameCell) {
+                const filenameDiv = filenameCell.querySelector('div');
+                if (filenameDiv) {
+                    filename = (filenameDiv.textContent || filenameDiv.innerText || '').toLowerCase().trim();
+                }
+            }
+            
+            // Get text from created date column (column 8)
+            const createdCell = row.querySelector('td:nth-child(8)');
+            let createdDate = '';
+            if (createdCell) {
+                const createdDiv = createdCell.querySelector('div');
+                if (createdDiv) {
+                    createdDate = (createdDiv.textContent || createdDiv.innerText || '').toLowerCase().trim();
+                }
+            }
+            
+            // Also check data attributes for type, backup type, storage, server
+            const rowType = (row.getAttribute('data-type') || '').toLowerCase();
+            const rowBackupType = (row.getAttribute('data-backup-type') || '').toLowerCase();
+            const rowStorage = (row.getAttribute('data-storage') || '').toLowerCase();
+            const rowServer = (row.getAttribute('data-server') || '').toLowerCase();
+            
+            // Search across all fields
+            matchesSearch = filename.includes(searchTerm) ||
+                           createdDate.includes(searchTerm) ||
+                           rowType.includes(searchTerm) ||
+                           rowBackupType.includes(searchTerm) ||
+                           rowStorage.includes(searchTerm) ||
+                           rowServer.includes(searchTerm);
+        }
+
+        // Check server filter
+        if (selectedServer) {
+            const rowServerName = row.getAttribute('data-server') || '';
+            matchesServer = rowServerName === selectedServer.toLowerCase();
+        }
+
+        if (matchesSearch && matchesServer) {
             row.style.display = '';
             visibleCount++;
         } else {
@@ -207,7 +276,7 @@ function filterBackups() {
     if (visibleCount === 0 && rows.length > 0) {
         const tr = document.createElement('tr');
         tr.setAttribute('data-no-results', 'true');
-        tr.innerHTML = '<td colspan="9" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups match your search</td>';
+        tr.innerHTML = '<td colspan="9" style="text-align: center; padding: 60px 40px; color: var(--text-secondary); font-size: 1em;">No backups match your filters</td>';
         backupsList.appendChild(tr);
     }
 
@@ -1031,6 +1100,20 @@ async function submitRestore() {
             window.loadContainers();
         }
         loadBackups();
+        
+        // Trigger stats refresh to show restored container
+        try {
+            // Trigger backend refresh
+            await fetch('/api/statistics/refresh', {
+                method: 'POST'
+            });
+            // Refresh stats display if statistics tab is visible
+            if (window.loadStatistics) {
+                window.loadStatistics();
+            }
+        } catch (error) {
+            console.warn('Failed to refresh statistics:', error);
+        }
 
     } catch (error) {
         console.error('Restore error:', error);
@@ -1665,6 +1748,7 @@ async function restoreNetworkBackup(filename) {
 // Export functions to window for HTML access
 window.loadBackups = loadBackups;
 window.createBackupRow = createBackupRow;
+window.populateServerFilter = populateServerFilter;
 window.filterBackups = filterBackups;
 window.sortBackups = sortBackups;
 window.sortBackupsData = sortBackupsData;

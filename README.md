@@ -1,6 +1,6 @@
 # Container Monkey
 
-**Version 0.4.1**
+**Version 0.4.2**
 
 The open-source backup and recovery solution for Docker. Protect your containers, volumes, and networks with one-click backups, automated scheduling, and instant restoration.
 
@@ -160,7 +160,7 @@ Access the web UI at: http://your-server:1066
 ### System Monitoring
 
 - **Dashboard**: Overview of containers, images, volumes, networks, backup schedule
-- **System Stats**: Real-time CPU and RAM utilization in top bar
+- **System Stats**: Real-time CPU and RAM utilization in top bar (includes Docker version)
 - **Statistics Page**: View all containers with detailed stats including CPU %, RAM, Network I/O, Block I/O, and refresh countdown timer
 - **Events Page**: Monitor Docker events in real-time with filtering and search capabilities
   - View Docker events for containers, images, volumes, and networks
@@ -212,7 +212,7 @@ The application provides a RESTful API. Key endpoints include:
 - `DELETE /api/backup/<filename>` - Remove backup (from S3 or local)
 - `DELETE /api/backups/delete-all` - Remove all backups
 - `GET /api/download/<filename>` - Download backup file (from S3 or local)
-- `POST /api/upload-backup` - Upload backup file (to S3 or local)
+- `POST /api/upload-backup` - Upload backup file (to S3 or local) - accepts both .tar.gz container backups and .json network backups
 - `POST /api/backups/download-all-prepare` - Prepare bulk download session
 - `GET /api/backups/download-all-progress/<id>` - Get bulk download progress
 - `POST /api/backups/download-all-create/<id>` - Create download session
@@ -260,8 +260,8 @@ The application provides a RESTful API. Key endpoints include:
 
 ### System & Monitoring
 - `GET /api/dashboard-stats` - Get dashboard statistics
-- `GET /api/system-stats` - Get system CPU/RAM stats
-- `GET /api/statistics` - Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O)
+- `GET /api/system-stats` - Get system CPU/RAM stats (includes Docker version)
+- `GET /api/statistics` - Get comprehensive container statistics (CPU, RAM, Network I/O, Block I/O, Next Refresh countdown) - returns cached stats immediately
 - `POST /api/statistics/refresh` - Trigger background refresh of statistics cache
 - `GET /api/system-time` - Get current system time
 - `GET /api/check-environment` - Check Docker environment
@@ -321,10 +321,14 @@ The application has been refactored into a modular architecture with separate ma
   - `scheduler_manager.py` - Scheduled backup management
   - `audit_log_manager.py` - Audit logging for backup operations
   - `storage_settings_manager.py` - Storage settings management (local vs S3)
+  - `ui_settings_manager.py` - UI settings management (server name, etc.)
   - `s3_storage_manager.py` - S3 storage operations
+  - `database_manager.py` - Unified database initialization and schema management
+  - `stats_cache_manager.py` - Background caching and refresh of container statistics
   - `encryption_utils.py` - Encryption utilities for securing credentials
+  - `error_utils.py` - Safe error logging utilities to prevent information disclosure
 - **Storage**: Docker volumes for backup persistence with optional AWS S3 cloud storage (enables shared vaults across Container Monkey instances)
-- **Database**: SQLite for user management, audit logs, and storage settings
+- **Database**: SQLite for user management, audit logs, storage settings, backup schedules, and UI settings
 - **Rate Limiting**: Flask-Limiter for API protection
 - **Authentication**: Session-based with password hashing
 - **Encryption**: Fernet symmetric encryption for S3 credentials at rest
