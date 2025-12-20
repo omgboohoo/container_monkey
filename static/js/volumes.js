@@ -88,19 +88,19 @@ function createVolumeRow(volume) {
             ${volume.in_use && !volume.is_self && volume.containers && volume.containers.length > 0 ? `<div style="font-size: 0.8em; color: #999; margin-top: 4px;"><em>In use by ${volume.containers.map(c => `<a href="#" onclick="event.stopPropagation(); if(window.viewContainerByName) window.viewContainerByName('${escapeHtml(c)}'); return false;" style="color: var(--secondary); text-decoration: underline; cursor: pointer;">${escapeHtml(c)}</a>`).join(', ')}</em></div>` : ''}
         </td>
         <td>
-            <div style="color: var(--text-secondary);">${volume.stack ? escapeHtml(volume.stack) : '-'}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${volume.stack ? escapeHtml(volume.stack) : '-'}</div>
         </td>
         <td>
-            <div style="color: var(--text-secondary);">${escapeHtml(volume.driver)}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(volume.driver)}</div>
         </td>
         <td>
             <div style="font-family: monospace; color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(volume.mountpoint || 'N/A')}</div>
         </td>
         <td>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary);">${createdDate}</div>
         </td>
         <td>
-           <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(volume.size)}</div>
+           <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9em;">${escapeHtml(volume.size)}</div>
        </td>
         <td>
             <div class="btn-group">

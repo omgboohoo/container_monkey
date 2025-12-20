@@ -259,9 +259,11 @@ function updateStatisticsGrid(containers, preserveRefreshTimes = false) {
     });
     
     if (preserveRefreshTimes) {
-        // Incremental update: update refresh times for containers that have new data
+        // Incremental update: update refresh times for containers that have new data,
+        // add new containers, and remove deleted containers
         const existingRows = statisticsList.querySelectorAll('tr.statistics-row');
         const containerIdToRow = {};
+        const containerIdsInData = new Set();
         
         // Build map of existing rows by container ID
         existingRows.forEach(row => {
@@ -271,18 +273,33 @@ function updateStatisticsGrid(containers, preserveRefreshTimes = false) {
             }
         });
         
-        // Update refresh times for containers with new data
+        // Track which containers are in the new data and update/add them
         containers.forEach(container => {
             const containerId = container.id;
+            containerIdsInData.add(containerId);
             const existingRow = containerIdToRow[containerId];
             
-            if (existingRow && container.refresh_timestamp) {
-                // Update refresh time cell
-                const refreshCell = existingRow.querySelector('td:last-child');
-                if (refreshCell) {
-                    refreshCell.dataset.refreshTimestamp = container.refresh_timestamp;
-                    refreshCell.textContent = formatRefreshTime(container.refresh_timestamp);
+            if (existingRow) {
+                // Update existing row refresh time
+                if (container.refresh_timestamp) {
+                    const refreshCell = existingRow.querySelector('td:last-child');
+                    if (refreshCell) {
+                        refreshCell.dataset.refreshTimestamp = container.refresh_timestamp;
+                        refreshCell.textContent = formatRefreshTime(container.refresh_timestamp);
+                    }
                 }
+            } else {
+                // Add new container row
+                const row = createStatisticsRow(container);
+                statisticsList.appendChild(row);
+            }
+        });
+        
+        // Remove containers that are no longer in the data
+        existingRows.forEach(row => {
+            const containerId = row.getAttribute('data-container-id');
+            if (containerId && !containerIdsInData.has(containerId)) {
+                row.remove();
             }
         });
     } else {
@@ -447,16 +464,16 @@ function createStatisticsRow(container) {
     tr.innerHTML = `
         <td>
             <div style="font-weight: 500; color: #fff;">${escapeHtml(container.name)}</div>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">ID: ${container.id}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary);">ID: ${container.id}</div>
         </td>
-        <td style="color: var(--text-secondary);">${escapeHtml(container.image)}</td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(container.image)}</td>
         <td>
             <div class="container-status ${statusClass}">${statusText}</div>
         </td>
-        <td style="color: var(--text-secondary);">${cpuDisplay}</td>
-        <td style="color: var(--text-secondary);">${ramDisplay}</td>
-        <td style="color: var(--text-secondary);">${networkIO}</td>
-        <td style="color: var(--text-secondary);">${blockIO}</td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${cpuDisplay}</td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${ramDisplay}</td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${networkIO}</td>
+        <td style="color: var(--text-secondary); font-size: 0.9em;">${blockIO}</td>
         <td style="color: var(--text-secondary); font-size: 0.9em;" data-refresh-timestamp="${container.refresh_timestamp || ''}">${refreshTime}</td>
     `;
 

@@ -104,13 +104,13 @@ function createImageRow(image) {
             ${inUse && image.containers && image.containers.length > 0 ? `<div style="font-size: 0.8em; color: #999; margin-top: 4px;"><em>In use by ${image.containers.map(c => `<a href="#" onclick="event.stopPropagation(); if(window.viewContainerByName) window.viewContainerByName('${escapeHtml(c)}'); return false;" style="color: var(--secondary); text-decoration: underline; cursor: pointer;">${escapeHtml(c)}</a>`).join(', ')}</em></div>` : ''}
         </td>
         <td style="vertical-align: top;">
-            <div style="font-family: monospace; color: var(--text-secondary); font-size: 0.9em; background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; display: inline-block;">${escapeHtml(image.id.substring(0, 12))}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(image.id.substring(0, 12))}</div>
         </td>
         <td style="vertical-align: top;">
-            <div style="color: var(--text-secondary);">${escapeHtml(image.size)}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(image.size)}</div>
         </td>
         <td style="vertical-align: top;">
-            <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary);">${createdDate}</div>
         </td>
     `;
 

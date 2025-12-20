@@ -587,8 +587,12 @@ def index():
     # Add scheduled containers count and next run
     if scheduler_manager:
         stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
-        config = scheduler_manager.get_config()
-        stats['scheduler_next_run'] = config.get('next_run')
+        # Only show next run if there are scheduled containers
+        if stats['scheduled_containers_qty'] > 0:
+            config = scheduler_manager.get_config()
+            stats['scheduler_next_run'] = config.get('next_run')
+        else:
+            stats['scheduler_next_run'] = None
     else:
         stats['scheduled_containers_qty'] = 0
         stats['scheduler_next_run'] = None
@@ -646,8 +650,12 @@ def dashboard_stats():
     # Add scheduled containers count and next run
     if scheduler_manager:
         stats['scheduled_containers_qty'] = len(scheduler_manager.selected_containers)
-        config = scheduler_manager.get_config()
-        stats['scheduler_next_run'] = config.get('next_run')
+        # Only show next run if there are scheduled containers
+        if stats['scheduled_containers_qty'] > 0:
+            config = scheduler_manager.get_config()
+            stats['scheduler_next_run'] = config.get('next_run')
+        else:
+            stats['scheduler_next_run'] = None
     else:
         stats['scheduled_containers_qty'] = 0
         stats['scheduler_next_run'] = None

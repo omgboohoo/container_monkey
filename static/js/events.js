@@ -224,17 +224,17 @@ function renderEvents(events) {
                 </div>
             </td>
             <td>
-                <div style="color: var(--text-secondary); text-transform: capitalize;">
+                <div style="color: var(--text-secondary); font-size: 0.9em; text-transform: capitalize;">
                     ${escapeHtml(event.type || 'unknown')}
                 </div>
             </td>
             <td>
-                <div style="color: ${actionColor}; text-transform: capitalize; font-weight: 500;">
+                <div style="color: ${actionColor}; font-size: 0.9em; text-transform: capitalize; font-weight: 500;">
                     ${escapeHtml(event.action || 'unknown')}
                 </div>
             </td>
             <td>
-                <div style="font-weight: 500; color: var(--text-primary);">
+                <div style="font-weight: 500; color: var(--text-primary); font-size: 0.9em;">
                     ${escapeHtml(event.name || 'N/A')}
                 </div>
             </td>

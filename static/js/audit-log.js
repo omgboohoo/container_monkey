@@ -248,7 +248,7 @@ function createAuditLogRow(log) {
         <td style="font-weight: 500;">${escapeHtml(operationLabel)}</td>
         <td>
             <div style="font-weight: 500;">${escapeHtml(containerInfo)}</div>
-            ${containerId ? `<div style="font-size: 0.85em; color: var(--text-secondary);">${escapeHtml(containerId)}</div>` : ''}
+            ${containerId ? `<div style="font-size: 0.9em; color: var(--text-secondary);">${escapeHtml(containerId)}</div>` : ''}
         </td>
         <td style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(backupFile)}</td>
         <td>

@@ -237,13 +237,13 @@ function createContainerCard(container) {
             <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(imageName)}</div>
         </td>
         <td>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">${createdDate}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary);">${createdDate}</div>
         </td>
         <td>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">${escapeHtml(ipAddress)}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary);">${escapeHtml(ipAddress)}</div>
         </td>
         <td>
-            <div style="font-size: 0.85em; color: var(--text-secondary);">${portsDisplay}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary);">${portsDisplay}</div>
         </td>
         <td style="white-space: nowrap;">
             <div class="btn-group" style="display: flex; gap: 2px; pointer-events: auto;">
@@ -901,6 +901,18 @@ async function startSelectedContainers() {
             window.loadContainers();
         }
     }, 300);
+    
+    // Refresh statistics to reflect container state changes
+    try {
+        await fetch('/api/statistics/refresh', {
+            method: 'POST'
+        });
+        if (window.loadStatistics) {
+            window.loadStatistics();
+        }
+    } catch (error) {
+        console.warn('Failed to refresh statistics:', error);
+    }
 }
 
 async function restartSelectedContainers() {
@@ -930,6 +942,18 @@ async function restartSelectedContainers() {
             window.loadContainers();
         }
     }, 300);
+    
+    // Refresh statistics to reflect container state changes
+    try {
+        await fetch('/api/statistics/refresh', {
+            method: 'POST'
+        });
+        if (window.loadStatistics) {
+            window.loadStatistics();
+        }
+    } catch (error) {
+        console.warn('Failed to refresh statistics:', error);
+    }
 }
 
 async function stopSelectedContainers() {
@@ -959,6 +983,18 @@ async function stopSelectedContainers() {
             window.loadContainers();
         }
     }, 300);
+    
+    // Refresh statistics to reflect container state changes
+    try {
+        await fetch('/api/statistics/refresh', {
+            method: 'POST'
+        });
+        if (window.loadStatistics) {
+            window.loadStatistics();
+        }
+    } catch (error) {
+        console.warn('Failed to refresh statistics:', error);
+    }
 }
 
 async function killSelectedContainers() {
@@ -988,6 +1024,18 @@ async function killSelectedContainers() {
             window.loadContainers();
         }
     }, 300);
+    
+    // Refresh statistics to reflect container state changes
+    try {
+        await fetch('/api/statistics/refresh', {
+            method: 'POST'
+        });
+        if (window.loadStatistics) {
+            window.loadStatistics();
+        }
+    } catch (error) {
+        console.warn('Failed to refresh statistics:', error);
+    }
 }
 
 async function pauseSelectedContainers() {
@@ -1046,6 +1094,18 @@ async function resumeSelectedContainers() {
             window.loadContainers();
         }
     }, 300);
+    
+    // Refresh statistics to reflect container state changes
+    try {
+        await fetch('/api/statistics/refresh', {
+            method: 'POST'
+        });
+        if (window.loadStatistics) {
+            window.loadStatistics();
+        }
+    } catch (error) {
+        console.warn('Failed to refresh statistics:', error);
+    }
 }
 
 // View containers in a stack (filters containers table)
@@ -2399,6 +2459,20 @@ async function deleteContainerWithOptions(containerId, containerName) {
                 }
                 if (window.resetSelection) {
                     window.resetSelection();
+                }
+                
+                // Trigger stats refresh to remove deleted container from stats screen
+                try {
+                    // Trigger backend refresh
+                    await fetch('/api/statistics/refresh', {
+                        method: 'POST'
+                    });
+                    // Refresh stats display if statistics tab is visible
+                    if (window.loadStatistics) {
+                        window.loadStatistics();
+                    }
+                } catch (error) {
+                    console.warn('Failed to refresh statistics:', error);
                 }
             } catch (error) {
                 console.error(`Error deleting containers: ${error.message}`);

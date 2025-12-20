@@ -86,14 +86,9 @@ function createNetworkRow(network) {
     const shouldShowContainerCount = !isDefault || network.name === 'bridge' || network.name === 'host' || network.name === 'none';
     const containerDisplay = shouldShowContainerCount && containerCount > 0 ? containerCount : (shouldShowContainerCount ? '0' : '-');
 
-    // Build subnet/gateway display
-    let subnetDisplay = '-';
-    if (network.subnet) {
-        subnetDisplay = escapeHtml(network.subnet);
-        if (network.gateway) {
-            subnetDisplay += ` / ${escapeHtml(network.gateway)}`;
-        }
-    }
+    // Build subnet and gateway displays separately
+    const subnetDisplay = network.subnet ? escapeHtml(network.subnet) : '-';
+    const gatewayDisplay = network.gateway ? escapeHtml(network.gateway) : '-';
 
     // Build actions column
     let actionsHtml = '<div class="btn-group" style="display: flex; gap: 4px; flex-wrap: nowrap;">';
@@ -122,21 +117,26 @@ function createNetworkRow(network) {
     tr.innerHTML = `
         <td>
             <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(network.name)} ${isDefault ? '<span style="color: #999; font-size: 0.8em;">(Built-in)</span>' : ''}</div>
-            <div style="font-size: 0.75em; color: var(--text-secondary); font-family: monospace; margin-top: 2px;">${escapeHtml(network.id.substring(0, 12))}</div>
         </td>
         <td>
-            <div style="color: var(--text-secondary);">${escapeHtml(network.driver)}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(network.id.substring(0, 12))}</div>
         </td>
         <td>
-            <div style="color: var(--text-secondary);">${escapeHtml(network.scope)}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(network.driver)}</div>
         </td>
         <td>
-            <div style="font-size: 0.85em; color: var(--text-secondary); font-family: monospace;">${subnetDisplay}</div>
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${escapeHtml(network.scope)}</div>
         </td>
         <td>
-            <div style="color: var(--text-secondary);">${containerDisplay}</div>
+            <div style="font-size: 0.9em; color: var(--text-secondary); font-family: monospace;">${subnetDisplay}</div>
         </td>
         <td>
+            <div style="font-size: 0.9em; color: var(--text-secondary); font-family: monospace;">${gatewayDisplay}</div>
+        </td>
+        <td style="text-align: center;">
+            <div style="color: var(--text-secondary); font-size: 0.9em;">${containerDisplay}</div>
+        </td>
+        <td style="white-space: nowrap;">
             ${actionsHtml}
         </td>
     `;
@@ -178,6 +178,10 @@ function sortNetworksData(networks, column, direction) {
                 aVal = (a.name || '').toLowerCase();
                 bVal = (b.name || '').toLowerCase();
                 break;
+            case 'id':
+                aVal = (a.id || '').toLowerCase();
+                bVal = (b.id || '').toLowerCase();
+                break;
             case 'driver':
                 aVal = (a.driver || '').toLowerCase();
                 bVal = (b.driver || '').toLowerCase();
@@ -189,6 +193,10 @@ function sortNetworksData(networks, column, direction) {
             case 'subnet':
                 aVal = (a.subnet || '').toLowerCase();
                 bVal = (b.subnet || '').toLowerCase();
+                break;
+            case 'gateway':
+                aVal = (a.gateway || '').toLowerCase();
+                bVal = (b.gateway || '').toLowerCase();
                 break;
             case 'containers':
                 aVal = a.containers !== undefined ? a.containers : 0;
@@ -212,7 +220,7 @@ function renderNetworks(networks) {
     networksList.innerHTML = '';
 
     if (networks.length === 0) {
-        networksList.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: #666;">No networks found</td></tr>';
+        networksList.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #666;">No networks found</td></tr>';
     } else {
         networks.forEach(network => {
             const row = createNetworkRow(network);

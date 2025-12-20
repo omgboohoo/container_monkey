@@ -90,6 +90,16 @@ function showSection(sectionName, navElement) {
             window.loadBackups();
         }
     } else if (sectionName === 'statistics') {
+        // Trigger stats refresh to ensure fresh data when visiting statistics tab
+        (async () => {
+            try {
+                await fetch('/api/statistics/refresh', {
+                    method: 'POST'
+                });
+            } catch (error) {
+                console.warn('Failed to trigger stats refresh:', error);
+            }
+        })();
         if (window.loadStatistics) {
             window.loadStatistics();
         }
@@ -190,7 +200,7 @@ async function loadDashboardStats() {
                 if (cardNumber) cardNumber.textContent = stats.scheduled_containers_qty || 0;
             }
             const schedulerNextRunEl = document.getElementById('scheduler-next-run-dashboard');
-            if (schedulerNextRunEl && stats.scheduler_next_run) {
+            if (schedulerNextRunEl && stats.scheduled_containers_qty > 0 && stats.scheduler_next_run) {
                 const nextRunDate = new Date(stats.scheduler_next_run);
                 const year = nextRunDate.getFullYear();
                 const month = String(nextRunDate.getMonth() + 1).padStart(2, '0');

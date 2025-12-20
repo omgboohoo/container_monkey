@@ -908,52 +908,107 @@ body {
 
 /* Networks table column widths */
 #networks-table {
-    table-layout: fixed;
+    table-layout: auto;
     width: 100%;
 }
 
 #networks-table th:nth-child(1),
 #networks-table td:nth-child(1) {
-    width: 22%;
+    width: auto;
+    min-width: 120px;
 }
 
 #networks-table th:nth-child(2),
 #networks-table td:nth-child(2) {
-    width: 10%;
+    width: auto;
+    min-width: 100px;
 }
 
 #networks-table th:nth-child(3),
 #networks-table td:nth-child(3) {
-    width: 8%;
+    width: auto;
+    min-width: 60px;
 }
 
 #networks-table th:nth-child(4),
 #networks-table td:nth-child(4) {
-    width: 18%;
+    width: auto;
+    min-width: 50px;
 }
 
 #networks-table th:nth-child(5),
 #networks-table td:nth-child(5) {
-    width: 12%;
+    width: auto;
+    min-width: 110px;
 }
 
 #networks-table th:nth-child(6),
 #networks-table td:nth-child(6) {
-    width: 30%;
+    width: auto;
+    min-width: 90px;
+}
+
+#networks-table th:nth-child(7),
+#networks-table td:nth-child(7) {
+    width: auto;
+    min-width: 50px;
+    text-align: center;
+}
+
+#networks-table th:nth-child(8),
+#networks-table td:nth-child(8) {
+    width: 1%;
     white-space: nowrap;
     padding-right: 20px;
 }
 
-#networks-table td:nth-child(6) .btn-group {
+#networks-table td:nth-child(8) .btn-group {
     white-space: nowrap;
     flex-wrap: nowrap !important;
     display: flex;
     gap: 4px;
 }
 
-#networks-table td:nth-child(6) .btn-group .btn {
+#networks-table td:nth-child(8) .btn-group .btn {
     flex-shrink: 0;
     white-space: nowrap;
+}
+
+/* Images table column widths */
+#images-table {
+    table-layout: auto;
+    width: 100%;
+}
+
+#images-table th:nth-child(1),
+#images-table td:nth-child(1) {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+}
+
+#images-table th:nth-child(2),
+#images-table td:nth-child(2) {
+    width: auto;
+    min-width: 150px;
+}
+
+#images-table th:nth-child(3),
+#images-table td:nth-child(3) {
+    width: auto;
+    min-width: 100px;
+}
+
+#images-table th:nth-child(4),
+#images-table td:nth-child(4) {
+    width: auto;
+    min-width: 80px;
+}
+
+#images-table th:nth-child(5),
+#images-table td:nth-child(5) {
+    width: auto;
+    min-width: 150px;
 }
 
 .table th,
@@ -970,7 +1025,6 @@ body {
     background: var(--bg-secondary);
     font-weight: 600;
     color: var(--text-light);
-    text-transform: uppercase;
     font-size: 0.8em;
     letter-spacing: 0.05em;
     position: sticky;
@@ -1024,7 +1078,6 @@ body {
 #scheduler-containers-table th {
     font-size: 0.8em;
     font-weight: 600;
-    text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-light);
 }
